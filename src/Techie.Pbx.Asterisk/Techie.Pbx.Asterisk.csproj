@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Techie.Pbx.Core\Techie.Pbx.Core.csproj" />
+  </ItemGroup>
+
+</Project>

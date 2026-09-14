@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>aspnet-TNPBX-4052027d-dece-4783-9346-d2d8544da74d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.10" NoWarn="NU1605" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Log4Net.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Identity.Web" Version="3.15.1" />
+    <PackageReference Include="Microsoft.Identity.Web.UI" Version="3.15.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Techie.Pbx.Core\Techie.Pbx.Core.csproj" />
+    <ProjectReference Include="..\Techie.Pbx.Asterisk\Techie.Pbx.Asterisk.csproj" />
+    <ProjectReference Include="..\Techie.Pbx.Contracts\Techie.Pbx.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="log4net.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

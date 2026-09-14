@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Techie.Pbx.Asterisk/Techie.Pbx.Asterisk.csproj" />
+    <Project Path="src/Techie.Pbx.Contracts/Techie.Pbx.Contracts.csproj" />
+    <Project Path="src/Techie.Pbx.Core/Techie.Pbx.Core.csproj" />
+    <Project Path="src/Techie.Pbx.Helper/Techie.Pbx.Helper.csproj" />
+    <Project Path="src/Techie.Pbx.Web/Techie.Pbx.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Techie.Pbx.Tests/Techie.Pbx.Tests.csproj" />
+  </Folder>
+</Solution>

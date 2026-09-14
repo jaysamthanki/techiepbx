@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.86" />
+    <PackageReference Include="log4net" Version="3.4.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="scripts\**" />
+    <EmbeddedResource Include="Data\Schema\*.sql" LogicalName="schema/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
