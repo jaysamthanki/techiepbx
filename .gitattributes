@@ -1,0 +1,4 @@
+* text=auto
+# Shell scripts and Asterisk configs run on Linux; CRLF breaks them.
+*.sh text eol=lf
+*.conf text eol=lf

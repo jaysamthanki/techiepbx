@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Techie.Pbx.Core\Techie.Pbx.Core.csproj" />
+    <ProjectReference Include="..\Techie.Pbx.Contracts\Techie.Pbx.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="log4net.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
