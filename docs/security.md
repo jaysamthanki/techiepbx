@@ -46,6 +46,11 @@ software.
   and `ConfText.Safe` rejects `\r \n \0 ; [ ] "` and control characters anyway, so a bad row
   that bypassed the repository still can't inject a section.
 - Generated files are owner/group readable only (0640); they contain SIP secrets.
+- `modules.conf` is an allowlist: `autoload = no` and an explicit `load =` per module we use
+  (D31). A feature that needs a new module adds it in the same change, and the list is reviewed
+  the same way as any other code.
+- AMI binds to `127.0.0.1` and permits only `127.0.0.1`, with `webenabled = no`, and the account
+  gets `read = system` / `write = system,config` — no `command`, no `originate` (D32).
 - AMI binds to `127.0.0.1` only.
 
 ### Secrets
@@ -65,4 +70,3 @@ Deliberately deferred. Don't treat them as done.
 | No firewall or fail2ban yet | SIP brute force | Lab VM is protected by the Azure NSG only |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |
-| `modules.conf` uses `autoload = yes` | Unneeded modules loaded | Generate an explicit allowlist |

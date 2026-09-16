@@ -46,6 +46,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private void AddExtension(string number, string name, string secret) =>
             this.extensions.Insert(new Extension { Number = number, Name = name, Secret = secret });
 
+        /// <summary>Every file in /etc/asterisk is generated now, base config included.</summary>
         [Fact]
         public void Renders_every_file_with_the_module_that_owns_it()
         {
@@ -53,12 +54,36 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var files = this.applier.Render();
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, files.Select(f => f.FileName));
-            Assert.Equal(ConfigApplier.PjsipModule, files[0].Module);
-            Assert.Equal(ConfigApplier.DialplanModule, files[1].Module);
-            Assert.Equal(ConfigApplier.VoicemailModule, files[2].Module);
-            Assert.Contains("[1001]", files[0].Content);
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30)", files[1].Content);
+            Assert.Equal(
+                new[]
+                {
+                    "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
+                    "manager.conf", "pjsip.conf", "extensions.conf", "voicemail.conf",
+                },
+                files.Select(f => f.FileName));
+
+            Assert.Equal(
+                new string?[]
+                {
+                    null, null, null, ConfigApplier.LoggerModule,
+                    ConfigApplier.ManagerModule, ConfigApplier.PjsipModule,
+                    ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
+                },
+                files.Select(f => f.Module));
+
+            Assert.Contains("[1001]", files.Single(f => f.FileName == "pjsip.conf").Content);
+            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30)", files.Single(f => f.FileName == "extensions.conf").Content);
+        }
+
+        /// <summary>
+        /// Asterisk reads these three once, at startup, so no reload can apply them (D33).
+        /// </summary>
+        [Fact]
+        public void The_files_asterisk_only_reads_at_startup_carry_no_module()
+        {
+            var restart = this.applier.Render().Where(f => f.NeedsRestart).Select(f => f.FileName);
+
+            Assert.Equal(new[] { "asterisk.conf", "modules.conf", "rtp.conf" }, restart);
         }
 
         [Fact]
@@ -66,10 +91,11 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, this.applier.Write().Select(f => f.FileName));
-            Assert.True(File.Exists(Path.Combine(this.confDirectory, "pjsip.conf")));
-            Assert.True(File.Exists(Path.Combine(this.confDirectory, "extensions.conf")));
-            Assert.True(File.Exists(Path.Combine(this.confDirectory, "voicemail.conf")));
+            var written = this.applier.Write().Select(f => f.FileName).ToList();
+
+            Assert.Equal(8, written.Count);
+            foreach (var fileName in written)
+                Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
             Assert.Empty(this.applier.Write());
         }
@@ -137,6 +163,61 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.Empty(result.ChangedFiles);
             Assert.Empty(result.ReloadedModules);
+            Assert.Empty(result.RestartRequiredFiles);
+            Assert.False(result.RestartRequired);
+        }
+
+        /// <summary>
+        /// Nothing a reload could apply changed, so there is nothing to say to Asterisk. The apply
+        /// still succeeds — AMI is not even opened, and port 1 would refuse it — and it says a
+        /// restart is owed (D33).
+        /// </summary>
+        [Fact]
+        public void An_apply_that_only_changed_startup_files_needs_no_ami_connection()
+        {
+            AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
+            this.applier.Write();
+            File.Delete(Path.Combine(this.confDirectory, "asterisk.conf"));
+
+            var result = this.applier.Apply();
+
+            Assert.Equal(new[] { "asterisk.conf" }, result.ChangedFiles);
+            Assert.Empty(result.ReloadedModules);
+            Assert.Equal(new[] { "asterisk.conf" }, result.RestartRequiredFiles);
+            Assert.True(result.RestartRequired);
+        }
+
+        /// <summary>
+        /// Reloading manager.conf can close the session the reloads are being sent on, so it goes
+        /// last and the files that need a restart are not in the plan at all (D34).
+        /// </summary>
+        [Fact]
+        public void The_reload_plan_puts_manager_last_and_leaves_out_the_startup_files()
+        {
+            var plan = ConfigApplier.ReloadOrder(this.applier.Render());
+
+            Assert.Equal(ConfigApplier.ManagerModule, plan[^1]);
+            Assert.Equal(
+                new[]
+                {
+                    ConfigApplier.LoggerModule, ConfigApplier.PjsipModule,
+                    ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
+                    ConfigApplier.ManagerModule,
+                },
+                plan);
+        }
+
+        [Fact]
+        public void The_reload_plan_names_each_module_once()
+        {
+            var twice = new List<GeneratedFile>
+            {
+                new("pjsip.conf", ConfigApplier.PjsipModule, ""),
+                new("pjsip-extra.conf", ConfigApplier.PjsipModule, ""),
+                new("asterisk.conf", null, ""),
+            };
+
+            Assert.Equal(new[] { ConfigApplier.PjsipModule }, ConfigApplier.ReloadOrder(twice));
         }
 
         /// <summary>
@@ -185,7 +266,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var applier = ConfigApplier.FromDatabase(this.database, this.settings, this.extensions);
             var changed = applier.Write();
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, changed.Select(f => f.FileName));
+            Assert.Contains("pjsip.conf", changed.Select(f => f.FileName));
             var pjsip = File.ReadAllText(Path.Combine(this.confDirectory, "pjsip.conf"));
             Assert.Contains("external_media_address = 203.0.113.10", pjsip);
             Assert.Contains("local_net = 10.8.20.0/24", pjsip);
@@ -195,10 +276,11 @@ namespace Techie.Pbx.Tests.Asterisk
         public void An_empty_database_still_renders_a_usable_dialplan()
         {
             var files = this.applier.Render();
+            var dialplan = files.Single(f => f.FileName == "extensions.conf").Content;
 
-            Assert.Contains("[internal]", files[1].Content);
-            Assert.Contains("exten => *43,1,Answer()", files[1].Content);
-            Assert.Contains("[transport-udp]", files[0].Content);
+            Assert.Contains("[internal]", dialplan);
+            Assert.Contains("exten => *43,1,Answer()", dialplan);
+            Assert.Contains("[transport-udp]", files.Single(f => f.FileName == "pjsip.conf").Content);
         }
     }
 }

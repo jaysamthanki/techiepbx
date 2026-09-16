@@ -274,3 +274,79 @@ Mailboxes live in voicemail context **`default`**, Asterisk's own, named explici
 `app_voicemail` autoloads and nothing in the generated `modules.conf` allowlist work (piece 7)
 may `noload` it.
 
+### D31. modules.conf is an allowlist: `autoload = no` and nothing else (2026-09-16)
+Closes the known gap in [security.md](security.md#known-gaps). A stock Asterisk loads well over a
+hundred modules; we call perhaps a quarter of them. The rest are channel drivers for protocols we
+do not speak, applications we never dial and subsystems we never configure — all of it code that
+a packet can reach. `ModulesConfRenderer` writes `autoload = no` and one `load =` line per module,
+grouped by why it is there, because a list nobody can read is a list nobody will keep honest.
+
+The list as of this piece (32 modules): `res_pjproject`, `res_rtp_asterisk`,
+`res_timing_timerfd`, `res_security_log`; `res_sorcery_config/memory/astdb`; `res_pjsip`,
+`res_pjsip_session`, `chan_pjsip`, `res_pjsip_authenticator_digest`,
+`res_pjsip_endpoint_identifier_user`, `res_pjsip_registrar`, `res_pjsip_sdp_rtp`,
+`res_pjsip_caller_id`, `res_pjsip_nat`, `res_pjsip_dtmf_info`; `bridge_simple`,
+`bridge_native_rtp`; `pbx_config`, `app_dial`, `app_playback`, `app_echo`, `app_voicemail`,
+`func_callerid`; `codec_alaw`, `codec_ulaw`, `codec_gsm`, `format_gsm`, `format_pcm`,
+`format_wav`, `format_wav_gsm`.
+
+Deliberately absent, each waiting for the piece that needs it: `res_pjsip_outbound_registration`,
+`res_pjsip_outbound_authenticator_digest` and `res_pjsip_endpoint_identifier_ip` (trunks, piece
+9); `res_pjsip_pubsub` and `res_pjsip_mwi` (message waiting); `app_stack` and `func_logic`
+(destinations, piece 8); `res_musiconhold`; `cdr_*` (reports, piece 18); `res_pjsip_refer`
+(transfers, not a feature yet). Permanently absent and worth naming:
+`res_pjsip_endpoint_identifier_anonymous`, which is how a PBX ends up taking calls from
+strangers. Adding a feature means adding its modules in the same change. This supersedes the last
+paragraph of D29: `app_voicemail` is not autoloaded any more, it is on the list.
+
+**The exact list is an open question until the lab VM confirms it.** A missing module shows up as
+a feature that quietly does not work, so it is to be verified by restarting the VM on this file
+and watching `core show modules`, `pjsip show endpoints` and a real call with voicemail.
+
+### D32. AMI binds to loopback, and manager.conf refuses to say otherwise (2026-09-16)
+`manager.conf` is generated from the same `AmiSettings` the app connects with, so the secret in
+the database and the secret in the file are one value with one source. `[general]` is always
+`bindaddr = 127.0.0.1`, `webenabled = no`, and the account is always `deny = 0.0.0.0/0.0.0.0`
+with `permit = 127.0.0.1/255.255.255.255`. None of that is configurable: AMI is a "do anything to
+this PBX" socket, and the app that uses it runs on the same box.
+
+Because the binding is fixed, a setting that points `Ami.Host` anywhere else is a mistake, and
+`ManagerConfRenderer` throws rather than writing a file that disagrees with the settings — a
+misconfiguration should fail where it is made, not as a broken apply at three in the morning.
+
+The account gets `read = system` and `write = system,config`: between them, what `Reload` and
+`PJSIPShowContacts` need and nothing more. No `command` (D17), no `originate`. Security events
+(`read = security`) come with the blocker in piece 20, CDR with reports in piece 18.
+
+### D33. asterisk.conf, modules.conf and rtp.conf are written but never reloaded (2026-09-16)
+Asterisk reads `asterisk.conf` once, at startup, and module loading is decided once as well.
+Pretending otherwise would mean an apply that says "done" while Asterisk runs the old file.
+
+So `GeneratedFile.Module` is nullable: null means no reload can apply this file. `Apply()` writes
+those files like any other, reloads nothing for them, and reports them in
+`ApplyResult.RestartRequiredFiles` with `RestartRequired` set, which the UI repeats to the admin.
+An apply where only those files changed opens no AMI connection at all and still succeeds.
+
+`rtp.conf` is in this group as the conservative choice. `res_rtp_asterisk` most likely does
+re-read it on a module reload, but the RTP range is static in the renderer and effectively never
+changes after the first write, so a reload that might fail and break an apply buys nothing.
+Worth confirming on the lab VM; if it reloads cleanly, moving `rtp.conf` to `res_rtp_asterisk` is
+a one-line change.
+
+The restart itself stays manual for now. Restarting Asterisk drops live calls, so it is not
+something an apply should do on its own; the polkit rule for `asterisk.service` (architecture.md)
+means it can be offered as its own button later.
+
+### D34. Reloading manager.conf may hang up on us, and that is not a failure (2026-09-16)
+Reloading `manager.conf` makes Asterisk rebuild its AMI sessions, and the session giving the
+reload order is one of them: it can answer and then close, or close without answering.
+
+`manager` is therefore reloaded **last** — everything else has already happened by then — and
+only its reload tolerates a dropped connection, which is logged at INFO as the expected outcome.
+Every other module's reload still has to succeed, and a failure still leaves the config-pending
+marker up (D26). `ConfigApplier.ReloadOrder` is public so this ordering can be tested without a
+live Asterisk.
+
+`logger` and `manager` are not `.so` files: the logger and AMI are part of the Asterisk core, and
+both names are reload classes the `Reload` action accepts alongside real module names.
+

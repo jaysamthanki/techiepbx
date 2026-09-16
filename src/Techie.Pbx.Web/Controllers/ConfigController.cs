@@ -50,6 +50,15 @@ namespace Techie.Pbx.Web.Controllers
                 return this.StatusCode(StatusCodes.Status500InternalServerError, new MessageResponse(
                     "The config files could not be written. Check that the conf directory exists and that the web user may write to it."));
             }
+            catch (InvalidOperationException ex)
+            {
+                // A renderer refused the data it was given: missing AMI credentials, a setting
+                // that contradicts the generated config, or a row that would break out of a conf
+                // file. The message is ours and says which, so it is worth showing.
+                Log.Error($"Apply config: the config could not be rendered: {ex.Message}", ex);
+                return this.StatusCode(StatusCodes.Status500InternalServerError, new MessageResponse(
+                    "The config could not be generated: " + ex.Message));
+            }
         }
 
         private static string Summarise(ApplyResult result)
@@ -57,7 +66,20 @@ namespace Techie.Pbx.Web.Controllers
             if (result.ChangedFiles.Count == 0)
                 return "Nothing to do: the config files already match the database.";
 
-            return $"Wrote {string.Join(", ", result.ChangedFiles)} and reloaded {string.Join(", ", result.ReloadedModules)}.";
+            var summary = $"Wrote {string.Join(", ", result.ChangedFiles)}";
+
+            summary += result.ReloadedModules.Count > 0
+                ? $" and reloaded {string.Join(", ", result.ReloadedModules)}."
+                : ".";
+
+            // Saying "done" when Asterisk is still running the old file would be a lie (D33).
+            if (result.RestartRequired)
+            {
+                summary += $" Asterisk must be restarted before {string.Join(", ", result.RestartRequiredFiles)} " +
+                           "take effect; it is still running the config it started with.";
+            }
+
+            return summary;
         }
     }
 }
