@@ -34,7 +34,7 @@ Most PBX management doesn't need root if file ownership is set up correctly:
 
 | Operation | How | Root? |
 |---|---|---|
-| Write Asterisk config | Web has group write on `/etc/asterisk` | No |
+| Write Asterisk config | Web is in the `asterisk` group; `/etc/asterisk` is setgid 2770 (D18) | No |
 | Reload config, live status | AMI on localhost | No |
 | Restart `asterisk.service` | polkit rule scoped to that one unit | No |
 | Bind 443 | `AmbientCapabilities=CAP_NET_BIND_SERVICE` | No |
@@ -49,8 +49,8 @@ Sudo rules were rejected: see [decisions.md](decisions.md).
 | Project | Contents | Depends on |
 |---|---|---|
 | `Techie.Pbx.Web` | Razor Pages, API controllers, auth, startup | Core, Asterisk, Contracts |
-| `Techie.Pbx.Core` | Models + validation, `Database` (SQLite + schema scripts), repositories, `SecretGenerator`, shell scripts | Dapper, Microsoft.Data.Sqlite, log4net |
-| `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, AMI client (planned) | Core |
+| `Techie.Pbx.Core` | Models + validation, `Database` (SQLite + schema scripts), repositories, `SettingsKeys`, `SecretGenerator`, shell scripts | Dapper, Microsoft.Data.Sqlite, log4net |
+| `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, `ConfigApplier`, AMI client | Core |
 | `Techie.Pbx.Contracts` | Messages between Web and Helper | none |
 | `Techie.Pbx.Helper` | Root helper (stub) | Core, Contracts |
 | `Techie.Pbx.Tests` | xUnit tests, expected conf files | Core, Asterisk |

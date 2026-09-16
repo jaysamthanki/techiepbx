@@ -113,7 +113,9 @@ fi
 mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
 chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
 chown root:asterisk /etc/asterisk
-chmod 0750 /etc/asterisk
+# setgid (2770): the web user is in the asterisk group and writes generated config here, and
+# every file it creates has to end up group-owned by asterisk so asterisk can read it (D18).
+chmod 2770 /etc/asterisk
 
 # --- minimal config ----------------------------------------------------------
 

@@ -8,6 +8,13 @@ namespace Techie.Pbx.Asterisk.Config
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfFileWriter));
 
         /// <summary>
+        /// Owner and group read/write, nothing for anyone else. The file holds SIP secrets, so the
+        /// world must not read it; the asterisk process reads it through its group (D18).
+        /// </summary>
+        private const UnixFileMode ConfFileMode =
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
+
+        /// <summary>
         /// Writes a config file atomically: temp file in the same directory, fsync, rename over
         /// the target. Asterisk never sees a half-written file. Returns false if the content
         /// was already identical (nothing written, no reload needed).
@@ -29,11 +36,12 @@ namespace Techie.Pbx.Asterisk.Config
                     stream.Flush(flushToDisk: true);
                 }
 
-                // Readable by the asterisk group, not the world (contains SIP secrets).
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
-
                 File.Move(temp, target, overwrite: true);
+
+                // Explicitly, after the move: the mode the umask happened to give the temp file
+                // is not good enough, because asterisk reads this file through its group.
+                if (!OperatingSystem.IsWindows())
+                    File.SetUnixFileMode(target, ConfFileMode);
             }
             finally
             {

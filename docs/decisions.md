@@ -67,3 +67,83 @@ Echo test is `*43`.
 ### D13. Solution layout (2026-09-13)
 `src/` with Web, Core, Asterisk, Contracts, Helper; `tests/` with one xUnit project. Shared
 build settings in `Directory.Build.props`.
+
+### D14. The AMI secret lives in the database (2026-09-15)
+`Settings.Ami.Secret`, added by schema script `002_settings.sql`. The database file is already
+0600 and already holds every SIP secret, so it is the one place that has to be protected.
+
+Rejected:
+- **`appsettings.json`:** a second secret store to protect and back up, and easy to commit by
+  accident.
+- **A file only the Helper can read:** the web process is the one that talks to AMI, so the
+  Helper would only be forwarding the secret back to it.
+
+The secret is never logged (`SettingsKeys.IsSecret`) and only ever rendered into `manager.conf`
+(piece 7). Nothing else in the app reads it.
+
+### D15. Non-secret settings in a `Settings` key/value table (2026-09-15)
+One table, `SettingID` / `Key` / `Value`, rather than typed columns per setting: conf directory,
+AMI host/port/user/timeout and the SIP transport (bind address, port, local nets, external
+address) all live in it. Adding a setting then needs no schema script.
+
+The cost of a key/value table is that it can become a junk drawer with no schema to check it
+against, so the key names are constants in a static `SettingsKeys` class and `SettingsRepository`
+refuses to write a key it doesn't know. `AsteriskSettings` turns the rows into `AmiSettings` and
+`PjsipTransport`; a missing or blank value falls back to the default on those objects, which
+stay ignorant of where the values are stored.
+
+### D16. Reload via typed `Action: Reload`, per changed file (2026-09-15)
+Apply renders every file, writes only the ones whose content changed, then reloads only the
+modules those files belong to: `res_pjsip` for `pjsip.conf`, `pbx_config` for `extensions.conf`.
+When nothing changed, no AMI connection is opened at all.
+
+A typed action rather than the CLI equivalents (`pjsip reload`, `dialplan reload`) through
+`Action: Command`, so the AMI user does not need `command` permission. See D17.
+
+### D17. No `Action: Command` in the AMI client (2026-09-15)
+Dropped as unjustified surface. It is a general "run any CLI command" channel, and granting the
+AMI user `command` permission would make a web bug that reaches AMI far more valuable to an
+attacker.
+
+Everything the app needs has a dedicated action: `Reload` for applying config, and
+`PJSIPShowContacts` for live registration status. `Response: Follows`, which only the Command
+action produces, is no longer treated as success. If something in future genuinely has no typed
+action, add it here as a new decision rather than reintroducing Command quietly.
+
+### D18. Generated conf files: setgid directory, 0640 files, group `asterisk` (2026-09-15)
+Found in live testing: the web user wrote `pjsip.conf` and `extensions.conf` as
+`-rw-r----- techie:techie`, so the asterisk process could not read them. `pbx_config` declined
+to load the dialplan and said nothing about why, which made it look like a renderer bug.
+
+The model, in two halves:
+
+- **Deploy side.** `/etc/asterisk` is `root:asterisk` mode **2770** (was 0750). The group write
+  bit is what lets the web user create files there at all; the **setgid** bit is what makes
+  every file it creates group-owned by `asterisk` rather than by the web user's own group. The
+  web user is a member of the `asterisk` group and of nothing else that matters.
+- **App side.** `ConfFileWriter.WriteAtomic` sets the mode explicitly to **0640** after the
+  rename, rather than leaving it to the umask. Owner read/write for the web user, group read for
+  asterisk, nothing for anyone else: these files hold every SIP secret.
+
+Group *write* on the files is deliberately not granted. The web user replaces a file by renaming
+over it, which needs write on the directory and not on the file, so nothing needs it.
+
+Rejected: **making the web user's primary group `asterisk`** (it would then own unrelated files
+it creates elsewhere), and **having the Helper write the config as root** (writing files is
+exactly the kind of work that does not need root, per D3).
+
+### D19. PJSIPShowContacts emits `ContactList`, and errors when empty (2026-09-15)
+Two facts about Asterisk 22.11 that the AMI documentation does not make obvious, both confirmed
+on the wire:
+
+- The list items are **`ContactList`** events, terminated by `ContactListComplete` with
+  `EventList: Complete`. Not `ContactStatusDetail`, which is what `ContactStatus`-style events
+  are called elsewhere; we filtered for that name and so always saw zero contacts.
+- `ContactList` has **no `Aor` header**. It carries `ObjectName` (`1001;@<hash>`), `Endpoint`
+  (`1001`), `Uri`, `UserAgent`, `Status`, `ViaAddr`/`ViaPort` and the qualify fields.
+  `PjsipContact.Aor` is read from **`Endpoint`**, because our generated config names the endpoint,
+  the AOR and the extension identically. If that ever stops being true, this has to be revisited.
+- With nothing registered, the action itself is answered **`Response: Error` /
+  `Message: No Contacts found`**, not an empty list. That is an empty result, not a failure, so
+  `SendEventList` takes an `emptyListMessage` that turns exactly that one message into an empty
+  list. Any other error still throws.
