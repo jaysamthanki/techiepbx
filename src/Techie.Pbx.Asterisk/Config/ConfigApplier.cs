@@ -37,6 +37,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly string confDirectory;
         private readonly PjsipTransport transport;
         private readonly ExtensionRepository extensions;
+        private readonly TrunkRepository trunks;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -44,12 +45,14 @@ namespace Techie.Pbx.Asterisk.Config
             string confDirectory,
             PjsipTransport transport,
             ExtensionRepository extensions,
+            TrunkRepository trunks,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
             this.confDirectory = confDirectory;
             this.transport = transport;
             this.extensions = extensions;
+            this.trunks = trunks;
             this.ami = ami;
             this.pending = pending;
         }
@@ -60,7 +63,11 @@ namespace Techie.Pbx.Asterisk.Config
         /// data folder next to the database. Settings are read once per apply, so a change made in
         /// the UI is picked up by the next apply without a restart.
         /// </summary>
-        public static ConfigApplier FromDatabase(Database database, SettingsRepository settings, ExtensionRepository extensions)
+        public static ConfigApplier FromDatabase(
+            Database database,
+            SettingsRepository settings,
+            ExtensionRepository extensions,
+            TrunkRepository trunks)
         {
             var values = settings.GetAll();
 
@@ -68,6 +75,7 @@ namespace Techie.Pbx.Asterisk.Config
                 AsteriskSettings.ConfDirectory(values),
                 AsteriskSettings.Transport(values),
                 extensions,
+                trunks,
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database));
         }
@@ -119,6 +127,7 @@ namespace Techie.Pbx.Asterisk.Config
         public List<GeneratedFile> Render()
         {
             var all = this.extensions.GetAll();
+            var allTrunks = this.trunks.GetAll();
 
             return new List<GeneratedFile>
             {
@@ -129,8 +138,8 @@ namespace Techie.Pbx.Asterisk.Config
 
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
-                new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all)),
-                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all)),
+                new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
+                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
         }

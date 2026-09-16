@@ -37,9 +37,12 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip.so",
                 "res_pjsip_session.so",
                 "chan_pjsip.so",
-                "res_pjsip_authenticator_digest.so",     // check the password a phone sends
-                "res_pjsip_endpoint_identifier_user.so", // match a request to an endpoint by user
-                "res_pjsip_registrar.so",                // accept REGISTER from phones
+                "res_pjsip_authenticator_digest.so",          // check the password a phone sends
+                "res_pjsip_outbound_authenticator_digest.so", // answer a provider's challenge
+                "res_pjsip_endpoint_identifier_user.so",      // match a request to an endpoint by user
+                "res_pjsip_endpoint_identifier_ip.so",        // match an inbound trunk call by address
+                "res_pjsip_registrar.so",                     // accept REGISTER from phones
+                "res_pjsip_outbound_registration.so",         // REGISTER with a provider ourselves
                 "res_pjsip_sdp_rtp.so",                  // negotiate the media stream
                 "res_pjsip_caller_id.so",                // the callerid we set per endpoint
                 "res_pjsip_nat.so",                      // rewrite_contact, force_rport, 1:1 NAT

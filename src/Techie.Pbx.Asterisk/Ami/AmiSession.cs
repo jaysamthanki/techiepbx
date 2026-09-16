@@ -14,6 +14,19 @@ namespace Techie.Pbx.Asterisk.Ami
         /// <summary>What PJSIPShowContacts answers when no phone is registered.</summary>
         private const string NoContactsFound = "No Contacts found";
 
+        /// <summary>
+        /// What PJSIPShowRegistrationsOutbound may answer when no trunk registers. Asterisk's
+        /// wording here has not been seen on the wire yet, so every plausible one is tolerated
+        /// and the list stays until the lab VM settles it (D40).
+        /// </summary>
+        private static readonly string[] NoRegistrationsFound =
+        {
+            "No objects found.",
+            "No objects found",
+            "No Registrations found",
+            "No registrations found",
+        };
+
         private readonly AmiReader _reader;
         private readonly TextWriter _writer;
 
@@ -55,13 +68,15 @@ namespace Techie.Pbx.Asterisk.Ami
         /// Sends an action whose answer is a list: the response, then one event per item, then a
         /// final event with "EventList: Complete".
         /// </summary>
-        /// <param name="emptyListMessage">
-        /// An error message that means "the list is empty" rather than "the action failed", for
-        /// the actions that answer an empty list with Response: Error. No events follow it.
+        /// <param name="emptyListMessages">
+        /// Error messages that mean "the list is empty" rather than "the action failed", for the
+        /// actions that answer an empty list with Response: Error (D19). No events follow one.
+        /// Several can be given: Asterisk's wording differs between actions, and being wrong about
+        /// it would turn "nothing registered" into a failed page.
         /// </param>
-        public AmiEventList SendEventList(AmiAction action, string? emptyListMessage = null)
+        public AmiEventList SendEventList(AmiAction action, params string[] emptyListMessages)
         {
-            var (actionID, response) = SendAndWait(action, emptyListMessage);
+            var (actionID, response) = SendAndWait(action, emptyListMessages);
             var events = new List<AmiMessage>();
 
             if (!response.IsSuccess)
@@ -104,9 +119,25 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </summary>
         public List<PjsipContact> ShowContacts()
         {
-            return SendEventList(new AmiAction("PJSIPShowContacts"), emptyListMessage: NoContactsFound).Events
+            return SendEventList(new AmiAction("PJSIPShowContacts"), NoContactsFound).Events
                 .Where(e => string.Equals(e.EventName, "ContactList", StringComparison.OrdinalIgnoreCase))
                 .Select(PjsipContact.FromEvent)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Which trunks are registered with their providers right now: our outbound registrations,
+        /// not the phones registering with us (those are <see cref="ShowContacts"/>).
+        ///
+        /// Every event in the list is taken, rather than filtering by event name as the contacts
+        /// list does: <see cref="SendEventList"/> has already narrowed the list to the events
+        /// carrying our ActionID, so whatever Asterisk calls them, they are the answer to this
+        /// question. That leaves one less name to be wrong about (D40).
+        /// </summary>
+        public List<PjsipRegistration> ShowRegistrations()
+        {
+            return SendEventList(new AmiAction("PJSIPShowRegistrationsOutbound"), NoRegistrationsFound).Events
+                .Select(PjsipRegistration.FromEvent)
                 .ToList();
         }
 
@@ -133,7 +164,7 @@ namespace Techie.Pbx.Asterisk.Ami
             }
         }
 
-        private (string ActionID, AmiMessage Response) SendAndWait(AmiAction action, string? toleratedError = null)
+        private (string ActionID, AmiMessage Response) SendAndWait(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null)
         {
             var actionID = Write(action);
 
@@ -154,7 +185,10 @@ namespace Techie.Pbx.Asterisk.Ami
 
                 if (!message.IsSuccess)
                 {
-                    if (toleratedError == null || !string.Equals(message.Message, toleratedError, StringComparison.OrdinalIgnoreCase))
+                    var tolerated = toleratedErrors != null && message.Message != null &&
+                        toleratedErrors.Contains(message.Message, StringComparer.OrdinalIgnoreCase);
+
+                    if (!tolerated)
                         throw new AmiException($"AMI action '{action.Name}' failed: {message.Response} {message.Message}".TrimEnd());
 
                     Log.Debug($"AMI action '{action.Name}' answered '{message.Message}', treating it as an empty list");

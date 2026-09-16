@@ -18,6 +18,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly Database database;
         private readonly ExtensionRepository extensions;
         private readonly SettingsRepository settings;
+        private readonly TrunkRepository trunks;
         private readonly ConfigPendingMarker pending;
         private readonly ConfigApplier applier;
 
@@ -30,11 +31,12 @@ namespace Techie.Pbx.Tests.Asterisk
             this.database.Migrate();
             this.extensions = new ExtensionRepository(this.database);
             this.settings = new SettingsRepository(this.database);
+            this.trunks = new TrunkRepository(this.database);
             this.pending = new ConfigPendingMarker(this.database);
 
             // Port 1 has nothing listening: any attempt to reload would fail loudly.
             var ami = new AmiSettings { Port = 1, Username = "tnpbx", Secret = "not-a-real-secret", TimeoutSeconds = 1 };
-            this.applier = new ConfigApplier(this.confDirectory, new PjsipTransport(), this.extensions, ami, this.pending);
+            this.applier = new ConfigApplier(this.confDirectory, new PjsipTransport(), this.extensions, this.trunks, ami, this.pending);
         }
 
         public void Dispose()
@@ -263,7 +265,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
 
-            var applier = ConfigApplier.FromDatabase(this.database, this.settings, this.extensions);
+            var applier = ConfigApplier.FromDatabase(this.database, this.settings, this.extensions, this.trunks);
             var changed = applier.Write();
 
             Assert.Contains("pjsip.conf", changed.Select(f => f.FileName));

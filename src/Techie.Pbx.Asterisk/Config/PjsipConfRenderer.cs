@@ -4,11 +4,34 @@ using Techie.Pbx.Core.Models;
 namespace Techie.Pbx.Asterisk.Config
 {
     /// <summary>
-    /// Renders pjsip.conf from the transport settings and extensions. Pure function: no I/O.
+    /// Renders pjsip.conf from the transport settings, the extensions and the trunks. Pure
+    /// function: no I/O. Trunks are appended after the extensions, so a system with no trunks
+    /// generates exactly the file it generated before there were any (D39).
     /// </summary>
     public static class PjsipConfRenderer
     {
-        public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions)
+        /// <summary>
+        /// What a trunk's registration section is called: the trunk name plus this. The AMI
+        /// status lookup reads it back off the object name, so both ends use this constant.
+        /// </summary>
+        public const string RegistrationSuffix = "-reg";
+
+        /// <summary>The transport every endpoint and registration is bound to.</summary>
+        public const string TransportName = "transport-udp";
+
+        /// <summary>How long a registration lasts before it is renewed, in seconds.</summary>
+        private const int RegistrationExpiration = 3600;
+
+        /// <summary>How long to wait before trying a failed registration again, in seconds.</summary>
+        private const int RegistrationRetryInterval = 60;
+
+        /// <summary>How often a trunk we register to is qualified (OPTIONS ping), in seconds.</summary>
+        private const int TrunkQualifyFrequency = 60;
+
+        public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions) =>
+            Render(transport, extensions, new List<Trunk>());
+
+        public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks)
         {
             var transportErrors = transport.Validate();
             if (transportErrors.Count > 0)
@@ -18,7 +41,7 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append(ConfText.Header).Append('\n');
 
             sb.Append('\n');
-            sb.Append("[transport-udp]\n");
+            sb.Append($"[{TransportName}]\n");
             sb.Append("type = transport\n");
             sb.Append("protocol = udp\n");
             sb.Append($"bind = {transport.BindAddress}:{transport.Port}\n");
@@ -64,7 +87,114 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("remove_existing = yes\n");
             }
 
+            foreach (var trunk in TrunkRenderOrder(trunks))
+                AppendTrunk(sb, trunk);
+
             return sb.ToString();
+        }
+
+        /// <summary>Enabled trunks by name, re-validated so a bad row cannot reach a conf file.</summary>
+        public static List<Trunk> TrunkRenderOrder(IEnumerable<Trunk> trunks)
+        {
+            var enabled = trunks.Where(t => t.Enabled).ToList();
+
+            foreach (var trunk in enabled)
+            {
+                var errors = trunk.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Trunk '{trunk.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return enabled.OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// One trunk, in the order the Asterisk and provider documentation writes it: registration,
+        /// auth, aor, endpoint, identify (D39).
+        /// </summary>
+        private static void AppendTrunk(StringBuilder sb, Trunk trunk)
+        {
+            var name = ConfText.Safe(trunk.Name, "trunk name");
+            var host = ConfText.Safe(trunk.ServerHost, "server host");
+            var username = ConfText.Safe(trunk.Username, "username");
+            var server = trunk.ServerPort == PjsipTransport.DefaultPort ? host : $"{host}:{trunk.ServerPort}";
+            var hasAuth = trunk.Password.Length > 0;
+
+            if (trunk.Register)
+            {
+                sb.Append('\n');
+                sb.Append($"[{name}{RegistrationSuffix}]\n");
+                sb.Append("type = registration\n");
+                sb.Append($"transport = {TransportName}\n");
+                sb.Append($"outbound_auth = {name}-auth\n");
+                sb.Append($"server_uri = sip:{server}\n");
+                sb.Append($"client_uri = sip:{username}@{server}\n");
+                sb.Append($"contact_user = {username}\n");
+                sb.Append($"retry_interval = {RegistrationRetryInterval}\n");
+                sb.Append($"expiration = {RegistrationExpiration}\n");
+            }
+
+            if (hasAuth)
+            {
+                sb.Append('\n');
+                sb.Append($"[{name}-auth]\n");
+                sb.Append("type = auth\n");
+                sb.Append("auth_type = userpass\n");
+                sb.Append($"username = {ConfText.Safe(trunk.EffectiveAuthUsername, "auth username")}\n");
+                sb.Append($"password = {ConfText.Safe(trunk.Password, "password")}\n");
+            }
+
+            sb.Append('\n');
+            sb.Append($"[{name}]\n");
+            sb.Append("type = aor\n");
+            if (trunk.Register)
+            {
+                // Registering tells the provider where we are, so the contact comes from that.
+                // Qualify watches whether the provider is still answering.
+                sb.Append($"qualify_frequency = {TrunkQualifyFrequency}\n");
+            }
+            else
+            {
+                sb.Append($"contact = sip:{server}\n");
+            }
+
+            sb.Append('\n');
+            sb.Append($"[{name}]\n");
+            sb.Append("type = endpoint\n");
+            sb.Append($"transport = {TransportName}\n");
+            sb.Append($"context = {ConfText.Safe(trunk.Context, "trunk context")}\n");
+            sb.Append("disallow = all\n");
+            sb.Append($"allow = {string.Join(",", trunk.CodecList().Select(c => ConfText.Safe(c, "codec")))}\n");
+            sb.Append($"aors = {name}\n");
+            if (hasAuth)
+                sb.Append($"outbound_auth = {name}-auth\n");
+            sb.Append($"from_domain = {host}\n");
+            if (username.Length > 0)
+                sb.Append($"from_user = {username}\n");
+            if (trunk.CallerIDNumber.Length > 0)
+            {
+                var callerIDName = ConfText.Safe(trunk.CallerIDName, "caller ID name");
+                var callerIDNumber = ConfText.Safe(trunk.CallerIDNumber, "caller ID number");
+                sb.Append($"callerid = \"{callerIDName}\" <{callerIDNumber}>\n");
+            }
+
+            sb.Append("direct_media = no\n");
+            sb.Append("rtp_symmetric = yes\n");
+            sb.Append("force_rport = yes\n");
+            sb.Append("ice_support = no\n");
+            sb.Append("send_rpid = yes\n");
+            sb.Append("timers = no\n");
+
+            var matches = trunk.MatchAddressList();
+            if (matches.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append($"[{name}-identify]\n");
+                sb.Append("type = identify\n");
+                sb.Append($"endpoint = {name}\n");
+                foreach (var match in matches)
+                    sb.Append($"match = {ConfText.Safe(match, "match address")}\n");
+            }
         }
     }
 }

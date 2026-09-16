@@ -8,6 +8,7 @@ using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
 using Techie.Pbx.Core.Security;
+using Techie.Pbx.Web.Pages.Shared;
 
 namespace Techie.Pbx.Web.Pages.Extensions
 {
@@ -87,7 +88,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             var states = RegistrationStatus.Read(this.Ami(), numbers);
 
             var badges = numbers
-                .Select(number => new StatusBadge { Number = number, OutOfBand = true, State = states[number] })
+                .Select(number => StatusBadge.ForExtension(number, states[number], outOfBand: true))
                 .ToList();
 
             return this.Partial("_Status", badges);

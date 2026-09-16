@@ -1,0 +1,34 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Trunks";
+
+    var formUrl = Url.Page("Index", "Form");
+    var statusUrl = Url.Page("Index", "Status");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Trunks</h1>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary" onclick="pbxTrunks.openModal('@formUrl')">Add trunk</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="pbxTrunks.applyConfig(this)">Apply config</button>
+    </div>
+</div>
+
+<partial name="_ApplyPending" model="Model.ConfigPending" />
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="trunks-table" hx-get="@tableUrl" hx-trigger="load, trunksChanged from:body">
+    <p class="text-secondary">Loading trunks…</p>
+</div>
+
+@*
+    One poll for every badge: the response is a set of out-of-band swaps, one per row, so the
+    table itself is left alone. Only this page polls, and only while it is open.
+*@
+<div hx-get="@statusUrl" hx-trigger="every 5s" hx-swap="none"></div>
+
+@section Scripts {
+    <script src="~/js/trunks.js" asp-append-version="true"></script>
+}

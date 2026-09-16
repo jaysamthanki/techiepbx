@@ -1,8 +1,8 @@
+@using Techie.Pbx.Web.Pages.Shared
 @model StatusBadge
 @*
-    One live registration badge. Rendered inside the table when the table is built, and again by
-    the five second poll with hx-swap-oob set, which makes htmx replace the badge with this id
-    wherever it is on the page.
+    Identical to Pages/Shared/_StatusBadge.cshtml, which is what this page would fall through to
+    if this file were not here. It can be deleted.
 *@
 <span id="@Model.ElementID"
       class="badge @Model.CssClass"

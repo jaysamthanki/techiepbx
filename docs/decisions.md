@@ -303,6 +303,19 @@ paragraph of D29: `app_voicemail` is not autoloaded any more, it is on the list.
 a feature that quietly does not work, so it is to be verified by restarting the VM on this file
 and watching `core show modules`, `pjsip show endpoints` and a real call with voicemail.
 
+**Added 2026-09-17 (trunks, piece 9)**, moving four modules from "waiting for the piece that needs
+it" to the list, because that piece is now here:
+
+- `res_pjsip_outbound_registration.so` — registering with a provider at all.
+- `res_pjsip_outbound_authenticator_digest.so` — answering the provider's auth challenge. Without
+  it a registration is sent, challenged, and never completed.
+- `res_pjsip_endpoint_identifier_ip.so` — what makes a trunk's `identify` section work, i.e. what
+  lets Asterisk recognise an inbound call from the provider's addresses (D39).
+- (`res_pjsip_registrar.so` and the rest were already there for phones.)
+
+The list is now 36 modules. Still absent and still waiting: `res_pjsip_refer`, `res_musiconhold`,
+`cdr_*`, `app_stack`, `res_pjsip_pubsub`/`res_pjsip_mwi`.
+
 ### D32. AMI binds to loopback, and manager.conf refuses to say otherwise (2026-09-16)
 `manager.conf` is generated from the same `AmiSettings` the app connects with, so the secret in
 the database and the secret in the file are one value with one source. `[general]` is always
@@ -398,4 +411,78 @@ the golden `extensions.conf` is **unchanged**, which is the proof that the helpe
 renderer used to say. What stayed in the renderer is the `GotoIf` on `DIALSTATUS`: choosing
 *which* greeting a caller hears is the extension feature's decision, not part of what a
 destination is. The helper takes that choice as a parameter (`VoicemailGreeting`).
+
+### D37. A trunk name starts with a letter (2026-09-17)
+A trunk's name becomes its PJSIP section names — `[callcentric]`, `[callcentric-auth]`,
+`[callcentric-reg]`, `[callcentric-identify]` — in the same file where extensions already own
+`[1001]`. A trunk called "1001" would therefore collide with extension 1001's endpoint and quietly
+merge two objects.
+
+`Trunk.Name` is `^[A-Za-z][A-Za-z0-9-]{0,31}$`: letters, digits and dashes, starting with a
+letter. Extension numbers are all digits, so the two namespaces cannot meet. Dashes are allowed
+because they read well in `from-trunk-<name>`; underscores and dots are not, to keep one shape.
+
+### D38. One inbound context per trunk, hanging up until piece 11 (2026-09-17)
+Every trunk endpoint has `context = from-trunk-<name>`, and the dialplan gets a context of that
+name per enabled trunk. One per trunk rather than one shared `from-trunk`, so an inbound route can
+say "calls arriving on *this* provider" without inspecting headers, and so a misconfigured trunk
+cannot reach another provider's routing.
+
+Right now that context contains one entry — `_X.` — which NoOps and hangs up, written through the
+shared destination helper (D36). **Inbound routes (piece 11) replace the hangup with a
+destination.** Ending the call is the right placeholder: the alternative, falling through to the
+`internal` context, would let a stranger who reached the trunk dial our extensions.
+
+### D39. Trunk sections: order, and registering versus a static contact (2026-09-17)
+Trunks are appended to `pjsip.conf` **after** the extensions, in name order. A system with no
+trunks therefore renders exactly the file it rendered before trunks existed, which the tests
+assert: no pointless diff, no needless `res_pjsip` reload on upgrade.
+
+Within a trunk the order is the one the Asterisk and provider documentation uses — registration,
+auth, aor, endpoint, identify — so that this file and the provider's guide can be read side by
+side. The registration object is `<name>-reg`, and the AMI status lookup reads the trunk name back
+off that suffix (`PjsipConfRenderer.RegistrationSuffix`), so both ends share one constant.
+
+The aor depends on whether we register:
+
+- **Registering:** no `contact`, and `qualify_frequency = 60`. The registration is what tells the
+  provider where we are, and qualify is what notices the provider going away.
+- **Not registering:** `contact = sip:<host>[:port]` and no qualify. Nothing has told the provider
+  anything, so the aor has to carry the address itself; qualifying a provider that never agreed to
+  be pinged just makes noise in the log.
+
+Other choices worth naming: the port is only written into a URI when it is not 5060; `callerid` is
+only written when a caller ID number is set; `from_user` only when there is a username; an auth
+section and `outbound_auth` only when there is a password, so an IP-authenticated trunk gets
+neither. Codecs are limited to the three `modules.conf` loads (D31) — offering g722 or g729 would
+generate config Asterisk has no module to honour.
+
+### D40. Reading trunk registration status over AMI (2026-09-17)
+`AmiSession.ShowRegistrations` sends **`PJSIPShowRegistrationsOutbound`**: our registrations with
+providers, not the phones registering with us (`ShowContacts`).
+
+Two deliberate pieces of caution, because this wire format has not been seen on the lab VM yet:
+
+- **Every event in the list is mapped**, rather than filtering by event name as the contacts list
+  does. `SendEventList` has already narrowed the list to events carrying our ActionID, so whatever
+  Asterisk calls them, they answer this question — one less name to be wrong about.
+- **Several "empty list" messages are tolerated.** D19 found that PJSIPShowContacts answers
+  `Response: Error / No Contacts found` when nothing is registered; the outbound registration
+  wording is unknown, so `SendEventList` now takes a list of tolerated messages and is given the
+  plausible ones. Being wrong here would turn "no trunks registered" into a failed page.
+
+`RegistrationState` gained **Rejected**, which only outbound registrations can be: the provider has
+our credentials and refuses them. It is the one trunk state an admin has to act on, so it gets its
+own red badge rather than being folded into "not registered".
+
+### D41. A trunk password is the provider's, so there is no "regenerate" (2026-09-17)
+Extensions have **show** and **regenerate**, because we choose an extension's SIP password. A
+trunk's password is issued by the provider: generating a new random one locally would not change
+anything at the provider, it would only stop the trunk authenticating at the next apply. So the
+trunks page has **show** only.
+
+Changing a trunk password — because the provider rotated it — is done in the edit form, where the
+password box is always empty and blank means "keep the stored one". The password is never rendered
+into the form or the table; reading it back is the explicit per-row action, and like the extension
+secret it is logged as who asked, never what they saw.
 

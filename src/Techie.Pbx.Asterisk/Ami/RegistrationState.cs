@@ -16,5 +16,11 @@ namespace Techie.Pbx.Asterisk.Ami
 
         /// <summary>A phone registered but has stopped answering qualify probes.</summary>
         Unreachable,
+
+        /// <summary>
+        /// The other end refused us: a trunk whose credentials the provider will not accept.
+        /// Only outbound registrations can be in this state.
+        /// </summary>
+        Rejected,
     }
 }

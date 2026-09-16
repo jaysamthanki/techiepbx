@@ -8,10 +8,13 @@ namespace Techie.Pbx.Asterisk.Config
     /// </summary>
     public class PjsipTransport
     {
+        /// <summary>The SIP port, which a trunk's server URI only mentions when it differs.</summary>
+        public const int DefaultPort = 5060;
+
         public string BindAddress { get; set; } = "0.0.0.0";
-        public int Port { get; set; } = 5060;
-        public List<string> LocalNets { get; set; } = new();
         public string? ExternalAddress { get; set; }
+        public List<string> LocalNets { get; set; } = new();
+        public int Port { get; set; } = DefaultPort;
 
         public List<string> Validate()
         {
