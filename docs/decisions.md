@@ -214,6 +214,12 @@ browser-local state, so the "changes not applied" indicator is true even across 
 restarts. File over a DB row: it is throwaway state, and it disappears with a restore of the
 app folder instead of surviving inside a database backup.
 
+### D30. `*97` skips the voicemail PIN when called from the extension's own phone (2026-09-16)
+FreePBX convention, using Asterisk's `VoiceMailMain(ext@context,s)` option: calling `*97`
+goes straight into the caller's own mailbox without the PIN prompt. Safe because the mailbox
+is chosen from `CALLERID(num)` — the authenticated SIP endpoint — not from anything the
+caller can dial, so you can only skip into your own box.
+
 ### D27. Voicemail is columns on Extensions, not a table of its own (2026-09-16)
 A mailbox belongs to exactly one extension, is optional, and is five fields: enabled, PIN,
 email, attach, delete-after-email. Schema script `003_voicemail.sql` adds them to `Extensions`
