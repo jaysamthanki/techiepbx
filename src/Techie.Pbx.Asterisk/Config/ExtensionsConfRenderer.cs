@@ -12,8 +12,13 @@ namespace Techie.Pbx.Asterisk.Config
         public const string InternalContext = "internal";
         public const string EchoTestNumber = "*43";
 
+        /// <summary>FreePBX's number for "listen to my own messages", which users already know.</summary>
+        public const string VoicemailMainNumber = "*97";
+
         public static string Render(IEnumerable<Extension> extensions)
         {
+            var enabled = ConfText.EnabledInOrder(extensions);
+
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
 
@@ -25,7 +30,17 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append(" same => n,Echo()\n");
             sb.Append(" same => n,Hangup()\n");
 
-            foreach (var extension in ConfText.EnabledInOrder(extensions))
+            // Nobody has a mailbox, so the feature code would only ever say "no such mailbox".
+            if (enabled.Any(e => e.VoicemailEnabled))
+            {
+                sb.Append('\n');
+                sb.Append("; Check your own voicemail\n");
+                sb.Append($"exten => {VoicemailMainNumber},1,Answer()\n");
+                sb.Append($" same => n,VoiceMailMain(${{CALLERID(num)}}@{VoicemailConfRenderer.MailboxContext})\n");
+                sb.Append(" same => n,Hangup()\n");
+            }
+
+            foreach (var extension in enabled)
             {
                 var number = ConfText.Safe(extension.Number, "number");
                 var name = ConfText.Safe(extension.Name, "name");
@@ -33,7 +48,21 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append('\n');
                 sb.Append($"; {name}\n");
                 sb.Append($"exten => {number},1,Dial(PJSIP/{number},30)\n");
-                sb.Append(" same => n,Hangup()\n");
+
+                if (extension.VoicemailEnabled)
+                {
+                    // Busy gets the "busy" greeting, everything else (no answer, phone off,
+                    // congestion) gets "unavailable" (D29).
+                    sb.Append(" same => n,GotoIf($[\"${DIALSTATUS}\" = \"BUSY\"]?busy:unavailable)\n");
+                    sb.Append($" same => n(busy),VoiceMail({number}@{VoicemailConfRenderer.MailboxContext},b)\n");
+                    sb.Append(" same => n,Hangup()\n");
+                    sb.Append($" same => n(unavailable),VoiceMail({number}@{VoicemailConfRenderer.MailboxContext},u)\n");
+                    sb.Append(" same => n,Hangup()\n");
+                }
+                else
+                {
+                    sb.Append(" same => n,Hangup()\n");
+                }
             }
 
             return sb.ToString();

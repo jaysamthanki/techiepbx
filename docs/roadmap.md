@@ -19,7 +19,7 @@ this file is the **order**.
 | 10 | Outbound routes (international restricted by default) | supporting | |
 | 11 | Inbound routes (DID → destination) | supporting | |
 | 12 | Callcentric wizard (verify settings on lab VM first) | F1 | |
-| 13 | Voicemail | F2a | |
+| 13 | Voicemail | F2a | **In progress** (pulled forward 2026-09-16): mailbox per extension, `voicemail.conf`, dialplan fallback, `*97`, UI. Email delivery stays in piece 14. |
 | 14 | Email notifications (voicemail to email first, then alerts) | F4 | |
 | 15 | Ring groups: ring all + hunt | F3 | |
 | 16 | Follow me | F2b | |
@@ -67,16 +67,30 @@ the lab script until then.
   now get 401 rather than a redirect (D20), and every browser call carries an antiforgery header
   (D23).
 
-Still to do before this piece is finished:
+Left over from this piece: per-extension caller ID for outbound calls (listed under F2) is not
+built; it waits for trunks and outbound routes to exist.
 
-- **Nobody has signed in to this app yet.** The Entra app registration needs a redirect URI for
-  wherever the lab VM serves the UI, and `AzureAd:ClientSecret` or a certificate in user secrets
-  or the environment for the code flow. No bypass was added; see the open question below.
-- Run it on the lab VM: sign in, create an extension, apply, register a phone against it and
-  watch the badge turn green. Nothing in the UI has touched a real Asterisk yet.
-- Per-extension caller ID for outbound calls (listed under F2) is not built; it waits for trunks
-  and outbound routes to exist.
-- The "apply config" reminder is only in the browser that made the change: reload the page, or
-  open a second one, and it is gone while the config is still unapplied. Doing it properly means
-  asking the applier whether the rendered files differ from the ones on disk. Ask before
-  building it.
+## Piece 13 detail (in progress, started 2026-09-16)
+
+Pulled forward from its place in the order because extensions are the only thing that exists to
+hang it on. Scope is F2a minus the email itself.
+
+- Schema `003_voicemail.sql`: five `Voicemail*` columns on `Extensions` (D27).
+- `VoicemailConfRenderer` writes `voicemail.conf`: a `[general]` section (wav49, 100 messages,
+  5 minutes each) and one mailbox line per enabled extension that asked for one, in context
+  `default`. `ConfigApplier` reloads `app_voicemail` when that file changes.
+- `ExtensionsConfRenderer`: busy and unanswered calls fall back to the mailbox (D29), and `*97`
+  plays your own messages. Extensions without voicemail are unchanged.
+- The extension modal gains the voicemail fields, and says plainly that no email is sent yet.
+
+Still to do:
+
+- **Email delivery is not built** (F4, piece 14): addresses and the attach/delete toggles are
+  stored and written into `voicemail.conf`, but with no `serveremail` or template Asterisk sends
+  nothing. The open question there — SMTP relay versus Microsoft Graph, and whether Asterisk
+  sends or the app does — is still open.
+- Voicemail as a **destination** for inbound routes, IVRs and ring group failover waits for
+  piece 8 (destinations).
+- **MWI** (the message-waiting light on the phone) is not configured: it needs `mailboxes =` on
+  the PJSIP endpoint and a decision about subscriptions.
+- Run it on the lab VM: leave a message, listen to it with `*97`, check the busy greeting.

@@ -214,3 +214,57 @@ browser-local state, so the "changes not applied" indicator is true even across 
 restarts. File over a DB row: it is throwaway state, and it disappears with a restore of the
 app folder instead of surviving inside a database backup.
 
+### D27. Voicemail is columns on Extensions, not a table of its own (2026-09-16)
+A mailbox belongs to exactly one extension, is optional, and is five fields: enabled, PIN,
+email, attach, delete-after-email. Schema script `003_voicemail.sql` adds them to `Extensions`
+with `Voicemail` prefixes, so one query still loads everything the renderers need, `Extension`
+stays the one model, `ExtensionRepository` stays the one repository, and there is no join, no
+second write path and no orphan row to worry about.
+
+Rejected: a **`Voicemails` table** keyed by `ExtensionID`. It would be the right shape for
+mailboxes that are not attached to an extension — a "general delivery" box an IVR drops callers
+into — and that is exactly what would make us revisit this: if standalone mailboxes are ever
+wanted, move the columns into their own table then, with a schema script that copies the rows.
+Until then it would be a join and a second repository bought with nothing.
+
+### D28. The voicemail PIN is stored and written as typed (2026-09-16)
+`Extensions.VoicemailPin` holds the digits, and `voicemail.conf` gets them in the mailbox line:
+`1001 => 4321,Front Desk,...`. That is how app_voicemail works — it reads the password from the
+file (and rewrites it there when a user changes it by phone), so there is nothing to hash
+against.
+
+This is the same exposure the SIP secrets already have (security.md: "SIP secrets stored in
+plain text in DB and `pjsip.conf`"), and it is defended the same way: the database is 0600 and
+the conf files are 0640 to group `asterisk` (D18). Two differences worth naming: a voicemail PIN
+buys an attacker someone's messages rather than a phone line to sell calls on, so it is the
+lesser secret of the two; and unlike the SIP secret it **is** shown in the edit modal, because
+an admin setting up a phone has to be able to read it out. PINs are 4 to 8 digits, a new
+extension is offered a random 6-digit one, and trivial PINs are not refused.
+
+### D29. Voicemail fallback: explicit GotoIf on DIALSTATUS, busy versus unavailable (2026-09-16)
+An extension with a mailbox gets:
+
+```
+exten => 1001,1,Dial(PJSIP/1001,30)
+ same => n,GotoIf($["${DIALSTATUS}" = "BUSY"]?busy:unavailable)
+ same => n(busy),VoiceMail(1001@default,b)
+ same => n,Hangup()
+ same => n(unavailable),VoiceMail(1001@default,u)
+ same => n,Hangup()
+```
+
+so the caller hears the busy greeting when the phone is busy and the unavailable greeting for
+everything else (no answer, unregistered, congestion). Without a mailbox the line stays
+`Hangup()`, as before. `*97` is `VoiceMailMain(${CALLERID(num)}@default)` — your own mailbox,
+FreePBX's number — and is only written when at least one mailbox exists.
+
+Rejected: the one-liner
+`VoiceMail(1001@default,${IF($["${DIALSTATUS}"="BUSY"]?b:u)})`. It is the same behaviour in less
+space, but the generated dialplan is something an admin reads while a phone system is down, and
+two labels are easier to follow than a nested expression.
+
+Mailboxes live in voicemail context **`default`**, Asterisk's own, named explicitly in every
+`VoiceMail()` call; one context is enough for a single-tenant PBX.
+`app_voicemail` autoloads and nothing in the generated `modules.conf` allowlist work (piece 7)
+may `noload` it.
+

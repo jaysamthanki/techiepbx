@@ -9,7 +9,7 @@ Status: **Done**, **Partial**, **Planned**.
 |---|---|---|
 | F1 | [Trunks](#f1-trunks): Callcentric wizard + generic SIP trunk | Planned |
 | F2 | [Extensions](#f2-extensions) | Partial |
-| F2a | [Voicemail](#f2a-voicemail) | Planned |
+| F2a | [Voicemail](#f2a-voicemail) | Partial |
 | F2b | [Follow me](#f2b-follow-me) | Planned |
 | F3 | [Ring groups](#f3-ring-groups) (including hunt groups) | Planned |
 | F4 | [Email notifications](#f4-email-notifications) | Planned |
@@ -53,6 +53,13 @@ routes to exist first.
 ## F2a. Voicemail
 
 A voicemail box per extension (optional).
+
+**Done (2026-09-16):** the box itself — PIN, email address, attach and delete-after-email
+settings on the extension (D27), `voicemail.conf` generation, busy/unanswered fallback to the
+mailbox and `*97` to listen (D29), and the fields in the extension modal.
+
+**Still to do:** sending the email (F4), voicemail as a destination for inbound routes and IVRs
+(needs destinations), and MWI.
 
 - PIN, email address, whether to attach the recording to the email, whether to delete after emailing.
 - Unanswered or busy calls to an extension go to its voicemail.

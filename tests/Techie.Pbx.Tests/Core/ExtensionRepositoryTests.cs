@@ -91,6 +91,82 @@ namespace Techie.Pbx.Tests.Core
         }
 
         [Fact]
+        public void Voicemail_settings_survive_a_round_trip()
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                VoicemailEnabled = true,
+                VoicemailPin = "4321",
+                VoicemailEmail = "desk@example.com",
+                VoicemailAttachRecording = false,
+                VoicemailDeleteAfterEmail = true,
+            };
+            this.repository.Insert(extension);
+
+            var loaded = this.repository.GetByNumber("1001")!;
+
+            Assert.True(loaded.VoicemailEnabled);
+            Assert.Equal("4321", loaded.VoicemailPin);
+            Assert.Equal("desk@example.com", loaded.VoicemailEmail);
+            Assert.False(loaded.VoicemailAttachRecording);
+            Assert.True(loaded.VoicemailDeleteAfterEmail);
+        }
+
+        /// <summary>An extension that never asked for voicemail has none, and needs no PIN.</summary>
+        [Fact]
+        public void An_extension_without_voicemail_needs_no_pin()
+        {
+            this.repository.Insert(new Extension { Number = "1001", Name = "Front Desk", Secret = SecretGenerator.Create() });
+
+            var loaded = this.repository.GetByNumber("1001")!;
+
+            Assert.False(loaded.VoicemailEnabled);
+            Assert.Equal("", loaded.VoicemailPin);
+            Assert.True(loaded.VoicemailAttachRecording);
+            Assert.False(loaded.VoicemailDeleteAfterEmail);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("123")]
+        [InlineData("123456789")]
+        [InlineData("12a4")]
+        public void Voicemail_needs_a_pin_of_four_to_eight_digits_once_it_is_switched_on(string pin)
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                VoicemailEnabled = true,
+                VoicemailPin = pin,
+            };
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.repository.Insert(extension));
+
+            Assert.Contains("PIN", ex.Message);
+        }
+
+        [Fact]
+        public void A_voicemail_email_that_is_not_an_address_is_rejected()
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                VoicemailEmail = "not-an-address",
+            };
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.repository.Insert(extension));
+
+            Assert.Contains("email", ex.Message);
+        }
+
+        [Fact]
         public void Invalid_extension_is_rejected_before_hitting_the_database()
         {
             var ex = Assert.Throws<ValidationFailedException>(() =>

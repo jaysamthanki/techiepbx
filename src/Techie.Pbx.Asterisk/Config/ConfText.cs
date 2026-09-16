@@ -13,6 +13,9 @@ namespace Techie.Pbx.Asterisk.Config
 
         private static readonly char[] Forbidden = { '\r', '\n', '\0', ';', '[', ']', '"' };
 
+        /// <summary>What would split one field of a comma separated line into two.</summary>
+        private static readonly char[] FieldSeparators = { ',', '|', '=' };
+
         /// <summary>
         /// Enabled extensions in numeric order, re-validated so a bad row can't reach a config file.
         /// </summary>
@@ -38,6 +41,22 @@ namespace Techie.Pbx.Asterisk.Config
             if (value.IndexOfAny(Forbidden) >= 0 || value.Any(char.IsControl))
                 throw new InvalidOperationException($"Refusing to write unsafe value for '{field}' to Asterisk config.");
             return value;
+        }
+
+        /// <summary>
+        /// A value for one field of a comma separated line, which is how voicemail.conf writes a
+        /// mailbox. A comma, pipe or equals sign would end the field early and shift everything
+        /// after it, so they become spaces rather than throwing: "Smith, John" is a name our own
+        /// rules allow, and an apply must not fail over it. Everything else still goes through
+        /// <see cref="Safe"/>.
+        /// </summary>
+        public static string SafeField(string value, string field)
+        {
+            var separators = value.IndexOfAny(FieldSeparators) < 0
+                ? value
+                : new string(value.Select(c => Array.IndexOf(FieldSeparators, c) >= 0 ? ' ' : c).ToArray());
+
+            return Safe(separators, field);
         }
     }
 }

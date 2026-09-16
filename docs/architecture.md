@@ -85,7 +85,8 @@ Generated files (current):
 | File | Renderer | Contains |
 |---|---|---|
 | `pjsip.conf` | `PjsipConfRenderer` | UDP transport (with NAT settings when needed), one endpoint + auth + aor per enabled extension |
-| `extensions.conf` | `ExtensionsConfRenderer` | `[internal]` context: `*43` echo test, one explicit `Dial` entry per enabled extension |
+| `extensions.conf` | `ExtensionsConfRenderer` | `[internal]` context: `*43` echo test, `*97` voicemail (when any mailbox exists), one explicit `Dial` entry per enabled extension, falling back to the mailbox when there is one (D29) |
+| `voicemail.conf` | `VoicemailConfRenderer` | `[general]` recording settings and one mailbox line per enabled extension with voicemail switched on, in context `default` |
 
 Still hand-written by the lab script and to be generated later: `asterisk.conf`, `modules.conf`,
 `logger.conf`, `rtp.conf`, `manager.conf`.
