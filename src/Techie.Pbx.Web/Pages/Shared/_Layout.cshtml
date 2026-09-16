@@ -37,8 +37,20 @@
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Trunks/Index">Trunks</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Routes/Index">Routes</a>
+                        </li>
                     </ul>
                     <partial name="_LoginPartial" />
+
+                    @*
+                        The apply button lives here, for every page at once, and only exists while
+                        there is something to apply (D43). The poll is what makes it appear after a
+                        change and disappear after an apply; the events just make it quicker.
+                    *@
+                    <div class="d-flex align-items-center ms-2"
+                         hx-get="/ConfigStatus"
+                         hx-trigger="load, every 5s, configChanged from:body, configApplied from:body"></div>
                 </div>
             </div>
         </nav>

@@ -24,7 +24,18 @@ namespace Techie.Pbx.Core.Data
         public void Delete(long trunkID)
         {
             using var connection = this.database.Open();
-            connection.Execute("DELETE FROM Trunks WHERE TrunkID = @trunkID", new { trunkID });
+
+            try
+            {
+                connection.Execute("DELETE FROM Trunks WHERE TrunkID = @trunkID", new { trunkID });
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)
+            {
+                // An outbound route still points at it. Deleting the route as well would be a
+                // surprise; saying so is not.
+                throw new ValidationFailedException(
+                    "This trunk is still used by an outbound route. Delete the route first.");
+            }
 
             this.pending.Raise();
         }

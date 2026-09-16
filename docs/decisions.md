@@ -529,3 +529,104 @@ Note that `.modal-dialog-scrollable` is deliberately not used: with the form bet
 `.modal-content` and the header/footer, that class's flex layout does not apply cleanly. A long
 form scrolls the page, as it did before.
 
+### D43. One apply button, in the navbar, and only when there is something to apply (2026-09-18)
+"Asterisk is running config older than the database" is true of the whole system, not of the page
+you happen to be looking at. So the per-page **Apply config** buttons and the per-page "changes
+not applied" banners are gone, replaced by a single red button at the end of the navbar that
+exists **only while the marker file does** (D26).
+
+`/ConfigStatus` is a page with nothing but a handler: it answers with the button, or with nothing
+at all. The navbar polls it every five seconds, and also on `configChanged` (which every save now
+fires) and `configApplied`, so it appears the moment something changes and disappears the moment
+an apply succeeds. A button that is only there when it has work to do needs no banner explaining
+itself, and no page has to remember to draw one.
+
+Polling from the layout means every open page asks every five seconds; the answer is a
+`File.Exists`, which is why that is affordable.
+
+### D44. Outbound routes: the fields, and the ones left out (2026-09-18)
+`OutboundRoutes` is Name, DialPattern, TrunkID, Priority, Enabled. Name is letters/digits/dashes
+starting with a letter, like a trunk (D37), because it names a dialplan context. TrunkID is a real
+foreign key, so a trunk a route still points at cannot be deleted — `TrunkRepository.Delete` turns
+that constraint into "delete the route first" rather than an exception.
+
+**Left out, deliberately: strip and prepend digits.** features.md says "dial pattern → trunk", and
+that is what this is. The consequence is worth naming: a site that wants "dial 9 for an outside
+line" cannot have it, because the 9 would be sent to the provider as part of the number. If that
+is wanted, it is one field (`StripDigits`, rendered as `${EXTEN:n}`) and one line of renderer —
+ask for it rather than assume it.
+
+Also left out: per-route caller ID (the trunk's is used), time-of-day conditions, and failover to
+a second trunk. Each is a feature, not a field.
+
+### D45. A number that matches no route does not go out (2026-09-18)
+The last context included from `outbound` is `outbound-blocked`, whose only entry is `_X.`: NoOp,
+play "not in service", hang up. It can never reach a `Dial`, and the tests assert that.
+
+This is the fail-closed half of the toll-fraud guard in [security.md](security.md): the danger is
+not the route an admin wrote, it is the number nobody thought about. When there are **no** routes
+at all, no outbound context is written and no catch-all either — an outside number simply does not
+match anything, which fails closed as well, and keeps the generated file identical to what a
+trunk-less, route-less system produced before this piece.
+
+The prompt is `ss-noservice` from Asterisk's core sounds. **To verify on the lab VM**: if that file
+is not installed, Playback logs a warning and the call falls through to the `Hangup()` on the next
+line, so the call still ends — it just ends in silence rather than with an explanation.
+
+### D46. One context per route, included in order, because Asterisk picks the best match (2026-09-18)
+Within one context Asterisk does not try patterns in file order: it picks the one it considers
+most specific. "First match wins, in the order the admin listed" therefore cannot be done by
+writing the patterns into a single context.
+
+What Asterisk *does* honour is the order of `include =>` lines. So each route gets a context of its
+own (`outbound-<name>`), `[outbound]` is nothing but includes in priority order, and `[internal]`
+includes `[outbound]` at the end. A context's own extensions are searched before its includes,
+which is what keeps a route pattern from ever stealing a call meant for an extension or a feature
+code.
+
+Pattern syntax is restricted to what we can reason about: digits, `X`, `N`, `Z`, a `[...]` set of
+digits and ranges, and a trailing `.`. `!` is refused — it matches as soon as it can, which
+surprises people — and so is anything else.
+
+### D47. International dialling cannot be routed at all (2026-09-18)
+The repository refuses to store a route whose pattern could reach an international number. There
+is no checkbox, no "advanced" section and no override: **a route that starts with `0`, or with a
+wildcard that can match `0`, is a validation error** with a message that says why.
+
+That covers both halves of the real-world problem: the explicit `_011.` or `_00.` route, and the
+`_X.` "one route to everywhere" that is how most compromised PBXes actually pay out. Ordinary
+dialling is untouched — `_1NXXXXXXXXX`, `_NXXXXXXX`, `_911`, `_[2-9]XXXXXX` all pass, because none
+of them can begin with a zero.
+
+Two things this does **not** do, both worth knowing:
+
+- **It assumes North American dialling.** A country where national numbers begin with 0 (the UK,
+  most of Europe) cannot write a route at all under this rule. That is the escape hatch to design
+  when it is needed, and it should be a deliberate per-system setting rather than a per-route
+  checkbox.
+- **It only looks at the start of the pattern.** `_9011.` is allowed, and would be nonsense today
+  because the 9 is sent to the provider as part of the number — but if strip-digits is ever added
+  (D44), that pattern becomes a real international route and this check has to grow to match.
+
+### D48. A table row is a link to its edit form (2026-09-18)
+Clicking anywhere on a row opens that row's edit form; the column of Edit/Password/Regenerate/
+Delete buttons is gone. Those actions now live in the **footer of the edit modal**, where there is
+room to label them properly and where they read as "things I can do to this extension" rather than
+four small buttons competing with the data.
+
+The table is the thing an admin looks at most, and it was becoming mostly buttons. One click
+anywhere on the row is also fewer pixels to hit than a specific button.
+
+How it works: each `<tr>` carries `data-edit-url`, and one delegated click handler on the body
+calls `pbx.openEdit`, which is the same htmx fetch into the same shared modal that the Add button
+does with attributes (D42). Delegation rather than a handler per row is what survives htmx swapping
+the table and bootstrap-table re-rendering its rows on sort and search; bootstrap-table carries
+`data-*` from the source row through that re-render, which is why the attribute is on the `<tr>`.
+A click on anything interactive inside a row is that thing's click, not the row's.
+
+`tr[data-edit-url]` gets `cursor: pointer` in site.css, because a row that does something when
+clicked should look like it.
+
+The alerts opened from inside the modal — show password, the regenerate confirm — are given
+sweetalert2's `heightAuto: false`, or opening one shifts the modal underneath it.
+

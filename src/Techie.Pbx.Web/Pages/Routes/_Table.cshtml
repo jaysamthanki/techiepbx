@@ -1,0 +1,41 @@
+@model List<RouteRow>
+@*
+    Clicking anywhere on a row opens its edit form (D48). Already in the order the routes are
+    tried, so the table is deliberately not sortable: the order is the meaning.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="priority">Priority</th>
+            <th data-field="name">Name</th>
+            <th data-field="pattern">Pattern</th>
+            <th data-field="trunk">Trunk</th>
+            <th data-field="enabled">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { outboundRouteID = row.OutboundRouteID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Priority</td>
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.DialPattern</td>
+                <td>
+                    @if (row.TrunkUsable)
+                    {
+                        @row.Trunk
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="This route is left out of the generated dialplan until its trunk is back.">@row.Trunk</span>
+                    }
+                </td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>

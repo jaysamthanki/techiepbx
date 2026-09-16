@@ -17,12 +17,14 @@ namespace Techie.Pbx.Web.Controllers
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigController));
 
         private readonly ExtensionRepository extensions;
+        private readonly OutboundRouteRepository routes;
         private readonly SettingsRepository settings;
         private readonly TrunkRepository trunks;
 
         public ConfigController()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.routes = new OutboundRouteRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
@@ -30,7 +32,8 @@ namespace Techie.Pbx.Web.Controllers
         [HttpPost("apply")]
         public IActionResult Apply()
         {
-            var applier = ConfigApplier.FromDatabase(PbxDatabase.Current, this.settings, this.extensions, this.trunks);
+            var applier = ConfigApplier.FromDatabase(
+                PbxDatabase.Current, this.settings, this.extensions, this.trunks, this.routes);
 
             try
             {

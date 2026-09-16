@@ -21,6 +21,11 @@ body {
   margin-bottom: 60px;
 }
 
+/* A row that opens its edit form when clicked should look like it will (D48). */
+tr[data-edit-url] {
+  cursor: pointer;
+}
+
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
   color: var(--bs-secondary-color);
   text-align: end;

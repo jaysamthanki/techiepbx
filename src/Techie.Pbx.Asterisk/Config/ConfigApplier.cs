@@ -38,6 +38,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly PjsipTransport transport;
         private readonly ExtensionRepository extensions;
         private readonly TrunkRepository trunks;
+        private readonly OutboundRouteRepository routes;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -46,6 +47,7 @@ namespace Techie.Pbx.Asterisk.Config
             PjsipTransport transport,
             ExtensionRepository extensions,
             TrunkRepository trunks,
+            OutboundRouteRepository routes,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
@@ -53,6 +55,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.transport = transport;
             this.extensions = extensions;
             this.trunks = trunks;
+            this.routes = routes;
             this.ami = ami;
             this.pending = pending;
         }
@@ -67,7 +70,8 @@ namespace Techie.Pbx.Asterisk.Config
             Database database,
             SettingsRepository settings,
             ExtensionRepository extensions,
-            TrunkRepository trunks)
+            TrunkRepository trunks,
+            OutboundRouteRepository routes)
         {
             var values = settings.GetAll();
 
@@ -76,6 +80,7 @@ namespace Techie.Pbx.Asterisk.Config
                 AsteriskSettings.Transport(values),
                 extensions,
                 trunks,
+                routes,
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database));
         }
@@ -128,6 +133,7 @@ namespace Techie.Pbx.Asterisk.Config
         {
             var all = this.extensions.GetAll();
             var allTrunks = this.trunks.GetAll();
+            var allRoutes = this.routes.GetAll();
 
             return new List<GeneratedFile>
             {
@@ -139,7 +145,7 @@ namespace Techie.Pbx.Asterisk.Config
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
-                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks)),
+                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks, allRoutes)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
         }
