@@ -48,7 +48,7 @@ Sudo rules were rejected: see [decisions.md](decisions.md).
 
 | Project | Contents | Depends on |
 |---|---|---|
-| `Techie.Pbx.Web` | Razor Pages, API controllers, auth, startup | Core, Asterisk, Contracts |
+| `Techie.Pbx.Web` | Razor Pages + htmx partials, API controllers, auth, `PbxDatabase`, startup | Core, Asterisk, Contracts |
 | `Techie.Pbx.Core` | Models + validation, `Database` (SQLite + schema scripts), repositories, `SettingsKeys`, `SecretGenerator`, shell scripts | Dapper, Microsoft.Data.Sqlite, log4net |
 | `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, `ConfigApplier`, AMI client | Core |
 | `Techie.Pbx.Contracts` | Messages between Web and Helper | none |
@@ -65,7 +65,7 @@ The database is the source of truth. Asterisk config files are an output, like a
       ▼
  Repository ── validates model ──▶ SQLite (Extensions, ...)
       │
-      ▼  "apply config" (planned)
+      ▼  "apply config" (button on the extensions page)
  Load all rows
       │
       ▼
@@ -102,6 +102,32 @@ Cloud VMs only see a private IP; the public IP is 1:1 NAT in front of them. With
 PJSIP, calls connect with no audio. `PjsipTransport` holds `LocalNets` (the private subnets)
 and `ExternalAddress` (the public IP). When `ExternalAddress` is set, the renderer adds
 `local_net`, `external_media_address` and `external_signaling_address` to the transport.
+
+## Web UI
+
+Server rendered. Four vendored client libraries and nothing else: Bootstrap, bootstrap-table,
+sweetalert2 and htmx (D9, D21). No CDN, no npm build step, and the JavaScript we write is glue:
+`site.js` (toasts, `hx-confirm` asked with sweetalert2, starting bootstrap-table on tables htmx
+brought in) and one small file per page.
+
+The extensions page is the pattern every later list should follow:
+
+```
+ /Extensions                      page shell: buttons, empty containers, nothing else
+   ├─ hx-get ?handler=Table  ───▶ _Table       bootstrap-table, one _StatusBadge per row
+   ├─ hx-get ?handler=Status ───▶ _Status      every 5s: hx-swap-oob badges, one request
+   ├─ ?handler=Form          ───▶ _Form        shown inside a sweetalert2 modal
+   ├─ ?handler=Save/Delete   ───▶ 204 + HX-Trigger: extensionsChanged, configChanged, pbxToast
+   └─ fetch /api/…           ───▶ JSON         apply config, show/regenerate a SIP password
+```
+
+An action that changes data does not decide what to redraw: it names what happened, and the
+page's containers listen. The table re-fetches on `extensionsChanged`, the apply reminder
+appears on `configChanged`, and `pbxToast` closes the modal and says what happened.
+
+The database itself is opened once at startup by `PbxDatabase` and read from `Database:Path`
+(default `/var/lib/tnpbx/tnpbx.db`); pages and controllers construct their repositories over it
+with `new` rather than taking them from the container (D22).
 
 ## Authentication
 

@@ -147,3 +147,48 @@ on the wire:
   `Message: No Contacts found`**, not an empty list. That is an empty result, not a failure, so
   `SendEventList` takes an `emptyListMessage` that turns exactly that one message into an empty
   list. Any other error still throws.
+
+### D20. Unauthenticated API and htmx calls get 401, not a redirect to Entra (2026-09-15)
+Closes the known gap recorded in [security.md](security.md#known-gaps), now that the first
+API-backed page exists. The default behaviour challenges OpenID Connect, so a `fetch` or htmx
+request with an expired session gets a 302 to `login.microsoftonline.com`, which the browser
+cannot follow cross-origin: the page sees a CORS failure instead of "your session ended".
+
+`OnRedirectToIdentityProvider` in `Program.cs` answers **401** instead when the path starts with
+`/api` or the request carries an `HX-Request` header. htmx requests also get `HX-Refresh: true`,
+which makes the browser reload as a full navigation and sign in normally; our own `fetch` calls
+reload the page themselves on a 401. Ordinary page requests are untouched and still redirect.
+
+### D21. The extensions UI: Razor Pages partials for htmx, a JSON API only where it earns it (2026-09-15)
+Page handlers on `/Extensions` return **HTML partials** (`_Table`, `_Form`, `_Status`,
+`_StatusBadge`); htmx fetches them. Anything that changes data answers **204 with an `HX-Trigger`
+header** naming events (`extensionsChanged`, `configChanged`, `pbxToast`) that the page reacts
+to, rather than each action deciding what to re-render. Lists are bootstrap-table, create/edit
+happen in sweetalert2 modals around the form partial (D9).
+
+Live registration status is **one poll every 5 seconds for the whole page**, answered with a set
+of `hx-swap-oob` badges, one per row. Rejected: one poll per row (N requests every 5s) and
+re-fetching the whole table (loses sort, search and focus every 5 seconds). The cost is that
+bootstrap-table re-renders its rows from the HTML it captured, so a sort or search shows the
+badge as it was when the table was fetched until the next poll, at most 5 seconds later.
+
+API controllers are used only where the answer is data rather than a piece of the page:
+`POST /api/config/apply`, and showing and regenerating an extension's SIP password. Secrets are
+never rendered into the table; they are fetched one at a time, and who asked is logged.
+
+### D22. The web app's database is a static holder, path from configuration (2026-09-15)
+`PbxDatabase.Open` runs at startup and `PbxDatabase.Current` is what pages and controllers build
+their repositories over with `new` (D8). A `Database` is only a connection string, so a
+repository per request costs nothing, and nothing has to be registered in the container.
+
+The file is `Database:Path` in configuration, defaulting to **`/var/lib/tnpbx/tnpbx.db`** for a
+real install; `appsettings.Development.json` points at `tnpbx.db` beside the project, which is
+git-ignored. The directory has to be writable by the web user: the installer (piece 21) creates
+it, and until then the database is created on first run.
+
+### D23. Antiforgery tokens on every browser call, including the API (2026-09-15)
+The API shares the session cookie (D5), so it needs the same CSRF protection as a form post.
+The token goes in the `RequestVerificationToken` **header**: the layout puts it on `<body>` as
+`hx-headers`, so every htmx request carries it, and in a meta tag for our own `fetch` calls.
+Controllers get `AutoValidateAntiforgeryToken` globally rather than per action, so a new endpoint
+is protected by default instead of when someone remembers.

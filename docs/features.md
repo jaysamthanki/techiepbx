@@ -43,10 +43,12 @@ Notes:
 
 ## F2. Extensions
 
-**Done:** model, schema, repository, `pjsip.conf` and dialplan generation, tests.
+**Done:** model, schema, repository, `pjsip.conf` and dialplan generation, tests. UI (table +
+modals), apply config via AMI, live registration status, show or regenerate the SIP password —
+all written, none of it run against the lab VM yet (see [roadmap.md](roadmap.md#piece-5-detail-code-done-2026-09-15)).
 
-**Still to do:** UI (table + modals), apply config via AMI, live registration status, show or
-regenerate the SIP password, per-extension caller ID for outbound calls.
+**Still to do:** per-extension caller ID for outbound calls, which needs trunks and outbound
+routes to exist first.
 
 ## F2a. Voicemail
 

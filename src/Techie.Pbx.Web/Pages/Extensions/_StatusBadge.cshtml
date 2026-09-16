@@ -1,0 +1,10 @@
+@model StatusBadge
+@*
+    One live registration badge. Rendered inside the table when the table is built, and again by
+    the five second poll with hx-swap-oob set, which makes htmx replace the badge with this id
+    wherever it is on the page.
+*@
+<span id="@Model.ElementID"
+      class="badge @Model.CssClass"
+      title="@Model.Title"
+      hx-swap-oob="@(Model.OutOfBand ? "true" : null)">@Model.Text</span>

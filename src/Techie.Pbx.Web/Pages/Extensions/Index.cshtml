@@ -1,0 +1,36 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Extensions";
+
+    var formUrl = Url.Page("Index", "Form");
+    var statusUrl = Url.Page("Index", "Status");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Extensions</h1>
+    <div class="d-flex gap-2">
+        <button type="button" class="btn btn-primary" onclick="pbxExtensions.openModal('@formUrl')">Add extension</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="pbxExtensions.applyConfig(this)">Apply config</button>
+    </div>
+</div>
+
+<div id="apply-pending" class="alert alert-warning d-none">
+    Extensions have changed since the last apply. Choose <strong>Apply config</strong> to write them to Asterisk.
+</div>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="extensions-table" hx-get="@tableUrl" hx-trigger="load, extensionsChanged from:body">
+    <p class="text-secondary">Loading extensions…</p>
+</div>
+
+@*
+    One poll for every badge: the response is a set of out-of-band swaps, one per row, so the
+    table itself is left alone. Only this page polls, and only while it is open.
+*@
+<div hx-get="@statusUrl" hx-trigger="every 5s" hx-swap="none"></div>
+
+@section Scripts {
+    <script src="~/js/extensions.js" asp-append-version="true"></script>
+}

@@ -483,3 +483,8 @@ $RECYCLE.BIN/
 
 # log4net output
 logs/
+
+# The local development database (Database:Path in appsettings.Development.json)
+tnpbx.db
+tnpbx.db-shm
+tnpbx.db-wal

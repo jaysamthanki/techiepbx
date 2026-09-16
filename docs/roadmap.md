@@ -11,7 +11,7 @@ this file is the **order**.
 | 2 | Solution layout, log4net, cookie auth | | Done 2026-09-13 |
 | 3 | Extensions: model, schema, repository, pjsip/extensions renderers, atomic writer, tests | F2 | Done 2026-09-13 |
 | 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | Done 2026-09-15 |
-| 5 | Extensions UI: table + modals, live registration status | F2 | **Next** |
+| 5 | Extensions UI: table + modals, live registration status | F2 | Code done 2026-09-15, **not yet run on the lab VM** |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
@@ -51,3 +51,32 @@ earlier whenever deployment needs them. Record changes here.
 Left for later, on purpose: nothing writes the settings yet (no UI, and `manager.conf` with the
 AMI user is generated in piece 7), so a lab VM has to have its AMI rows inserted by hand or by
 the lab script until then.
+
+## Piece 5 detail (code done 2026-09-15)
+
+- `/Extensions`: bootstrap-table of number, name, enabled and a live registration badge, with
+  create, edit and delete in sweetalert2 modals, "show password", "regenerate password" and
+  "apply config". The page is a shell; htmx fetches every part of it from page handlers as HTML
+  partials, and changes answer 204 with `HX-Trigger` events (D21).
+- `RegistrationStatus` (in `Techie.Pbx.Asterisk/Ami`) turns `PJSIPShowContacts` into a state per
+  extension number and never throws: no AMI means every badge says Unknown. The page polls it
+  once every 5 seconds and htmx swaps the badges out of band.
+- `PbxDatabase` opens the database at startup from `Database:Path` (D22); pages and controllers
+  build their own repositories over it.
+- API: `POST /api/config/apply`, `GET`/`POST /api/extensions/{id}/secret`. Unauthenticated calls
+  now get 401 rather than a redirect (D20), and every browser call carries an antiforgery header
+  (D23).
+
+Still to do before this piece is finished:
+
+- **Nobody has signed in to this app yet.** The Entra app registration needs a redirect URI for
+  wherever the lab VM serves the UI, and `AzureAd:ClientSecret` or a certificate in user secrets
+  or the environment for the code flow. No bypass was added; see the open question below.
+- Run it on the lab VM: sign in, create an extension, apply, register a phone against it and
+  watch the badge turn green. Nothing in the UI has touched a real Asterisk yet.
+- Per-extension caller ID for outbound calls (listed under F2) is not built; it waits for trunks
+  and outbound routes to exist.
+- The "apply config" reminder is only in the browser that made the change: reload the page, or
+  open a second one, and it is gone while the config is still unapplied. Doing it properly means
+  asking the applier whether the rendered files differ from the ones on disk. Ask before
+  building it.

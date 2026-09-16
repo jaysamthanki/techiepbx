@@ -1,15 +1,23 @@
-﻿<!DOCTYPE html>
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    // htmx sends this on every request it makes (hx-headers below); our own fetch calls read it
+    // from the meta tag. The header name is Program.AntiforgeryHeaderName.
+    var requestToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="request-verification-token" content="@requestToken" />
     <title>@ViewData["Title"] - TNPBX</title>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-table/bootstrap-table.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Techie.Pbx.Web.styles.css" asp-append-version="true" />
 </head>
-<body>
+<body hx-headers='{"@Techie.Pbx.Web.Program.AntiforgeryHeaderName": "@requestToken"}'>
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container">
@@ -22,6 +30,9 @@
                     <ul class="navbar-nav flex-grow-1">
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-page="/Extensions/Index">Extensions</a>
                         </li>
                     </ul>
                     <partial name="_LoginPartial" />
@@ -37,12 +48,15 @@
 
     <footer class="border-top footer text-muted">
         <div class="container">
-            &copy; 2026 - TNPBX - <a asp-area="" asp-page="/Privacy">Privacy</a>
+            &copy; 2026 - TNPBX
         </div>
     </footer>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/bootstrap-table/bootstrap-table.min.js"></script>
+    <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
+    <script src="~/lib/htmx/htmx.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
     @await RenderSectionAsync("Scripts", required: false)

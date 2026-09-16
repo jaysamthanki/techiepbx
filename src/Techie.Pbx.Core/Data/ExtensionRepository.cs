@@ -9,22 +9,34 @@ namespace Techie.Pbx.Core.Data
         private const string Columns = "ExtensionID, Number, Name, Secret, Enabled";
         private const int SqliteConstraintError = 19;
 
-        private readonly Database _database;
+        private readonly Database database;
 
         public ExtensionRepository(Database database)
         {
-            _database = database;
+            this.database = database;
+        }
+
+        public void Delete(long extensionID)
+        {
+            using var connection = this.database.Open();
+            connection.Execute("DELETE FROM Extensions WHERE ExtensionID = @extensionID", new { extensionID });
         }
 
         public List<Extension> GetAll()
         {
-            using var connection = _database.Open();
+            using var connection = this.database.Open();
             return connection.Query<Extension>($"SELECT {Columns} FROM Extensions ORDER BY CAST(Number AS INTEGER)").ToList();
+        }
+
+        public Extension? GetByID(long extensionID)
+        {
+            using var connection = this.database.Open();
+            return connection.QuerySingleOrDefault<Extension>($"SELECT {Columns} FROM Extensions WHERE ExtensionID = @extensionID", new { extensionID });
         }
 
         public Extension? GetByNumber(string number)
         {
-            using var connection = _database.Open();
+            using var connection = this.database.Open();
             return connection.QuerySingleOrDefault<Extension>($"SELECT {Columns} FROM Extensions WHERE Number = @number", new { number });
         }
 
@@ -32,7 +44,7 @@ namespace Techie.Pbx.Core.Data
         {
             ThrowIfInvalid(extension);
 
-            using var connection = _database.Open();
+            using var connection = this.database.Open();
             try
             {
                 extension.ExtensionID = connection.ExecuteScalar<long>(
@@ -50,7 +62,7 @@ namespace Techie.Pbx.Core.Data
         {
             ThrowIfInvalid(extension);
 
-            using var connection = _database.Open();
+            using var connection = this.database.Open();
             try
             {
                 var rows = connection.Execute(
@@ -63,12 +75,6 @@ namespace Techie.Pbx.Core.Data
             {
                 throw new ValidationFailedException($"Extension {extension.Number} already exists.");
             }
-        }
-
-        public void Delete(long extensionID)
-        {
-            using var connection = _database.Open();
-            connection.Execute("DELETE FROM Extensions WHERE ExtensionID = @extensionID", new { extensionID });
         }
 
         private static void ThrowIfInvalid(Extension extension)
