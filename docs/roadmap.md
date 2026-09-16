@@ -14,7 +14,7 @@ this file is the **order**.
 | 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Done 2026-09-15 (verified on lab VM: add/edit/apply/status/secret all exercised end-to-end) |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | Done 2026-09-16. Lab-verified: restart onto the 32-module allowlist, SIP registration, AMI login via regenerated `manager.conf`, and voicemail all pass. `/etc/asterisk` is now 100% DB-generated. |
-| 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | **In progress** 2026-09-17: model, catalog, dialplan helper and shared picker done (D35, D36). No schema: destinations are derived, not stored. Nothing consumes the picker until piece 9. |
+| 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | Done 2026-09-17 (D35 derived model, D36 helper; golden extensions.conf unchanged; deployed + lab-verified) |
 | 9 | Generic SIP trunk | F1 | |
 | 10 | Outbound routes (international restricted by default) | supporting | |
 | 11 | Inbound routes (DID → destination) | supporting | |
