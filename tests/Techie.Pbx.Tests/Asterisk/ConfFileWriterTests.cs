@@ -24,5 +24,30 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.False(ConfFileWriter.WriteAtomic(_directory, "pjsip.conf", "hello\n"));
             Assert.True(ConfFileWriter.WriteAtomic(_directory, "pjsip.conf", "changed\n"));
         }
+
+        /// <summary>
+        /// Asterisk reads the generated files as a member of the file's group, so group read has
+        /// to be there; the files hold SIP secrets, so "other" must not be (D18).
+        /// </summary>
+        [Fact]
+        public void Written_files_are_group_readable_and_not_world_readable()
+        {
+            if (OperatingSystem.IsWindows())
+                return;
+
+            var target = Path.Combine(_directory, "pjsip.conf");
+
+            // Once onto a new file and once over an existing one, which is the case that matters:
+            // a rename keeps the mode of whatever was renamed into place.
+            ConfFileWriter.WriteAtomic(_directory, "pjsip.conf", "hello\n");
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead,
+                File.GetUnixFileMode(target));
+
+            ConfFileWriter.WriteAtomic(_directory, "pjsip.conf", "changed\n");
+            Assert.Equal(
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead,
+                File.GetUnixFileMode(target));
+        }
     }
 }

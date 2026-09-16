@@ -10,8 +10,8 @@ this file is the **order**.
 | 1 | Spike: Asterisk LTS built from source on a Debian VM, hand-written config, echo test | | Done 2026-09-13 |
 | 2 | Solution layout, log4net, cookie auth | | Done 2026-09-13 |
 | 3 | Extensions: model, schema, repository, pjsip/extensions renderers, atomic writer, tests | F2 | Done 2026-09-13 |
-| 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | **Next** |
-| 5 | Extensions UI: table + modals, live registration status | F2 | |
+| 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | Done 2026-09-15 |
+| 5 | Extensions UI: table + modals, live registration status | F2 | **Next** |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
@@ -35,14 +35,19 @@ use; ring groups, follow me and IVR all send calls to destinations, so destinati
 reports last because they only need call data to exist. Helper, fail2ban and installer can move
 earlier whenever deployment needs them. Record changes here.
 
-## Piece 4 detail (next)
+## Piece 4 detail (done 2026-09-15)
 
-- `Techie.Pbx.Asterisk/Ami/`: minimal AMI client over TCP (login, action/response, events).
-  Only what's needed: `Login`, `Command` / `PJSIPShowContacts`, reload actions, event reading.
-- `ConfigApplier` (or similar): loads rows from repositories, renders every file, writes with
-  `WriteAtomic`, then reloads only the modules whose files changed (`pjsip reload`,
-  `dialplan reload`).
-- Tests: renderer output is already covered. The AMI client needs protocol parsing tests using
-  canned responses; the end-to-end check happens on the lab VM.
-- Settings needed: conf directory, AMI host/port/user/secret, transport NAT settings. Store
-  non-secret settings in the DB; decide where the AMI secret lives.
+- `Techie.Pbx.Asterisk/Ami/`: minimal AMI client over TCP. `Login`, `Logoff`, action/response
+  with ActionID matching, event lists, event reading, `Reload` and `PJSIPShowContacts`.
+  `Action: Command` was dropped (D17), so the AMI user needs no `command` permission.
+- `ConfigApplier`: renders every file from the database, writes with `WriteAtomic`, then reloads
+  only the modules whose files changed (D16). `ConfigApplier.FromDatabase` is the normal wiring.
+- Settings: `Settings` key/value table, script `002_settings.sql`, keys in `SettingsKeys`,
+  read through `SettingsRepository` and turned into objects by `AsteriskSettings`. The AMI
+  secret lives there too (D14, D15).
+- Tests: AMI protocol and session against canned responses, settings repository and loader,
+  applier from database to files. The end-to-end reload check happens on the lab VM.
+
+Left for later, on purpose: nothing writes the settings yet (no UI, and `manager.conf` with the
+AMI user is generated in piece 7), so a lab VM has to have its AMI rows inserted by hand or by
+the lab script until then.
