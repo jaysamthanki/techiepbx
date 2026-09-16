@@ -52,16 +52,17 @@ namespace Techie.Pbx.Asterisk.Config
                 if (extension.VoicemailEnabled)
                 {
                     // Busy gets the "busy" greeting, everything else (no answer, phone off,
-                    // congestion) gets "unavailable" (D29).
+                    // congestion) gets "unavailable" (D29). Which greeting is this renderer's
+                    // decision; what "send it to the mailbox" looks like is not (D36).
+                    var mailbox = new Destination(DestinationType.Voicemail, extension.Number);
+
                     sb.Append(" same => n,GotoIf($[\"${DIALSTATUS}\" = \"BUSY\"]?busy:unavailable)\n");
-                    sb.Append($" same => n(busy),VoiceMail({number}@{VoicemailConfRenderer.MailboxContext},b)\n");
-                    sb.Append(" same => n,Hangup()\n");
-                    sb.Append($" same => n(unavailable),VoiceMail({number}@{VoicemailConfRenderer.MailboxContext},u)\n");
-                    sb.Append(" same => n,Hangup()\n");
+                    sb.Append(DestinationDialplan.Lines(mailbox, "busy", VoicemailGreeting.Busy));
+                    sb.Append(DestinationDialplan.Lines(mailbox, "unavailable", VoicemailGreeting.Unavailable));
                 }
                 else
                 {
-                    sb.Append(" same => n,Hangup()\n");
+                    sb.Append(DestinationDialplan.Lines(Destination.Hangup));
                 }
             }
 

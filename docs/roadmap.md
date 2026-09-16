@@ -14,7 +14,7 @@ this file is the **order**.
 | 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Done 2026-09-15 (verified on lab VM: add/edit/apply/status/secret all exercised end-to-end) |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | Done 2026-09-16. Lab-verified: restart onto the 32-module allowlist, SIP registration, AMI login via regenerated `manager.conf`, and voicemail all pass. `/etc/asterisk` is now 100% DB-generated. |
-| 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
+| 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | **In progress** 2026-09-17: model, catalog, dialplan helper and shared picker done (D35, D36). No schema: destinations are derived, not stored. Nothing consumes the picker until piece 9. |
 | 9 | Generic SIP trunk | F1 | |
 | 10 | Outbound routes (international restricted by default) | supporting | |
 | 11 | Inbound routes (DID → destination) | supporting | |
@@ -128,3 +128,29 @@ Still to do:
   restart group if it does.
 - Restarting Asterisk is still a manual step. A button for it needs the polkit rule and a
   decision about dropping live calls.
+
+## Piece 8 detail (in progress, started 2026-09-17)
+
+The shared "send the call to X" model, for the four features that will send calls somewhere.
+**No schema script**: a destination is a reference to something that already has a table, so the
+list is computed and a stored choice is two columns on whichever feature stores it (D35).
+
+- `Core/Models`: `DestinationType` (Extension, Hangup, Voicemail), `Destination` (type + value,
+  `Key`/`TryParse` for the string form), `DestinationChoice`, and `DestinationCatalog` — a pure
+  function from the rows a caller loaded to the list a picker shows.
+- `Asterisk/Config/DestinationDialplan`: the only code that writes "and then the call goes here"
+  (D36). `ExtensionsConfRenderer` now uses it for the voicemail fallback, and the golden
+  `extensions.conf` did not change.
+- `Pages/Shared/_DestinationSelect.cshtml`: the shared picker, grouped by type, which shows a
+  destination that no longer resolves instead of silently repointing it.
+
+Still to do:
+
+- **Nothing renders the picker yet.** It compiles, and the logic behind it is tested in Core, but
+  it is not on a page until inbound routes (piece 11) or IVRs (piece 17) need it. The extensions
+  page had no field it belonged in, and adding one would have been building a feature that is not
+  on the list.
+- Each feature that stores a destination adds `DestinationType` / `DestinationValue` columns in
+  its own schema script, and validates on save that the destination still resolves.
+- New destination types are additive: a member on the enum, a case in `DestinationDialplan`, a
+  source in `DestinationCatalog.All`. Ring groups and IVRs will each add one.
