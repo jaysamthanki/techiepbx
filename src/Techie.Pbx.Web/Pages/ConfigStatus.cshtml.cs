@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Techie.Pbx.Core.Data;
 
@@ -20,9 +21,13 @@ namespace Techie.Pbx.Web.Pages
             this.pending = new ConfigPendingMarker(PbxDatabase.Current);
         }
 
-        public void OnGet()
+        /// <summary>
+        /// The button only - never a full page. Rendering the layout here would return the navbar,
+        /// whose poll div swaps in another poll div, and htmx would refetch this in a tight loop.
+        /// </summary>
+        public PartialViewResult OnGet()
         {
-            this.ConfigPending = this.pending.IsPending;
+            return this.Partial("_ApplyButton", this.pending.IsPending);
         }
     }
 }
