@@ -1,0 +1,32 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Ring groups";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Ring groups</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add ring group</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    A number that rings several extensions, dialled from a phone or sent here by an inbound route.
+    When nobody answers, the call goes wherever the group says.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="ring-groups-table" hx-get="@tableUrl" hx-trigger="load, ringGroupsChanged from:body">
+    <p class="text-secondary">Loading ring groups…</p>
+</div>
+
+<partial name="_FormModal" />

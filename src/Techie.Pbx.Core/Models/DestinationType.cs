@@ -15,6 +15,9 @@ namespace Techie.Pbx.Core.Models
         /// <summary>End the call. Needs no value.</summary>
         Hangup,
 
+        /// <summary>Ring several phones. The value is the ring group's number (D54).</summary>
+        RingGroup,
+
         /// <summary>Take a message. The value is the number of the extension that owns the box.</summary>
         Voicemail,
     }

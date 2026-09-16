@@ -12,6 +12,7 @@ namespace Techie.Pbx.Core.Models
     {
         public const string ExtensionsGroup = "Extensions";
         public const string OtherGroup = "Other";
+        public const string RingGroupsGroup = "Ring groups";
         public const string VoicemailGroup = "Voicemail";
 
         /// <summary>
@@ -22,7 +23,10 @@ namespace Techie.Pbx.Core.Models
         /// to one would go nowhere. An extension without voicemail switched on has no mailbox
         /// entry, for the same reason.
         /// </summary>
-        public static List<DestinationChoice> All(IEnumerable<Extension> extensions)
+        public static List<DestinationChoice> All(IEnumerable<Extension> extensions) =>
+            All(extensions, new List<RingGroup>());
+
+        public static List<DestinationChoice> All(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups)
         {
             var usable = InNumberOrder(extensions);
             var choices = new List<DestinationChoice>();
@@ -47,6 +51,18 @@ namespace Techie.Pbx.Core.Models
                 });
             }
 
+            // Disabled groups are left out for the same reason disabled extensions are: they are
+            // not in the generated dialplan, so a call sent to one would go nowhere (D54).
+            foreach (var group in ringGroups.Where(g => g.Enabled).OrderBy(g => g.Number.Length).ThenBy(g => g.Number, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = new Destination(DestinationType.RingGroup, group.Number),
+                    GroupName = RingGroupsGroup,
+                    Label = $"{group.Number} {group.Name}",
+                });
+            }
+
             choices.Add(new DestinationChoice
             {
                 Destination = Destination.Hangup,
@@ -62,12 +78,16 @@ namespace Techie.Pbx.Core.Models
         /// that has since been deleted, disabled or had its voicemail switched off. Callers use it
         /// both to label a choice and to notice a dangling one.
         /// </summary>
-        public static DestinationChoice? Find(IEnumerable<Extension> extensions, Destination? destination)
+        public static DestinationChoice? Find(IEnumerable<Extension> extensions, Destination? destination) =>
+            Find(extensions, new List<RingGroup>(), destination);
+
+        public static DestinationChoice? Find(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups, Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions).FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
+            return All(extensions, ringGroups)
+                .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 
         /// <summary>

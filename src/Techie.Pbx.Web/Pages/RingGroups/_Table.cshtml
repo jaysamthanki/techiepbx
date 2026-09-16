@@ -1,0 +1,45 @@
+@model List<RingGroupRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="number"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="number" data-sortable="true">Number</th>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="strategy" data-sortable="true">Strategy</th>
+            <th data-field="members">Members</th>
+            <th data-field="ring">Ring time</th>
+            <th data-field="destination">No answer</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { ringGroupID = row.RingGroupID });
+
+            <tr data-edit-url="@editUrl">
+                <td class="font-monospace">@row.Number</td>
+                <td>@row.Name</td>
+                <td>@row.Strategy</td>
+                <td class="font-monospace">@row.Members</td>
+                <td>@row.RingSeconds s</td>
+                <td>
+                    @if (row.DestinationUsable)
+                    {
+                        @row.Destination
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="What this group pointed at is gone. An unanswered call will be hung up until it is fixed.">@row.Destination</span>
+                    }
+                </td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>

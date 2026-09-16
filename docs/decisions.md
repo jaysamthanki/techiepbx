@@ -683,3 +683,27 @@ normalisation step is needed — strip a leading `1`, or match on the last N dig
 one place (the renderer, or a setting on the trunk), and this decision gets a dated note saying
 which.
 
+**Addendum 2026-09-19 (verified on the wire):** Callcentric puts the *account user* in the request
+URI and the real DID in the `To:` header — the trunk contexts now dispatch on
+`DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)}` (Callcentric's own DID-routing doc describes the
+same thing for chan_sip). Exact matching on the extracted DID stands; the request URI is never
+used for matching.
+
+### D52. Ring groups are generated Dial() dialplan, not Asterisk queues (2026-09-19)
+Both strategies we need — ring all and hunt — are one line of Dial() each: ring all is one Dial
+with the members joined by `&`, hunt is one Dial per member in order. `app_queue` would add
+agents, penalties, statistics and a queue application to learn, and would still need its own
+config file. External numbers as members are deliberately deferred: a group that can dial out
+is a toll-fraud hole, and nothing on the feature list needs it yet.
+
+The group's ring time applies to each Dial attempt (so hunt rings member 1 for N seconds, then
+member 2 for N seconds), and the no-answer destination is the shared D35 shape, so a group can
+fail over to voicemail, another group, or an extension.
+
+### D53. Ring group members are an ordered list in one column, not a table of their own (2026-09-19)
+The order is the whole point for Hunt, and the same comma-list shape is already used for a
+trunk's codecs and match addresses. A members table would add a join for what is always read
+as a list. Members are extension numbers, validated against existing enabled extensions, and
+the group number is collision-checked against extensions and feature codes.
+
+

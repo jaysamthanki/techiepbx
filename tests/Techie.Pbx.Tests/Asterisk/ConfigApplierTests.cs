@@ -19,6 +19,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly OutboundRouteRepository routes;
+        private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
         private readonly TrunkRepository trunks;
         private readonly ConfigPendingMarker pending;
@@ -33,6 +34,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.database.Migrate();
             this.extensions = new ExtensionRepository(this.database);
             this.inbound = new InboundRouteRepository(this.database);
+            this.ringGroups = new RingGroupRepository(this.database);
             this.routes = new OutboundRouteRepository(this.database);
             this.settings = new SettingsRepository(this.database);
             this.trunks = new TrunkRepository(this.database);
@@ -41,7 +43,7 @@ namespace Techie.Pbx.Tests.Asterisk
             // Port 1 has nothing listening: any attempt to reload would fail loudly.
             var ami = new AmiSettings { Port = 1, Username = "tnpbx", Secret = "not-a-real-secret", TimeoutSeconds = 1 };
             this.applier = new ConfigApplier(
-                this.confDirectory, new PjsipTransport(), this.extensions, this.trunks, this.routes, this.inbound, ami, this.pending);
+                this.confDirectory, new PjsipTransport(), this.extensions, this.trunks, this.routes, this.inbound, this.ringGroups, ami, this.pending);
         }
 
         public void Dispose()
@@ -271,7 +273,7 @@ namespace Techie.Pbx.Tests.Asterisk
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
 
             var applier = ConfigApplier.FromDatabase(
-                this.database, this.settings, this.extensions, this.trunks, this.routes, this.inbound);
+                this.database, this.settings, this.extensions, this.trunks, this.routes, this.inbound, this.ringGroups);
             var changed = applier.Write();
 
             Assert.Contains("pjsip.conf", changed.Select(f => f.FileName));
