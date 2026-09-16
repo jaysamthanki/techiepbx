@@ -19,7 +19,7 @@ this file is the **order**.
 | 10 | Outbound routes (international restricted by default) | supporting | |
 | 11 | Inbound routes (DID → destination) | supporting | |
 | 12 | Callcentric wizard (verify settings on lab VM first) | F1 | |
-| 13 | Voicemail | F2a | **In progress** (pulled forward 2026-09-16): mailbox per extension, `voicemail.conf`, dialplan fallback, `*97`, UI. Email delivery stays in piece 14. |
+| 13 | Voicemail | F2a | Done 2026-09-16, except email (piece 14). Lab-verified: UI enable -> voicemail.conf + dialplan -> real unanswered call -> message recorded in INBOX. |
 | 14 | Email notifications (voicemail to email first, then alerts) | F4 | |
 | 15 | Ring groups: ring all + hunt | F3 | |
 | 16 | Follow me | F2b | |
