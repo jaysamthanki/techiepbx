@@ -11,7 +11,7 @@ this file is the **order**.
 | 2 | Solution layout, log4net, cookie auth | | Done 2026-09-13 |
 | 3 | Extensions: model, schema, repository, pjsip/extensions renderers, atomic writer, tests | F2 | Done 2026-09-13 |
 | 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | Done 2026-09-15 |
-| 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Code done 2026-09-15, lab run in progress |
+| 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Done 2026-09-15 (verified on lab VM: add/edit/apply/status/secret all exercised end-to-end) |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
