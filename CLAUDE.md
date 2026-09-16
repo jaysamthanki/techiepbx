@@ -50,6 +50,12 @@ dotnet run --project src/Techie.Pbx.Web
 ## Conventions (follow these, the user cares about them)
 
 **C#**
+- **Code style (the user cares about these; apply to all new code, and to existing code when you touch it):**
+  - Private members are camelCase with **no underscore prefix** (`confDirectory`, not `_confDirectory`). Underscores are a waste of time.
+  - Properties and methods are PascalCase, always.
+  - Group all properties together **above the constructors**, in alphabetical order.
+  - Group methods together after the constructors, in alphabetical order (test classes exempt).
+  - Use `this.` where possible (`this.confDirectory`, `this.Apply()`) — it helps the reader see where the member comes from.
 - **Minimal dependency injection.** Construct things with `new`, use static classes for pure
   functions (e.g. renderers). Only use DI where ASP.NET Core forces it (auth, Razor Pages).
   No interfaces that exist only for DI or mocking.
