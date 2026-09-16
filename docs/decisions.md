@@ -630,3 +630,56 @@ clicked should look like it.
 The alerts opened from inside the modal — show password, the regenerate confirm — are given
 sweetalert2's `heightAuto: false`, or opening one shifts the modal underneath it.
 
+### D49. Inbound routes belong to a trunk, and a catch-all is a flag rather than a pattern (2026-09-19)
+`InboundRoutes` is TrunkID, DID, CatchAll, DestinationType, DestinationValue, Description,
+Enabled.
+
+**Per trunk, not global.** A DID is bought from one provider and only ever arrives on that
+provider's trunk, and the dialplan already has a context per trunk (D38). So `TrunkID` is a real
+foreign key, like an outbound route's (D44), and a trunk that still has inbound routes cannot be
+deleted.
+
+**Catch-all is a boolean, not a magic DID.** `CatchAll = 1` with an empty DID, rather than a `*`
+or an empty box meaning "everything". An empty text box is something you reach by accident; a
+checkbox is something you tick. `UNIQUE(TrunkID, DID)` then does two jobs at once: no two routes
+claim one number on a trunk, and — because every catch-all stores the same empty DID — a trunk
+cannot have two of them.
+
+**No priority field.** Outbound routes needed one because their patterns overlap (D46). Inbound
+routes do not: a DID is a literal extension and the catch-all is the pattern `_X.`, and Asterisk
+always prefers a literal match to a pattern. The dialplan's own rules give "the specific one wins"
+for free, so there is no order for an admin to get wrong.
+
+`Description` is optional and ends up as a comment above the entry in the generated dialplan,
+which is where someone reading `extensions.conf` at 3am would want it.
+
+### D50. An inbound call that matches nothing is not answered (2026-09-19)
+Each trunk context ends with `_X.` → NoOp → `Hangup()`, unless that trunk has a catch-all route,
+in which case the catch-all *is* the `_X.` entry and sends the call to its destination.
+
+Deliberately **not** answered first and not given a prompt, unlike the outbound blocked context
+(D45): answering an unrouted inbound call means paying for it and telling a scanner that something
+is here. Hanging up without answering lets the caller's own carrier say the number is unobtainable.
+
+The important half is what this context never contains: no `include`, and no `Dial` to a trunk. A
+call that arrives from outside cannot fall through to anywhere that dials out — that is how a PBX
+becomes somebody else's long distance carrier. There is a test that asserts it.
+
+The wording of the placeholder changed slightly from the piece-9 version (it now reads "No inbound
+route for..."), so two golden files were updated; the extensions-only file, which has no trunks, is
+untouched.
+
+### D51. DIDs are matched exactly, and what a provider sends is still unverified (2026-09-19)
+A route's DID is stored as digits and written into the dialplan as a literal extension, matched
+character for character against what the provider puts in the request URI.
+
+**This has not been seen on our lab VM yet.** Callcentric may send the full 11-digit number with
+the country code, the 10-digit number, or the account number — we do not know, and guessing in
+code would be worse than matching exactly and being told. Exact matching fails safely: a mismatch
+falls through to the catch-all, or to the hangup, rather than routing a call somewhere wrong.
+
+The form says so, and points at the Asterisk log as the way to find out. If it turns out a
+normalisation step is needed — strip a leading `1`, or match on the last N digits — it belongs in
+one place (the renderer, or a setting on the trunk), and this decision gets a dated note saying
+which.
+
