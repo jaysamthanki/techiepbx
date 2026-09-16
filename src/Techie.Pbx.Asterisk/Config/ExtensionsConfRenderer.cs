@@ -43,12 +43,21 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<Extension> extensions,
             IEnumerable<Trunk> trunks,
             IEnumerable<OutboundRoute> routes,
-            IEnumerable<InboundRoute> inbound)
+            IEnumerable<InboundRoute> inbound) =>
+            Render(extensions, trunks, routes, inbound, new List<RingGroup>());
+
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
             var inboundList = InboundRenderOrder(inbound, trunkList);
+            var groupList = RingGroupRenderOrder(ringGroups, enabled);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -97,6 +106,9 @@ namespace Techie.Pbx.Asterisk.Config
                 }
             }
 
+            foreach (var group in groupList)
+                AppendRingGroup(sb, group, enabled);
+
             // Extensions in a context are matched before anything it includes, so the phones and
             // feature codes above always win over a route pattern (D46).
             if (routeList.Count > 0)
@@ -141,6 +153,31 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
+        /// Enabled ring groups by number, leaving out any with nobody left to ring. Re-validated,
+        /// so a row that reached the database another way cannot reach a conf file.
+        /// </summary>
+        public static List<RingGroup> RingGroupRenderOrder(IEnumerable<RingGroup> ringGroups, List<Extension> enabledExtensions)
+        {
+            var enabled = ringGroups.Where(g => g.Enabled).ToList();
+
+            foreach (var group in enabled)
+            {
+                var errors = group.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Ring group '{group.Number}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            // A group whose every member has been deleted or switched off would be a Dial() with
+            // nothing to dial, which Asterisk treats as an error mid-call. Better to leave it out
+            // and let the number simply not exist.
+            return enabled
+                .Where(g => MembersOf(g, enabledExtensions).Count > 0)
+                .OrderBy(g => g.Number.Length)
+                .ThenBy(g => g.Number, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
         /// Enabled routes in the order they are tried, leaving out any whose trunk is not there to
         /// take the call. Re-validated, so a row that reached the database another way cannot
         /// reach a conf file.
@@ -162,6 +199,58 @@ namespace Techie.Pbx.Asterisk.Config
                 .ThenBy(r => r.Name, StringComparer.Ordinal)
                 .ToList();
         }
+
+        /// <summary>
+        /// One ring group: an entry in the internal context that rings its members and then sends
+        /// the call wherever the group says (D52). Generated Dial() rather than a queue, so there
+        /// is nothing to load and nothing to keep in step.
+        ///
+        /// Ring all is one Dial with the members joined by &amp;. Hunt is one Dial each, in order:
+        /// Dial only carries on to the next priority when nobody answered, so an answered call
+        /// ends where it was answered rather than ringing the next member afterwards.
+        /// </summary>
+        private static void AppendRingGroup(StringBuilder sb, RingGroup group, List<Extension> enabledExtensions)
+        {
+            var number = ConfText.Safe(group.Number, "ring group number");
+            var name = ConfText.Safe(group.Name, "ring group name");
+            var members = MembersOf(group, enabledExtensions)
+                .Select(m => $"PJSIP/{ConfText.Safe(m, "ring group member")}")
+                .ToList();
+
+            sb.Append('\n');
+            sb.Append($"; {name} ({group.ToStrategy()}, {group.RingSeconds}s)\n");
+            sb.Append($"exten => {number},1,NoOp(Ring group {number} {name})\n");
+
+            if (group.CallerIDPrefix.Length > 0)
+            {
+                // SafeField, not Safe: a comma in the prefix would end the Set() argument early
+                // and quietly drop the rest.
+                var prefix = ConfText.SafeField(group.CallerIDPrefix, "caller ID prefix");
+                sb.Append($" same => n,Set(CALLERID(name)={prefix}${{CALLERID(name)}})\n");
+            }
+
+            if (group.ToStrategy() == RingStrategy.All)
+            {
+                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds})\n");
+            }
+            else
+            {
+                foreach (var member in members)
+                    sb.Append($" same => n,Dial({member},{group.RingSeconds})\n");
+            }
+
+            sb.Append(DestinationDialplan.Lines(group.ToDestination()));
+        }
+
+        /// <summary>
+        /// The group's members that are still extensions somebody can ring, in the order the group
+        /// lists them. A member that has been deleted or switched off is dropped rather than
+        /// written into a Dial that would fail.
+        /// </summary>
+        private static List<string> MembersOf(RingGroup group, List<Extension> enabledExtensions) =>
+            group.MemberList()
+                .Where(m => enabledExtensions.Any(e => string.Equals(e.Number, m, StringComparison.Ordinal)))
+                .ToList();
 
         /// <summary>
         /// Where calls from one provider land: one entry per DID, sent on by the shared

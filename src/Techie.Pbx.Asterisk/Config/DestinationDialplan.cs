@@ -55,6 +55,11 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.Extension =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // In by the same door as an extension, for the same reason: the group's own entry
+                // already knows how to ring it and where to send the call if nobody does (D54).
+                DestinationType.RingGroup =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
+
                 DestinationType.Voicemail =>
                     new List<string>
                     {

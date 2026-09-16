@@ -74,6 +74,13 @@ namespace Techie.Pbx.Core.Models
                         errors.Add($"A {this.Type} destination needs an extension number of 2 to 6 digits.");
                     break;
 
+                // A ring group's number follows the same rule as an extension's, because it is
+                // dialled the same way and lives in the same context (D54).
+                case DestinationType.RingGroup:
+                    if (!Extension.IsValidNumber(this.Value))
+                        errors.Add("A RingGroup destination needs a group number of 2 to 6 digits.");
+                    break;
+
                 case DestinationType.Hangup:
                     if (this.Value.Length > 0)
                         errors.Add("A Hangup destination has nothing to point at.");
