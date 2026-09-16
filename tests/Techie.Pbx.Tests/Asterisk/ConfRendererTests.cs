@@ -206,7 +206,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.Contains($"[{context}]", VoicemailConfRenderer.Render(SampleExtensions()));
             Assert.Contains($"VoiceMail(1002@{context},u)", ExtensionsConfRenderer.Render(SampleExtensions()));
-            Assert.Contains($"VoiceMailMain(${{CALLERID(num)}}@{context})", ExtensionsConfRenderer.Render(SampleExtensions()));
+            Assert.Contains($"VoiceMailMain(${{CALLERID(num)}}@{context},s)", ExtensionsConfRenderer.Render(SampleExtensions()));
         }
     }
 }

@@ -36,7 +36,7 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append('\n');
                 sb.Append("; Check your own voicemail\n");
                 sb.Append($"exten => {VoicemailMainNumber},1,Answer()\n");
-                sb.Append($" same => n,VoiceMailMain(${{CALLERID(num)}}@{VoicemailConfRenderer.MailboxContext})\n");
+                sb.Append($" same => n,VoiceMailMain(${{CALLERID(num)}}@{VoicemailConfRenderer.MailboxContext},s)\n");
                 sb.Append(" same => n,Hangup()\n");
             }
 
