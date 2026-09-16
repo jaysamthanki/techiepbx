@@ -13,7 +13,7 @@ this file is the **order**.
 | 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | Done 2026-09-15 |
 | 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Done 2026-09-15 (verified on lab VM: add/edit/apply/status/secret all exercised end-to-end) |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
-| 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | **In progress** 2026-09-16: all five generated, tests green, **not yet run on the lab VM** — the module allowlist has to be confirmed there (D31) |
+| 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | Done 2026-09-16. Lab-verified: restart onto the 32-module allowlist, SIP registration, AMI login via regenerated `manager.conf`, and voicemail all pass. `/etc/asterisk` is now 100% DB-generated. |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
 | 9 | Generic SIP trunk | F1 | |
 | 10 | Outbound routes (international restricted by default) | supporting | |
