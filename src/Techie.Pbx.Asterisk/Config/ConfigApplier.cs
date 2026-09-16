@@ -6,7 +6,8 @@ namespace Techie.Pbx.Asterisk.Config
 {
     /// <summary>
     /// Turns the database into running config: load every row, render every file, write the ones
-    /// that changed, then reload only the Asterisk modules those files belong to.
+    /// that changed, then reload only the Asterisk modules those files belong to. Files Asterisk
+    /// only reads at startup are written too, and reported as needing a restart (D33).
     /// </summary>
     public class ConfigApplier
     {
@@ -16,8 +17,20 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Owns extensions.conf, i.e. what "dialplan reload" reloads.</summary>
         public const string DialplanModule = "pbx_config";
 
-        /// <summary>Owns voicemail.conf. It autoloads; nothing in modules.conf blocks it.</summary>
+        /// <summary>Owns voicemail.conf.</summary>
         public const string VoicemailModule = "app_voicemail";
+
+        /// <summary>
+        /// logger.conf. Not a .so: the logger is part of the core, and "logger" is one of the
+        /// reload classes Asterisk accepts alongside real module names.
+        /// </summary>
+        public const string LoggerModule = "logger";
+
+        /// <summary>
+        /// manager.conf. Core as well, for the same reason. Reloading it can drop the very
+        /// connection we are reloading from, which is expected rather than a failure (D34).
+        /// </summary>
+        public const string ManagerModule = "manager";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigApplier));
 
@@ -61,8 +74,8 @@ namespace Techie.Pbx.Asterisk.Config
 
         /// <summary>
         /// Render, write, then reload the modules whose files changed. When nothing changed, no
-        /// AMI connection is opened at all. Either way the config now matches the database, so the
-        /// "apply is due" marker goes.
+        /// AMI connection is opened at all. Either way the config on disk now matches the
+        /// database, so the "apply is due" marker goes, even when a restart is still owed.
         /// </summary>
         public ApplyResult Apply()
         {
@@ -72,27 +85,36 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 Log.Info("Apply config: every file was already up to date, nothing reloaded");
                 this.pending.Clear();
-                return new ApplyResult(new List<string>(), new List<string>());
+                return new ApplyResult(new List<string>(), new List<string>(), new List<string>());
             }
 
             var files = changed.Select(f => f.FileName).ToList();
-            var modules = changed.Select(f => f.Module).Distinct(StringComparer.Ordinal).ToList();
+            var restartFiles = changed.Where(f => f.NeedsRestart).Select(f => f.FileName).ToList();
+            var modules = ReloadOrder(changed);
 
-            using var client = new AmiClient(this.ami);
-            var session = client.Connect();
+            if (modules.Count > 0)
+            {
+                using var client = new AmiClient(this.ami);
+                var session = client.Connect();
 
-            foreach (var module in modules)
-                session.Reload(module);
+                foreach (var module in modules)
+                    this.Reload(session, module);
+            }
 
-            // Only once the reload worked: a failure leaves the marker up, and it should.
+            // Only once the reloads worked: a failure leaves the marker up, and it should.
             this.pending.Clear();
 
-            Log.Info($"Apply config: wrote {string.Join(", ", files)}, reloaded {string.Join(", ", modules)}");
-            return new ApplyResult(files, modules);
+            Log.Info($"Apply config: wrote {string.Join(", ", files)}, reloaded {Listed(modules)}");
+            if (restartFiles.Count > 0)
+                Log.Warn($"Apply config: {string.Join(", ", restartFiles)} need an Asterisk restart to take effect");
+
+            return new ApplyResult(files, modules, restartFiles);
         }
 
         /// <summary>
         /// Loads every row and renders every generated file. Reads the database, writes nothing.
+        /// After this piece, everything in the conf directory is on this list: nothing in
+        /// /etc/asterisk is hand written any more.
         /// </summary>
         public List<GeneratedFile> Render()
         {
@@ -100,6 +122,13 @@ namespace Techie.Pbx.Asterisk.Config
 
             return new List<GeneratedFile>
             {
+                // Read once at startup: written here, applied by a restart (D33).
+                new("asterisk.conf", null, AsteriskConfRenderer.Render()),
+                new("modules.conf", null, ModulesConfRenderer.Render()),
+                new("rtp.conf", null, RtpConfRenderer.Render()),
+
+                new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
+                new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all)),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
@@ -121,6 +150,47 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             return changed;
+        }
+
+        /// <summary>
+        /// The reload plan for a set of changed files: each module once, in the order they will be
+        /// reloaded, with manager last because reloading manager.conf can close the AMI session we
+        /// are giving the orders on (D34). Files that need a restart are not in it.
+        /// </summary>
+        public static List<string> ReloadOrder(List<GeneratedFile> changed)
+        {
+            return changed
+                .Where(f => !f.NeedsRestart)
+                .Select(f => f.Module!)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(module => string.Equals(module, ManagerModule, StringComparison.Ordinal) ? 1 : 0)
+                .ToList();
+        }
+
+        private static string Listed(List<string> modules) => modules.Count == 0 ? "nothing" : string.Join(", ", modules);
+
+        /// <summary>
+        /// Reloading manager.conf makes Asterisk rebuild its AMI sessions, and ours is one of
+        /// them: it can answer and then hang up, or hang up without answering. Either way the
+        /// reload happened, so losing the connection here is not a failed apply. Every other
+        /// module's reload still has to succeed.
+        /// </summary>
+        private void Reload(AmiSession session, string module)
+        {
+            if (!string.Equals(module, ManagerModule, StringComparison.Ordinal))
+            {
+                session.Reload(module);
+                return;
+            }
+
+            try
+            {
+                session.Reload(module);
+            }
+            catch (Exception ex) when (ex is AmiException or IOException)
+            {
+                Log.Info($"AMI closed while reloading '{module}', which is what reloading manager.conf does: {ex.Message}");
+            }
         }
     }
 }

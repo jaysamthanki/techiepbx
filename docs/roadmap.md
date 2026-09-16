@@ -13,7 +13,7 @@ this file is the **order**.
 | 4 | AMI client + "apply config" (DB → render → write → reload only what changed) | | Done 2026-09-15 |
 | 5 | Extensions UI: table + modals, live registration status, local auth bypass (D24), Data folder (D25), config-pending marker (D26) | F2 | Done 2026-09-15 (verified on lab VM: add/edit/apply/status/secret all exercised end-to-end) |
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
-| 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | |
+| 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | **In progress** 2026-09-16: all five generated, tests green, **not yet run on the lab VM** — the module allowlist has to be confirmed there (D31) |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | |
 | 9 | Generic SIP trunk | F1 | |
 | 10 | Outbound routes (international restricted by default) | supporting | |
@@ -94,3 +94,37 @@ Still to do:
 - **MWI** (the message-waiting light on the phone) is not configured: it needs `mailboxes =` on
   the PJSIP endpoint and a decision about subscriptions.
 - Run it on the lab VM: leave a message, listen to it with `*97`, check the busy greeting.
+
+## Piece 7 detail (in progress, started 2026-09-16)
+
+`/etc/asterisk` is now generated end to end: eight files, no hand-written ones left. The lab
+script still writes its own versions, and it has to — Asterisk must be running before the app can
+apply anything — but the first apply replaces every one of them.
+
+| File | Renderer | Applied by |
+|---|---|---|
+| `asterisk.conf` | `AsteriskConfRenderer` | restart (D33) |
+| `modules.conf` | `ModulesConfRenderer` | restart (D33) |
+| `rtp.conf` | `RtpConfRenderer` | restart (D33) |
+| `logger.conf` | `LoggerConfRenderer` | `logger` reload |
+| `manager.conf` | `ManagerConfRenderer` | `manager` reload, last and disconnect-tolerant (D34) |
+| `pjsip.conf` | `PjsipConfRenderer` | `res_pjsip` reload |
+| `extensions.conf` | `ExtensionsConfRenderer` | `pbx_config` reload |
+| `voicemail.conf` | `VoicemailConfRenderer` | `app_voicemail` reload |
+
+`ApplyResult` grew `RestartRequiredFiles`/`RestartRequired`, and the apply toast says so.
+
+Still to do:
+
+- **Verify the module allowlist on the lab VM** (D31). This is the one that needs real hardware
+  in front of it: restart on the generated `modules.conf`, then `core show modules`, register a
+  phone, place a call, leave a message, and read the log for "Error loading module". Expect to
+  iterate — a missing module usually shows up as a feature that silently does nothing.
+- **The AMI secret has to be in the database before the first apply**, or rendering
+  `manager.conf` fails with "AMI secret is required" and nothing is written. The lab script still
+  generates its own secret into its own `manager.conf`; until there is a settings UI, the two are
+  reconciled by putting the script's secret into the `Settings` table by hand.
+- Confirm whether `res_rtp_asterisk` reloads `rtp.conf` cleanly (D33), and move it out of the
+  restart group if it does.
+- Restarting Asterisk is still a manual step. A button for it needs the polkit rule and a
+  decision about dropping live calls.

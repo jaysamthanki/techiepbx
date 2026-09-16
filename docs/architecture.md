@@ -88,8 +88,15 @@ Generated files (current):
 | `extensions.conf` | `ExtensionsConfRenderer` | `[internal]` context: `*43` echo test, `*97` voicemail (when any mailbox exists), one explicit `Dial` entry per enabled extension, falling back to the mailbox when there is one (D29) |
 | `voicemail.conf` | `VoicemailConfRenderer` | `[general]` recording settings and one mailbox line per enabled extension with voicemail switched on, in context `default` |
 
-Still hand-written by the lab script and to be generated later: `asterisk.conf`, `modules.conf`,
-`logger.conf`, `rtp.conf`, `manager.conf`.
+| `asterisk.conf` | `AsteriskConfRenderer` | `[options]`: verbose, and `live_dangerously`/`execincludes` off. Restart, not reload (D33) |
+| `modules.conf` | `ModulesConfRenderer` | `autoload = no` and an explicit `load =` allowlist (D31). Restart, not reload |
+| `rtp.conf` | `RtpConfRenderer` | The media port range, 10000-20000. Restart, not reload |
+| `logger.conf` | `LoggerConfRenderer` | Console, `messages.log`, and `security.log` for the events fail2ban and our own blocker read |
+| `manager.conf` | `ManagerConfRenderer` | AMI on 127.0.0.1 only, and the one account, from the same settings the app connects with (D32) |
+
+Nothing in `/etc/asterisk` is hand written any more. Three of these files are only read when
+Asterisk starts, so an apply writes them and reports that a restart is owed rather than claiming
+they are live (D33).
 
 ### Dialplan approach
 
