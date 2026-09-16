@@ -53,9 +53,10 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var files = this.applier.Render();
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf" }, files.Select(f => f.FileName));
+            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, files.Select(f => f.FileName));
             Assert.Equal(ConfigApplier.PjsipModule, files[0].Module);
             Assert.Equal(ConfigApplier.DialplanModule, files[1].Module);
+            Assert.Equal(ConfigApplier.VoicemailModule, files[2].Module);
             Assert.Contains("[1001]", files[0].Content);
             Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30)", files[1].Content);
         }
@@ -65,9 +66,10 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf" }, this.applier.Write().Select(f => f.FileName));
+            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, this.applier.Write().Select(f => f.FileName));
             Assert.True(File.Exists(Path.Combine(this.confDirectory, "pjsip.conf")));
             Assert.True(File.Exists(Path.Combine(this.confDirectory, "extensions.conf")));
+            Assert.True(File.Exists(Path.Combine(this.confDirectory, "voicemail.conf")));
 
             Assert.Empty(this.applier.Write());
         }
@@ -100,6 +102,29 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new[] { ConfigApplier.PjsipModule, ConfigApplier.DialplanModule },
                 this.applier.Write().Select(f => f.Module));
+        }
+
+        /// <summary>
+        /// Switching voicemail on rewrites the mailbox list and the dialplan that falls back to
+        /// it, but leaves the endpoint alone: two modules to reload, not three.
+        /// </summary>
+        [Fact]
+        public void Switching_voicemail_on_touches_the_dialplan_and_the_mailboxes()
+        {
+            AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
+            this.applier.Write();
+
+            var extension = this.extensions.GetByNumber("1001")!;
+            extension.VoicemailEnabled = true;
+            extension.VoicemailPin = "4321";
+            this.extensions.Update(extension);
+
+            var changed = this.applier.Write();
+
+            Assert.Equal(new[] { "extensions.conf", "voicemail.conf" }, changed.Select(f => f.FileName));
+            Assert.Equal(
+                new[] { ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule },
+                changed.Select(f => f.Module));
         }
 
         [Fact]
@@ -160,7 +185,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var applier = ConfigApplier.FromDatabase(this.database, this.settings, this.extensions);
             var changed = applier.Write();
 
-            Assert.Equal(new[] { "pjsip.conf", "extensions.conf" }, changed.Select(f => f.FileName));
+            Assert.Equal(new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" }, changed.Select(f => f.FileName));
             var pjsip = File.ReadAllText(Path.Combine(this.confDirectory, "pjsip.conf"));
             Assert.Contains("external_media_address = 203.0.113.10", pjsip);
             Assert.Contains("local_net = 10.8.20.0/24", pjsip);

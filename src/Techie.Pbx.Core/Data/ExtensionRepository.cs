@@ -6,7 +6,9 @@ namespace Techie.Pbx.Core.Data
 {
     public class ExtensionRepository
     {
-        private const string Columns = "ExtensionID, Number, Name, Secret, Enabled";
+        private const string Columns =
+            "ExtensionID, Number, Name, Secret, Enabled, " +
+            "VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail";
         private const int SqliteConstraintError = 19;
 
         private readonly Database database;
@@ -52,7 +54,10 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 extension.ExtensionID = connection.ExecuteScalar<long>(
-                    "INSERT INTO Extensions (Number, Name, Secret, Enabled) VALUES (@Number, @Name, @Secret, @Enabled); SELECT last_insert_rowid();",
+                    "INSERT INTO Extensions " +
+                    "(Number, Name, Secret, Enabled, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail) " +
+                    "VALUES (@Number, @Name, @Secret, @Enabled, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail); " +
+                    "SELECT last_insert_rowid();",
                     extension);
 
                 this.pending.Raise();
@@ -72,7 +77,11 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 var rows = connection.Execute(
-                    "UPDATE Extensions SET Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled WHERE ExtensionID = @ExtensionID",
+                    "UPDATE Extensions SET " +
+                    "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +
+                    "VoicemailEnabled = @VoicemailEnabled, VoicemailPin = @VoicemailPin, VoicemailEmail = @VoicemailEmail, " +
+                    "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail " +
+                    "WHERE ExtensionID = @ExtensionID",
                     extension);
                 if (rows == 0)
                     throw new ValidationFailedException($"ExtensionID {extension.ExtensionID} does not exist.");

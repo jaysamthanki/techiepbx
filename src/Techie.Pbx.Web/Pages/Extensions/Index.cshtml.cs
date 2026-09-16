@@ -44,8 +44,13 @@ namespace Techie.Pbx.Web.Pages.Extensions
         {
             if (extensionID is null or 0)
             {
-                // A new extension gets its password now so it can be shown once, on the form.
-                return this.Partial("_Form", new ExtensionForm { Secret = SecretGenerator.Create() });
+                // A new extension gets its password and a voicemail PIN now, so that nobody has
+                // to invent either and settles on 1234.
+                return this.Partial("_Form", new ExtensionForm
+                {
+                    Secret = SecretGenerator.Create(),
+                    VoicemailPin = SecretGenerator.CreatePin(),
+                });
             }
 
             var extension = this.extensions.GetByID(extensionID.Value);
@@ -58,6 +63,11 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 ExtensionID = extension.ExtensionID,
                 Name = extension.Name,
                 Number = extension.Number,
+                VoicemailAttachRecording = extension.VoicemailAttachRecording,
+                VoicemailDeleteAfterEmail = extension.VoicemailDeleteAfterEmail,
+                VoicemailEmail = extension.VoicemailEmail,
+                VoicemailEnabled = extension.VoicemailEnabled,
+                VoicemailPin = extension.VoicemailPin,
             });
         }
 
@@ -119,20 +129,25 @@ namespace Techie.Pbx.Web.Pages.Extensions
         /// Creates or updates one extension. Validation failures come back as the form again,
         /// with the repository's messages on it, which htmx swaps into the open modal.
         /// </summary>
-        public IActionResult OnPostSave(long extensionID, string? number, string? name, string? secret, bool enabled)
+        public IActionResult OnPostSave(ExtensionForm form)
         {
-            var isNew = extensionID == 0;
-            var extension = isNew ? new Extension() : this.extensions.GetByID(extensionID);
+            var isNew = form.ExtensionID == 0;
+            var extension = isNew ? new Extension() : this.extensions.GetByID(form.ExtensionID);
             if (extension == null)
                 return this.NotFound();
 
-            extension.Enabled = enabled;
-            extension.Name = (name ?? "").Trim();
-            extension.Number = (number ?? "").Trim();
+            extension.Enabled = form.Enabled;
+            extension.Name = Text(form.Name);
+            extension.Number = Text(form.Number);
+            extension.VoicemailAttachRecording = form.VoicemailAttachRecording;
+            extension.VoicemailDeleteAfterEmail = form.VoicemailDeleteAfterEmail;
+            extension.VoicemailEmail = Text(form.VoicemailEmail);
+            extension.VoicemailEnabled = form.VoicemailEnabled;
+            extension.VoicemailPin = Text(form.VoicemailPin);
 
             // Only a new extension carries a password on the form; editing leaves it alone.
             if (isNew)
-                extension.Secret = string.IsNullOrWhiteSpace(secret) ? SecretGenerator.Create() : secret.Trim();
+                extension.Secret = string.IsNullOrWhiteSpace(form.Secret) ? SecretGenerator.Create() : Text(form.Secret);
 
             try
             {
@@ -143,15 +158,10 @@ namespace Techie.Pbx.Web.Pages.Extensions
             }
             catch (ValidationFailedException ex)
             {
-                return this.Partial("_Form", new ExtensionForm
-                {
-                    Enabled = extension.Enabled,
-                    Errors = ex.Errors.ToList(),
-                    ExtensionID = extensionID,
-                    Name = extension.Name,
-                    Number = extension.Number,
-                    Secret = isNew ? extension.Secret : "",
-                });
+                // Hand back what they typed, with the reasons on it.
+                form.Errors = ex.Errors.ToList();
+                form.Secret = isNew ? extension.Secret : "";
+                return this.Partial("_Form", form);
             }
 
             Log.Info($"Extension {extension.Number} {(isNew ? "created" : "updated")} by {this.User.Identity?.Name}");
@@ -176,5 +186,8 @@ namespace Techie.Pbx.Web.Pages.Extensions
             this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
             return new StatusCodeResult(StatusCodes.Status204NoContent);
         }
+
+        /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
+        private static string Text(string? value) => (value ?? "").Trim();
     }
 }

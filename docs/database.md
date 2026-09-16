@@ -42,6 +42,19 @@ service user, mode 0600.
 | `Secret` | TEXT | SIP password, 16–64 letters/digits |
 | `Enabled` | INTEGER | 0/1, default 1. Disabled extensions are left out of the generated config. |
 
+### Extensions: voicemail columns (003)
+
+One optional mailbox per extension, so columns rather than a table (D27). A disabled extension
+gets no mailbox whatever these say.
+
+| Column | Type | Notes |
+|---|---|---|
+| `VoicemailEnabled` | INTEGER | 0/1, default 0 |
+| `VoicemailPin` | TEXT | 4–8 digits, required once enabled. Written into `voicemail.conf` as typed (D28) |
+| `VoicemailEmail` | TEXT | Optional. Stored and rendered, but nothing sends email yet (F4) |
+| `VoicemailAttachRecording` | INTEGER | 0/1, default 1 |
+| `VoicemailDeleteAfterEmail` | INTEGER | 0/1, default 0. Never rendered as `delete=yes` without an address to email |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).

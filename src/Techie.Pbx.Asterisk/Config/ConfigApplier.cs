@@ -16,6 +16,9 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Owns extensions.conf, i.e. what "dialplan reload" reloads.</summary>
         public const string DialplanModule = "pbx_config";
 
+        /// <summary>Owns voicemail.conf. It autoloads; nothing in modules.conf blocks it.</summary>
+        public const string VoicemailModule = "app_voicemail";
+
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigApplier));
 
         private readonly string confDirectory;
@@ -99,6 +102,7 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all)),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all)),
+                new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
         }
 
