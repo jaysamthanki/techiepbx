@@ -38,6 +38,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_session.so",
                 "res_pjsip_pubsub.so",
                 "res_pjsip_header_funcs.so",                      // PJSIP_HEADER(): read the To header for inbound DIDs
+                "func_cut.so",                                     // CUT(): extract the DID out of the To header
                 "chan_pjsip.so",
                 "res_pjsip_authenticator_digest.so",          // check the password a phone sends
                 "res_pjsip_outbound_authenticator_digest.so", // answer a provider's challenge
