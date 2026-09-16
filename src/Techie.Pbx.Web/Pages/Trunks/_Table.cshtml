@@ -35,7 +35,10 @@
                 <td class="text-end">
                     <div class="btn-group btn-group-sm" role="group">
                         <button type="button" class="btn btn-outline-secondary"
-                                onclick="pbxTrunks.openModal('@editUrl')">Edit</button>
+                                hx-get="@editUrl"
+                                hx-target="#form-modal-content"
+                                data-bs-toggle="modal"
+                                data-bs-target="#form-modal">Edit</button>
                         <button type="button" class="btn btn-outline-secondary"
                                 onclick="pbxTrunks.showSecret(@row.TrunkID)">Password</button>
                         <button type="button" class="btn btn-outline-danger"

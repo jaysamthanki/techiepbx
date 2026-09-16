@@ -11,8 +11,13 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Extensions</h1>
     <div class="d-flex gap-2">
-        <button type="button" class="btn btn-primary" onclick="pbxExtensions.openModal('@formUrl')">Add extension</button>
-        <button type="button" class="btn btn-outline-secondary" onclick="pbxExtensions.applyConfig(this)">Apply config</button>
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add extension</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="pbx.applyConfig(this)">Apply config</button>
     </div>
 </div>
 
@@ -28,6 +33,8 @@
     table itself is left alone. Only this page polls, and only while it is open.
 *@
 <div hx-get="@statusUrl" hx-trigger="every 5s" hx-swap="none"></div>
+
+<partial name="_FormModal" />
 
 @section Scripts {
     <script src="~/js/extensions.js" asp-append-version="true"></script>

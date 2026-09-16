@@ -1,0 +1,22 @@
+@*
+    The one modal every create/edit form on a page is shown in (D42). It is deliberately empty:
+    the button that opens it carries hx-get for the form partial and Bootstrap's own
+    data-bs-toggle to show the modal, and the partial brings its own header, body and footer.
+
+    site.js puts this placeholder back when the modal closes, so the next open never flashes the
+    form that was in it last time.
+*@
+<div class="modal fade" id="form-modal" tabindex="-1" aria-hidden="true">
+    @*
+        Not modal-dialog-scrollable: the form sits between .modal-content and the header/body/
+        footer, which is the wrong shape for that class's flex layout. A long form scrolls the
+        page instead, which is what it did before.
+    *@
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" id="form-modal-content">
+            <div class="modal-body">
+                <p class="text-secondary mb-0">Loading…</p>
+            </div>
+        </div>
+    </div>
+</div>
