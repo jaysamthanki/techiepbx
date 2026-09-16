@@ -117,7 +117,8 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 ExtensionsConfRenderer.Render(new List<Extension>(), SampleTrunks(), new List<OutboundRoute>(), new List<InboundRoute>()),
                 actual);
-            Assert.Contains("exten => _X.,1,NoOp(No inbound route for ${EXTEN} on callcentric)\n same => n,Hangup()\n", actual);
+            Assert.Contains("exten => _X.,1,Set(DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)})\n", actual);
+            Assert.Contains(" same => n(none),NoOp(No inbound route for ${DID} on callcentric)\n same => n,Hangup()\n", actual);
         }
 
         /// <summary>A system with no trunks has no inbound anything, and never did.</summary>
@@ -135,7 +136,8 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = Render(SampleRoutes()[4]);
 
-            Assert.Contains("exten => 17771234567,1,NoOp(Inbound 17771234567 on callcentric to Extension:1001)\n", actual);
+            Assert.Contains(" same => n,GotoIf($[\"${DID}\" = \"17771234567\"]?r1)\n", actual);
+            Assert.Contains(" same => n(r1),NoOp(Inbound 17771234567 on callcentric to Extension:1001)\n", actual);
             Assert.Contains(" same => n,Goto(internal,1001,1)\n", actual);
         }
 
@@ -158,9 +160,9 @@ namespace Techie.Pbx.Tests.Asterisk
                 SampleExtensions(), SampleTrunks(), new List<OutboundRoute>(), SampleRoutes());
             var context = Context(actual, "from-trunk-callcentric");
 
-            Assert.Contains("exten => _X.,1,NoOp(Inbound any other number on callcentric to Hangup)\n", context);
+            Assert.Contains(" same => n(none),NoOp(Inbound catch-all on callcentric to Hangup)\n", context);
             Assert.DoesNotContain("No inbound route for", context);
-            Assert.Contains("exten => 17771234567,", context);
+            Assert.Contains("GotoIf($[\"${DID}\" = \"17771234567\"]?r1)", context);
         }
 
         [Fact]
@@ -169,7 +171,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var actual = ExtensionsConfRenderer.Render(
                 SampleExtensions(), SampleTrunks(), new List<OutboundRoute>(), SampleRoutes());
 
-            Assert.Contains("No inbound route for ${EXTEN} on ip-provider", Context(actual, "from-trunk-ip-provider"));
+            Assert.Contains("No inbound route for ${DID} on ip-provider", Context(actual, "from-trunk-ip-provider"));
         }
 
         [Fact]
