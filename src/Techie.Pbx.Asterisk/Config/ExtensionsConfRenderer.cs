@@ -165,11 +165,14 @@ namespace Techie.Pbx.Asterisk.Config
                 var name = ConfText.Safe(route.Name, "route name");
                 var pattern = ConfText.Safe(route.DialPattern, "dial pattern");
                 var trunkName = ConfText.Safe(trunk.Name, "trunk name");
+                var trunkHost = ConfText.Safe(trunk.ServerHost, "trunk server host");
 
                 sb.Append('\n');
                 sb.Append($"[{ConfText.Safe(route.Context, "route context")}]\n");
                 sb.Append($"; {name} ({route.Priority}) out over {trunkName}\n");
-                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/${{EXTEN}},{OutboundRingSeconds})\n");
+                // The full URI form is required: chan_pjsip treats a bare dialstring as a literal
+                // URI and rejects it ("Could not create dialog to invalid URI").
+                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:${{EXTEN}}@{trunkHost},{OutboundRingSeconds})\n");
                 sb.Append(" same => n,Hangup()\n");
             }
 
