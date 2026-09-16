@@ -35,10 +35,6 @@ window.pbxExtensions = (function () {
         Swal.fire({ icon: 'error', title: 'That did not work', text: error.message });
     }
 
-    function pendingApply() {
-        document.getElementById('apply-pending').classList.remove('d-none');
-    }
-
     function showPassword(title, result) {
         Swal.fire({
             icon: 'info',
@@ -51,8 +47,6 @@ window.pbxExtensions = (function () {
         });
     }
 
-    document.body.addEventListener('configChanged', pendingApply);
-
     return {
         // Writes the config files and reloads only what changed.
         applyConfig: async function (button) {
@@ -60,7 +54,9 @@ window.pbxExtensions = (function () {
 
             try {
                 const result = await send('POST', '/api/config/apply');
-                document.getElementById('apply-pending').classList.add('d-none');
+
+                // The banner asks the server again rather than being hidden from here.
+                htmx.trigger(document.body, 'configApplied');
                 pbx.toast('success', result.summary);
             } catch (error) {
                 failed(error);
@@ -110,7 +106,9 @@ window.pbxExtensions = (function () {
 
             try {
                 const result = await send('POST', '/api/extensions/' + extensionID + '/secret');
-                pendingApply();
+
+                // A password change is a config change: let the page catch up with the server.
+                htmx.trigger(document.body, 'extensionsChanged');
                 showPassword('New password', result);
             } catch (error) {
                 failed(error);

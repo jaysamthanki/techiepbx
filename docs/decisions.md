@@ -192,3 +192,25 @@ The token goes in the `RequestVerificationToken` **header**: the layout puts it 
 `hx-headers`, so every htmx request carries it, and in a meta tag for our own `fetch` calls.
 Controllers get `AutoValidateAntiforgeryToken` globally rather than per action, so a new endpoint
 is protected by default instead of when someone remembers.
+
+### D24. Local authentication bypass for the lab (2026-09-15)
+`LocalAuthenticationBypass` in appsettings: `Enabled` (default false) plus `AllowedNetworks`,
+a CIDR whitelist (`Ipv4Networks` matcher, single IPs as /32). When enabled and the remote IP
+matches, `LocalBypassMiddleware` authenticates the request as identity `local-bypass` before
+the Entra challenge; non-matching IPs get the normal Entra flow. It covers pages, htmx
+partials and API controllers alike. A startup WARNING is logged when it is on, and each
+bypass-authenticated request is logged with the remote IP. Failsafe only: enabled on the lab
+VM, never in production.
+
+### D25. The database and state files live in a Data folder inside the app (2026-09-15)
+Amends D22: the default path is `<content root>/Data/tnpbx.db` (still overridable via
+`Database:Path`), and the app creates the folder at startup. Backing up the app directory
+backs up everything.
+
+### D26. "Config pending" is a marker file in Data (2026-09-15)
+Every repository write that changes rendered config touches `Data/config-pending`
+(`ConfigPendingMarker`); a successful `Apply()` clears it. The UI reads the file rather than
+browser-local state, so the "changes not applied" indicator is true even across browsers and
+restarts. File over a DB row: it is throwaway state, and it disappears with a restore of the
+app folder instead of surviving inside a database backup.
+

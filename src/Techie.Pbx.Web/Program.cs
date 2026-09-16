@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Techie.Pbx.Web.Security;
 
 namespace Techie.Pbx.Web
 {
@@ -14,8 +15,11 @@ namespace Techie.Pbx.Web
         /// </summary>
         public const string AntiforgeryHeaderName = "RequestVerificationToken";
 
-        /// <summary>Where the installer puts the database. Override with Database:Path.</summary>
-        public const string DefaultDatabasePath = "/var/lib/tnpbx/tnpbx.db";
+        /// <summary>
+        /// Where the database goes when Database:Path says nothing: a Data folder inside the
+        /// install, so that copying the app folder copies everything it owns (D25).
+        /// </summary>
+        public const string DefaultDatabasePath = "Data/tnpbx.db";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(Program));
 
@@ -83,6 +87,20 @@ namespace Techie.Pbx.Web
 
             app.UseRouting();
 
+            app.UseAuthentication();
+
+            // The failsafe sign-in, and only when it has been asked for (D24).
+            var bypass = LocalBypassSettings.FromConfiguration(app.Configuration);
+            if (bypass.Enabled)
+            {
+                app.UseMiddleware<LocalBypassMiddleware>(bypass);
+
+                if (bypass.AllowedNetworks.Networks.Count == 0)
+                    Log.Warn("Local sign-in bypass is enabled but no networks are allowed, so it can never apply");
+                else
+                    Log.Warn($"Local sign-in bypass is ENABLED: requests from {bypass.AllowedNetworks} are admins without signing in");
+            }
+
             app.UseAuthorization();
 
             app.MapStaticAssets();
@@ -90,10 +108,22 @@ namespace Techie.Pbx.Web
                .WithStaticAssets();
             app.MapControllers();
 
-            PbxDatabase.Open(app.Configuration["Database:Path"] ?? DefaultDatabasePath);
+            PbxDatabase.Open(DatabasePath(app));
 
             Log.Info("TNPBX web starting");
             app.Run();
+        }
+
+        /// <summary>
+        /// Database:Path, or the default, and a relative path is relative to the install rather
+        /// than to whatever directory the service happened to start in.
+        /// </summary>
+        private static string DatabasePath(WebApplication app)
+        {
+            var configured = app.Configuration["Database:Path"];
+            var path = string.IsNullOrWhiteSpace(configured) ? DefaultDatabasePath : configured.Trim();
+
+            return Path.IsPathRooted(path) ? path : Path.Combine(app.Environment.ContentRootPath, path);
         }
     }
 }

@@ -484,7 +484,6 @@ $RECYCLE.BIN/
 # log4net output
 logs/
 
-# The local development database (Database:Path in appsettings.Development.json)
-tnpbx.db
-tnpbx.db-shm
-tnpbx.db-wal
+# The web app's data folder: the database and the config-pending marker (D25).
+# Spelled out rather than "Data/", which would also match Techie.Pbx.Core/Data.
+src/Techie.Pbx.Web/Data/
