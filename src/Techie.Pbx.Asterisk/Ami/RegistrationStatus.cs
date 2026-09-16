@@ -1,12 +1,16 @@
 using System.Net.Sockets;
 using log4net;
+using Techie.Pbx.Asterisk.Config;
 
 namespace Techie.Pbx.Asterisk.Ami
 {
     /// <summary>
-    /// Live registration state per extension number, from the PJSIP contacts Asterisk holds.
-    /// The extensions page polls this every few seconds, so <see cref="Read"/> never throws:
-    /// a status badge is not worth failing a page over.
+    /// Live registration state, both ways round: phones registering with us (the PJSIP contacts
+    /// Asterisk holds, <see cref="Map"/> and <see cref="Read"/>) and us registering with providers
+    /// (<see cref="MapTrunks"/> and <see cref="ReadTrunks"/>).
+    ///
+    /// The pages poll these every few seconds, so neither Read throws: a status badge is not
+    /// worth failing a page over.
     /// </summary>
     public static class RegistrationStatus
     {
@@ -39,6 +43,29 @@ namespace Techie.Pbx.Asterisk.Ami
         }
 
         /// <summary>
+        /// Matches outbound registrations to trunk names. Pure, so the mapping is testable without
+        /// a connection. A registration object is named after its trunk with "-reg" on the end
+        /// (D39), which is how a registration is matched back to the trunk it belongs to.
+        /// </summary>
+        public static Dictionary<string, RegistrationState> MapTrunks(IEnumerable<PjsipRegistration> registrations, IEnumerable<string> trunkNames)
+        {
+            var states = new Dictionary<string, RegistrationState>(StringComparer.Ordinal);
+
+            foreach (var name in trunkNames)
+                states[name] = RegistrationState.NotRegistered;
+
+            foreach (var registration in registrations)
+            {
+                var name = TrunkNameOf(registration.ObjectName);
+
+                if (name != null && states.ContainsKey(name))
+                    states[name] = TrunkStateFor(registration.Status);
+            }
+
+            return states;
+        }
+
+        /// <summary>
         /// Asks Asterisk over AMI which of these extensions have a contact right now. If AMI is
         /// unreachable or refuses, every extension comes back <see cref="RegistrationState.Unknown"/>
         /// and the reason is logged.
@@ -56,13 +83,39 @@ namespace Techie.Pbx.Asterisk.Ami
             catch (Exception ex) when (ex is AmiException or IOException or SocketException)
             {
                 Log.Warn($"Could not read registration status over AMI: {ex.Message}");
-
-                var unknown = new Dictionary<string, RegistrationState>(StringComparer.Ordinal);
-                foreach (var number in wanted)
-                    unknown[number] = RegistrationState.Unknown;
-
-                return unknown;
+                return AllUnknown(wanted);
             }
+        }
+
+        /// <summary>
+        /// Asks Asterisk over AMI which trunks are registered with their providers right now. Like
+        /// <see cref="Read"/>, an unreachable AMI means Unknown rather than an exception.
+        /// </summary>
+        public static Dictionary<string, RegistrationState> ReadTrunks(AmiSettings ami, IEnumerable<string> trunkNames)
+        {
+            var wanted = trunkNames.ToList();
+
+            try
+            {
+                using var client = new AmiClient(ami);
+                var session = client.Connect();
+                return MapTrunks(session.ShowRegistrations(), wanted);
+            }
+            catch (Exception ex) when (ex is AmiException or IOException or SocketException)
+            {
+                Log.Warn($"Could not read trunk registration status over AMI: {ex.Message}");
+                return AllUnknown(wanted);
+            }
+        }
+
+        private static Dictionary<string, RegistrationState> AllUnknown(IEnumerable<string> names)
+        {
+            var unknown = new Dictionary<string, RegistrationState>(StringComparer.Ordinal);
+
+            foreach (var name in names)
+                unknown[name] = RegistrationState.Unknown;
+
+            return unknown;
         }
 
         /// <summary>
@@ -74,5 +127,30 @@ namespace Techie.Pbx.Asterisk.Ami
             string.Equals(contactStatus, "Unreachable", StringComparison.OrdinalIgnoreCase)
                 ? RegistrationState.Unreachable
                 : RegistrationState.Registered;
+
+        /// <summary>
+        /// The trunk a registration object belongs to, from the "-reg" name the renderer gives it,
+        /// or null for a registration this app did not write.
+        /// </summary>
+        private static string? TrunkNameOf(string objectName) =>
+            objectName.EndsWith(PjsipConfRenderer.RegistrationSuffix, StringComparison.Ordinal)
+                ? objectName[..^PjsipConfRenderer.RegistrationSuffix.Length]
+                : null;
+
+        /// <summary>
+        /// "Rejected" is its own state because it is the one an admin has to act on: the provider
+        /// has our credentials and does not like them. Anything else that is not "Registered" —
+        /// Unregistered, Stopped, a name we have not seen — means no registration right now.
+        /// </summary>
+        private static RegistrationState TrunkStateFor(string status)
+        {
+            if (string.Equals(status, "Registered", StringComparison.OrdinalIgnoreCase))
+                return RegistrationState.Registered;
+
+            if (string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase))
+                return RegistrationState.Rejected;
+
+            return RegistrationState.NotRegistered;
+        }
     }
 }

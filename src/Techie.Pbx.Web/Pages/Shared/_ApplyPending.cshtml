@@ -3,8 +3,9 @@
     var pendingUrl = Url.Page("Index", "Pending");
 }
 @*
-    Identical to Pages/Shared/_ApplyPending.cshtml, which is what this page would fall through to
-    if this file were not here. It can be deleted.
+    Whether an apply is due comes from the marker file, not from what this browser happens to
+    remember (D26). It re-asks after every change on any page that shows it, after an apply, and
+    every 5 seconds in case something else on the box changed the answer.
 *@
 <div id="apply-pending"
      hx-get="@pendingUrl"

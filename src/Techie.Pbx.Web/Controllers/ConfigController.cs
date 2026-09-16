@@ -18,17 +18,19 @@ namespace Techie.Pbx.Web.Controllers
 
         private readonly ExtensionRepository extensions;
         private readonly SettingsRepository settings;
+        private readonly TrunkRepository trunks;
 
         public ConfigController()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
+            this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
 
         [HttpPost("apply")]
         public IActionResult Apply()
         {
-            var applier = ConfigApplier.FromDatabase(PbxDatabase.Current, this.settings, this.extensions);
+            var applier = ConfigApplier.FromDatabase(PbxDatabase.Current, this.settings, this.extensions, this.trunks);
 
             try
             {

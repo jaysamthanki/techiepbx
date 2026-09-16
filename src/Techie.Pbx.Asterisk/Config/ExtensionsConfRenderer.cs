@@ -15,7 +15,10 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>FreePBX's number for "listen to my own messages", which users already know.</summary>
         public const string VoicemailMainNumber = "*97";
 
-        public static string Render(IEnumerable<Extension> extensions)
+        public static string Render(IEnumerable<Extension> extensions) =>
+            Render(extensions, new List<Trunk>());
+
+        public static string Render(IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
 
@@ -64,6 +67,20 @@ namespace Techie.Pbx.Asterisk.Config
                 {
                     sb.Append(DestinationDialplan.Lines(Destination.Hangup));
                 }
+            }
+
+            foreach (var trunk in PjsipConfRenderer.TrunkRenderOrder(trunks))
+            {
+                var trunkName = ConfText.Safe(trunk.Name, "trunk name");
+
+                // Where inbound calls from this provider land. Until inbound routes exist
+                // (piece 11) there is nowhere to send them, so they end here rather than
+                // anywhere surprising (D38).
+                sb.Append('\n');
+                sb.Append($"[{ConfText.Safe(trunk.Context, "trunk context")}]\n");
+                sb.Append($"; Inbound calls from the {trunkName} trunk. No inbound routes yet.\n");
+                sb.Append($"exten => _X.,1,NoOp(Inbound call on trunk {trunkName} for ${{EXTEN}})\n");
+                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
             }
 
             return sb.ToString();

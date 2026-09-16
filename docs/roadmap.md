@@ -15,7 +15,7 @@ this file is the **order**.
 | 6 | Auth hardening: app role requirement (break-glass deferred) | | |
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | Done 2026-09-16. Lab-verified: restart onto the 32-module allowlist, SIP registration, AMI login via regenerated `manager.conf`, and voicemail all pass. `/etc/asterisk` is now 100% DB-generated. |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | Done 2026-09-17 (D35 derived model, D36 helper; golden extensions.conf unchanged; deployed + lab-verified) |
-| 9 | Generic SIP trunk | F1 | |
+| 9 | Generic SIP trunk | F1 | **In progress** 2026-09-17: model, schema, repository, pjsip sections, inbound context, AMI registration status, modules, and the Trunks page all done (D37–D41). **Not yet run on the lab VM** — no real provider has been dialled, and the `PJSIPShowRegistrationsOutbound` wire format is unverified. |
 | 10 | Outbound routes (international restricted by default) | supporting | |
 | 11 | Inbound routes (DID → destination) | supporting | |
 | 12 | Callcentric wizard (verify settings on lab VM first) | F1 | |
