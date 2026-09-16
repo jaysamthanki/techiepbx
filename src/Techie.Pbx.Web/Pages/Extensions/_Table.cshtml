@@ -1,10 +1,9 @@
 @using Techie.Pbx.Web.Pages.Shared
 @model List<ExtensionRow>
-@{
-    var deleteUrl = Url.Page("Index", "Delete");
-    var formUrl = Url.Page("Index", "Form");
-}
-
+@*
+    Clicking anywhere on a row opens its edit form (D48); the actions that used to sit in a
+    column of buttons are in that form's footer instead.
+*@
 <table class="table table-sm table-hover"
        data-toggle="table"
        data-search="true"
@@ -17,7 +16,6 @@
             <th data-field="name" data-sortable="true">Name</th>
             <th data-field="enabled" data-sortable="true">Enabled</th>
             <th data-field="registration">Registration</th>
-            <th data-field="actions" class="text-end">Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -26,29 +24,11 @@
             var badge = StatusBadge.ForExtension(row.Number, row.State);
             var editUrl = Url.Page("Index", "Form", new { extensionID = row.ExtensionID });
 
-            <tr>
+            <tr data-edit-url="@editUrl">
                 <td class="font-monospace">@row.Number</td>
                 <td>@row.Name</td>
                 <td>@(row.Enabled ? "Yes" : "No")</td>
                 <td><partial name="_StatusBadge" model="badge" /></td>
-                <td class="text-end">
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button type="button" class="btn btn-outline-secondary"
-                                hx-get="@editUrl"
-                                hx-target="#form-modal-content"
-                                data-bs-toggle="modal"
-                                data-bs-target="#form-modal">Edit</button>
-                        <button type="button" class="btn btn-outline-secondary"
-                                onclick="pbxExtensions.showSecret(@row.ExtensionID)">Password</button>
-                        <button type="button" class="btn btn-outline-secondary"
-                                onclick="pbxExtensions.regenerateSecret(@row.ExtensionID, '@row.Number')">Regenerate</button>
-                        <button type="button" class="btn btn-outline-danger"
-                                hx-post="@deleteUrl"
-                                hx-vals='{"extensionID": @row.ExtensionID}'
-                                hx-swap="none"
-                                hx-confirm="Delete extension @row.Number (@row.Name)? Apply config afterwards to take it out of Asterisk.">Delete</button>
-                    </div>
-                </td>
             </tr>
         }
     </tbody>

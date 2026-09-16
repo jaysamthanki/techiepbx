@@ -17,11 +17,8 @@
                 hx-target="#form-modal-content"
                 data-bs-toggle="modal"
                 data-bs-target="#form-modal">Add trunk</button>
-        <button type="button" class="btn btn-outline-secondary" onclick="pbx.applyConfig(this)">Apply config</button>
     </div>
 </div>
-
-<partial name="_ApplyPending" model="Model.ConfigPending" />
 
 @* The table arrives from the Table handler, and comes back whenever something changed. *@
 <div id="trunks-table" hx-get="@tableUrl" hx-trigger="load, trunksChanged from:body">

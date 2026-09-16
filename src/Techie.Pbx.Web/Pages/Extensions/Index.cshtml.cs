@@ -22,25 +22,19 @@ namespace Techie.Pbx.Web.Pages.Extensions
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly ExtensionRepository extensions;
-        private readonly ConfigPendingMarker pending;
         private readonly SettingsRepository settings;
-
-        /// <summary>Whether the database has changed since the last apply, for the page shell.</summary>
-        public bool ConfigPending { get; private set; }
 
         public IndexModel()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
-            this.pending = new ConfigPendingMarker(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
         {
-            this.ConfigPending = this.pending.IsPending;
         }
 
-        /// <summary>The create or edit form, which the page shows in a sweetalert2 modal.</summary>
+        /// <summary>The create or edit form, which the page shows in the Bootstrap modal.</summary>
         public IActionResult OnGetForm(long? extensionID)
         {
             if (extensionID is null or 0)
@@ -71,12 +65,6 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 VoicemailPin = extension.VoicemailPin,
             });
         }
-
-        /// <summary>
-        /// The "apply is due" banner, which asks the marker file rather than remembering anything
-        /// in the browser: reload the page, or open a second one, and the answer is the same (D26).
-        /// </summary>
-        public PartialViewResult OnGetPending() => this.Partial("_ApplyPending", this.pending.IsPending);
 
         /// <summary>
         /// The five second poll: one badge per extension, each marked for an out-of-band swap so
@@ -181,6 +169,9 @@ namespace Techie.Pbx.Web.Pages.Extensions
             var events = new Dictionary<string, object?>
             {
                 ["extensionsChanged"] = null,
+
+                // The navbar's apply button polls, but it may as well know at once (D43).
+                ["configChanged"] = null,
                 ["pbxToast"] = new { message },
             };
 

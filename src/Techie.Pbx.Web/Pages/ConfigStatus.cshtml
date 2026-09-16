@@ -1,0 +1,7 @@
+@page
+@model ConfigStatusModel
+@*
+    Not a page anyone visits: the layout's navbar polls it every few seconds for the apply button
+    (D43). The answer is the button, or nothing at all when the config is in sync.
+*@
+<partial name="_ApplyButton" model="Model.ConfigPending" />

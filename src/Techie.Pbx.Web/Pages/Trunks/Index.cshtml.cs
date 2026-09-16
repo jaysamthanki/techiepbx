@@ -20,23 +20,17 @@ namespace Techie.Pbx.Web.Pages.Trunks
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
-        private readonly ConfigPendingMarker pending;
         private readonly SettingsRepository settings;
         private readonly TrunkRepository trunks;
 
-        /// <summary>Whether the database has changed since the last apply, for the page shell.</summary>
-        public bool ConfigPending { get; private set; }
-
         public IndexModel()
         {
-            this.pending = new ConfigPendingMarker(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
         {
-            this.ConfigPending = this.pending.IsPending;
         }
 
         /// <summary>The create or edit form, which the page shows in a sweetalert2 modal.</summary>
@@ -66,9 +60,6 @@ namespace Techie.Pbx.Web.Pages.Trunks
                 Username = trunk.Username,
             });
         }
-
-        /// <summary>The "apply is due" banner, which asks the marker file (D26).</summary>
-        public PartialViewResult OnGetPending() => this.Partial("_ApplyPending", this.pending.IsPending);
 
         /// <summary>
         /// The five second poll: one badge per trunk, marked for an out-of-band swap so htmx drops
@@ -180,6 +171,9 @@ namespace Techie.Pbx.Web.Pages.Trunks
             var events = new Dictionary<string, object?>
             {
                 ["trunksChanged"] = null,
+
+                // The navbar's apply button polls, but it may as well know at once (D43).
+                ["configChanged"] = null,
                 ["pbxToast"] = new { message },
             };
 

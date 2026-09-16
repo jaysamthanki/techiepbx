@@ -1,0 +1,14 @@
+@model bool
+@*
+    The apply button, or nothing (D43). It is in the navbar rather than on each page because
+    "Asterisk is running config older than the database" is true of the whole system, not of the
+    page you happen to be looking at, and because a button that is only there when there is
+    something to do needs no explaining.
+*@
+@if (Model)
+{
+    <button type="button" class="btn btn-danger" onclick="pbx.applyConfig(this)"
+            title="The configuration has changed since the last apply. This writes it to Asterisk and reloads what changed.">
+        Apply config
+    </button>
+}

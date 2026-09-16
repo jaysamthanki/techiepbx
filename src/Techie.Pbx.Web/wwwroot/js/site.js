@@ -33,7 +33,15 @@ window.pbx = (function () {
         },
 
         failed: function (error) {
-            Swal.fire({ icon: 'error', title: 'That did not work', text: error.message });
+            Swal.fire({ icon: 'error', title: 'That did not work', text: error.message, heightAuto: false });
+        },
+
+        // What a click on a table row does: fetch that row's edit form into the shared modal and
+        // open it. The same thing the Add button does with attributes, which a row cannot use
+        // because the click has to come from anywhere on it (D48).
+        openEdit: function (url) {
+            htmx.ajax('GET', url, { target: '#form-modal-content', swap: 'innerHTML' });
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('form-modal')).show();
         },
 
         // A call to one of our own JSON endpoints, with the antiforgery header (D23) and the
@@ -96,6 +104,17 @@ window.pbx = (function () {
 
     document.body.addEventListener('htmx:afterSwap', function (event) {
         startTables(event.target);
+    });
+
+    // Clicking a row opens its edit form (D48). Delegated from the body, so it keeps working
+    // through htmx swaps and bootstrap-table's own re-rendering of the rows.
+    document.body.addEventListener('click', function (event) {
+        const row = event.target.closest('tr[data-edit-url]');
+
+        // Anything clickable inside a row is itself, not the row.
+        if (row && !event.target.closest('a, button, input, select, label')) {
+            pbx.openEdit(row.dataset.editUrl);
+        }
     });
 
     // hx-confirm, asked with sweetalert2 rather than the browser's grey box. Confirms are what

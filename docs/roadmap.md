@@ -16,7 +16,7 @@ this file is the **order**.
 | 7 | Generate the remaining base config: `modules.conf` allowlist, `logger.conf`, `rtp.conf`, `manager.conf`, `asterisk.conf` | | Done 2026-09-16. Lab-verified: restart onto the 32-module allowlist, SIP registration, AMI login via regenerated `manager.conf`, and voicemail all pass. `/etc/asterisk` is now 100% DB-generated. |
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | Done 2026-09-17 (D35 derived model, D36 helper; golden extensions.conf unchanged; deployed + lab-verified) |
 | 9 | Generic SIP trunk | F1 | Done 2026-09-17 (D37–D41). Lab-verified: Callcentric trunk created in the UI, config applied, `callcentric-reg` **Registered** to sip.callcentric.net, renewal confirmed, AMI status endpoint live. Outbound audio test deferred to piece 10 (needs a route). |
-| 10 | Outbound routes (international restricted by default) | supporting | |
+| 10 | Outbound routes (international restricted by default) | supporting | **In progress** 2026-09-18: model, schema 005, repository, dialplan, and the Routes page all done (D44–D47). **Not yet run on the lab VM** — no real outbound call has been placed. |
 | 11 | Inbound routes (DID → destination) | supporting | |
 | 12 | Callcentric wizard (verify settings on lab VM first) | F1 | |
 | 13 | Voicemail | F2a | Done 2026-09-16, except email (piece 14). Lab-verified: UI enable -> voicemail.conf + dialplan -> real unanswered call -> message recorded in INBOX. |
@@ -155,3 +155,23 @@ Still to do:
   its own schema script, and validates on save that the destination still resolves.
 - New destination types are additive: a member on the enum, a case in `DestinationDialplan`, a
   source in `DestinationCatalog.All`. Ring groups and IVRs will each add one.
+
+## Piece 10 detail (in progress, started 2026-09-18)
+
+Which numbers go out, and over which trunk. Schema `005_outbound_routes.sql`, a repository that
+refuses international patterns outright (D47), and a dialplan of one context per route included in
+priority order, ending in a context that stops everything nothing matched (D45, D46).
+
+Two UI changes landed alongside it, both user decisions: the apply button moved into the navbar and
+only exists when there is something to apply (D43), and table rows became clickable with their
+actions in the edit modal's footer (D48). Extensions and Trunks were converted too.
+
+Still to do:
+
+- **Place a real outbound call from the lab VM.** Nothing here has dialled a provider yet: worth
+  checking the route order, that an unmatched number fails closed, and that `ss-noservice` is
+  actually installed (D45) rather than leaving the caller in silence.
+- **No strip or prepend digits** (D44), so "dial 9 for an outside line" is not possible. Ask if it
+  is wanted; it is one field and one line of renderer.
+- **The international guard assumes North American dialling** (D47). A UK or European site cannot
+  write a route at all under it, and will need a deliberate per-system escape hatch.

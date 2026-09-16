@@ -17,7 +17,10 @@ window.pbxTrunks = (function () {
                     input: 'text',
                     inputValue: result.secret,
                     inputAttributes: { readonly: 'readonly', spellcheck: 'false' },
-                    confirmButtonText: 'Done'
+                    confirmButtonText: 'Done',
+
+                    // Opened from the edit modal now (D48); heightAuto would shift it.
+                    heightAuto: false
                 });
             } catch (error) {
                 pbx.failed(error);

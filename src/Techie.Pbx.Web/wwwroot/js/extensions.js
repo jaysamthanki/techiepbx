@@ -13,7 +13,10 @@ window.pbxExtensions = (function () {
             input: 'text',
             inputValue: result.secret,
             inputAttributes: { readonly: 'readonly', spellcheck: 'false' },
-            confirmButtonText: 'Done'
+            confirmButtonText: 'Done',
+
+            // These are opened from the edit modal now (D48); heightAuto would shift it.
+            heightAuto: false
         });
     }
 
@@ -25,7 +28,8 @@ window.pbxExtensions = (function () {
                 text: 'The phone keeps working until the next apply, and then has to be set up again with the new password.',
                 showCancelButton: true,
                 confirmButtonText: 'Regenerate',
-                confirmButtonColor: '#dc3545'
+                confirmButtonColor: '#dc3545',
+                heightAuto: false
             });
 
             if (!confirmed.isConfirmed) {

@@ -1,0 +1,32 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Outbound routes";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Outbound routes</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add route</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    Numbers are matched against these routes in order, and the first match decides which trunk
+    the call goes out over. A number that matches nothing does not go out at all.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="routes-table" hx-get="@tableUrl" hx-trigger="load, routesChanged from:body">
+    <p class="text-secondary">Loading routes…</p>
+</div>
+
+<partial name="_FormModal" />

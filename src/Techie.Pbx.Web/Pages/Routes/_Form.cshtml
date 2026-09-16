@@ -1,0 +1,102 @@
+@model RouteForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
+    and footer together, so a validation failure comes back with the modal still open.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title">@(Model.IsNew ? "Add outbound route" : $"Edit route {Model.Name}")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (Model.Trunks.Count == 0)
+    {
+        <div class="alert alert-warning">
+            There are no enabled trunks, so there is nowhere for a route to send calls.
+            Add a trunk first.
+        </div>
+    }
+
+    <input type="hidden" name="outboundRouteID" value="@Model.OutboundRouteID" />
+
+    <div class="mb-3">
+        <label class="form-label" for="route-name">Name</label>
+        <input class="form-control" id="route-name" name="name" value="@Model.Name"
+               maxlength="32" autocomplete="off" required />
+        <div class="form-text">Letters, digits and dashes, starting with a letter. It names the dialplan context.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="route-pattern">Dial pattern</label>
+        <input class="form-control font-monospace" id="route-pattern" name="dialPattern" value="@Model.DialPattern"
+               maxlength="41" autocomplete="off" placeholder="_1NXXXXXXXXX" required />
+        <div class="form-text">
+            Asterisk pattern syntax: <code>X</code> any digit, <code>N</code> 2–9, <code>Z</code> 1–9,
+            <code>[2-9]</code> a set, a trailing <code>.</code> for the rest.
+            <strong>International dialling cannot be routed</strong> — a pattern may not start with 0,
+            or with a wildcard that could match one, because that is how a compromised PBX runs up a bill.
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-8 mb-3">
+            <label class="form-label" for="route-trunk">Trunk</label>
+            <select class="form-select" id="route-trunk" name="trunkID" required>
+                <option value="" selected="@(Model.TrunkID == 0 ? "selected" : null)">Choose a trunk…</option>
+                @foreach (var trunk in Model.Trunks)
+                {
+                    <option value="@trunk.TrunkID" selected="@(trunk.TrunkID == Model.TrunkID ? "selected" : null)">@trunk.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-4 mb-3">
+            <label class="form-label" for="route-priority">Priority</label>
+            <input class="form-control" id="route-priority" name="priority" value="@Model.Priority"
+                   type="number" min="1" max="@Techie.Pbx.Core.Models.OutboundRoute.MaxPriority" required />
+            <div class="form-text">Lower first.</div>
+        </div>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="route-enabled" name="enabled" value="true"
+               checked="@(Model.Enabled ? "checked" : null)" />
+        <label class="form-check-label" for="route-enabled">Enabled</label>
+        <div class="form-text">A disabled route is left out of the generated dialplan.</div>
+    </div>
+    </div>
+
+    @* Deleting lives here now that the table has no button column (D48). *@
+    <div class="modal-footer justify-content-between">
+        <div>
+            @if (!Model.IsNew)
+            {
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@deleteUrl"
+                        hx-vals='{"outboundRouteID": @Model.OutboundRouteID}'
+                        hx-swap="none"
+                        hx-confirm="Delete the @Model.Name route? Calls matching @Model.DialPattern stop going out at the next apply.">Delete</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>

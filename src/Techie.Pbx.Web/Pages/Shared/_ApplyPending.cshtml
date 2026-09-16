@@ -1,20 +1,5 @@
-@model bool
-@{
-    var pendingUrl = Url.Page("Index", "Pending");
-}
 @*
-    Whether an apply is due comes from the marker file, not from what this browser happens to
-    remember (D26). It re-asks after every change on any page that shows it, after an apply, and
-    every 5 seconds in case something else on the box changed the answer.
+    Empty. The per-page "changes not applied" banner was replaced by the apply button in the
+    navbar (D43), which is the same information in one place instead of on every page. Nothing
+    renders this any more and the file can be deleted.
 *@
-<div id="apply-pending"
-     hx-get="@pendingUrl"
-     hx-trigger="every 5s, extensionsChanged from:body, trunksChanged from:body, configApplied from:body"
-     hx-swap="outerHTML">
-    @if (Model)
-    {
-        <div class="alert alert-warning">
-            The configuration has changed since the last apply. Choose <strong>Apply config</strong> to write it to Asterisk.
-        </div>
-    }
-</div>

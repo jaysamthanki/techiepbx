@@ -1,19 +1,4 @@
-@model bool
-@{
-    var pendingUrl = Url.Page("Index", "Pending");
-}
 @*
-    Identical to Pages/Shared/_ApplyPending.cshtml, which is what this page would fall through to
-    if this file were not here. It can be deleted.
+    Empty. The per-page "changes not applied" banner was replaced by the apply button in the
+    navbar (D43). Nothing renders this any more and the file can be deleted.
 *@
-<div id="apply-pending"
-     hx-get="@pendingUrl"
-     hx-trigger="every 5s, extensionsChanged from:body, trunksChanged from:body, configApplied from:body"
-     hx-swap="outerHTML">
-    @if (Model)
-    {
-        <div class="alert alert-warning">
-            The configuration has changed since the last apply. Choose <strong>Apply config</strong> to write it to Asterisk.
-        </div>
-    }
-</div>
