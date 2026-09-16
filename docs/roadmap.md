@@ -55,9 +55,10 @@ the lab script until then.
 ## Piece 5 detail (code done 2026-09-15)
 
 - `/Extensions`: bootstrap-table of number, name, enabled and a live registration badge, with
-  create, edit and delete in sweetalert2 modals, "show password", "regenerate password" and
+  create, edit and delete in modals, "show password", "regenerate password" and
   "apply config". The page is a shell; htmx fetches every part of it from page handlers as HTML
-  partials, and changes answer 204 with `HX-Trigger` events (D21).
+  partials, and changes answer 204 with `HX-Trigger` events (D21). The create/edit form moved
+  from a sweetalert2 popup to a Bootstrap modal on 2026-09-18 (D42).
 - `RegistrationStatus` (in `Techie.Pbx.Asterisk/Ami`) turns `PJSIPShowContacts` into a state per
   extension number and never throws: no AMI means every badge says Unknown. The page polls it
   once every 5 seconds and htmx swaps the badges out of band.

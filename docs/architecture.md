@@ -136,8 +136,12 @@ and `ExternalAddress` (the public IP). When `ExternalAddress` is set, the render
 
 Server rendered. Four vendored client libraries and nothing else: Bootstrap, bootstrap-table,
 sweetalert2 and htmx (D9, D21). No CDN, no npm build step, and the JavaScript we write is glue:
-`site.js` (toasts, `hx-confirm` asked with sweetalert2, starting bootstrap-table on tables htmx
-brought in) and one small file per page.
+`site.js` (the JSON calls, toasts, `hx-confirm` asked with sweetalert2, keeping the form modal
+tidy, starting bootstrap-table on tables htmx brought in) and one small file per page.
+
+**Forms live in Bootstrap modals; sweetalert2 does alerts, confirms and toasts** (D42). A page has
+one empty `_FormModal` shell; the button that opens it carries `hx-get` for the form partial and
+Bootstrap's `data-bs-toggle`, so neither opening nor closing needs JavaScript of ours.
 
 The extensions page is the pattern every later list should follow:
 
@@ -145,14 +149,14 @@ The extensions page is the pattern every later list should follow:
  /Extensions                      page shell: buttons, empty containers, nothing else
    ├─ hx-get ?handler=Table  ───▶ _Table       bootstrap-table, one _StatusBadge per row
    ├─ hx-get ?handler=Status ───▶ _Status      every 5s: hx-swap-oob badges, one request
-   ├─ ?handler=Form          ───▶ _Form        shown inside a sweetalert2 modal
-   ├─ ?handler=Save/Delete   ───▶ 204 + HX-Trigger: extensionsChanged, configChanged, pbxToast
+   ├─ hx-get ?handler=Form   ───▶ _Form        into #form-modal-content, a Bootstrap modal
+   ├─ ?handler=Save/Delete   ───▶ 204 + HX-Trigger: extensionsChanged, pbxToast
    └─ fetch /api/…           ───▶ JSON         apply config, show/regenerate a SIP password
 ```
 
 An action that changes data does not decide what to redraw: it names what happened, and the
-page's containers listen. The table re-fetches on `extensionsChanged`, the apply reminder
-appears on `configChanged`, and `pbxToast` closes the modal and says what happened.
+page's containers listen. The table and the apply reminder re-fetch on `extensionsChanged`
+(`trunksChanged` on the trunks page), and `pbxToast` closes the form modal and says what happened.
 
 The database itself is opened once at startup by `PbxDatabase` and read from `Database:Path`
 (default `/var/lib/tnpbx/tnpbx.db`); pages and controllers construct their repositories over it

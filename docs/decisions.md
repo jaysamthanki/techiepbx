@@ -486,3 +486,46 @@ password box is always empty and blank means "keep the stored one". The password
 into the form or the table; reading it back is the explicit per-row action, and like the extension
 secret it is logged as who asked, never what they saw.
 
+### D42. Forms live in Bootstrap modals; sweetalert2 is for alerts, confirms and toasts (2026-09-18)
+Supersedes the form half of D21, which put the create/edit forms in sweetalert2 modals. Every
+create/edit form now opens in a Bootstrap modal instead. sweetalert2 keeps the three jobs it is
+actually built for: alerts, confirms (`hx-confirm`, the delete and regenerate questions) and
+toasts.
+
+Why: a sweetalert2 popup is an *alert* that we were handing a form to. It meant our JavaScript
+fetched the partial, handed the HTML to `Swal.fire`, then called `htmx.process` on the popup to
+wake the form up, and closing it was `Swal.close()` from an event handler. Bootstrap is already
+loaded, its modal is the thing forms are supposed to go in, and it does the opening itself.
+
+The flow, which has no JavaScript of ours in the opening or the closing:
+
+```
+ button  hx-get=<form handler>  hx-target="#form-modal-content"
+         data-bs-toggle="modal" data-bs-target="#form-modal"
+            │ htmx fetches the partial      │ Bootstrap opens the modal
+            ▼                               ▼
+ _FormModal.cshtml  ── one empty shell per page, shared (Pages/Shared)
+            │
+            ▼
+ _Form.cshtml  ── the whole modal-content: header, body, footer, all inside one <form>
+            │ hx-post, hx-target="this", hx-swap="outerHTML"
+            ▼
+ invalid → the form again, errors on it, modal still open
+ valid   → 204 + HX-Trigger: extensionsChanged/trunksChanged + pbxToast
+                  └─ site.js hides the modal and toasts; the table and the apply
+                     banner were already listening for those events
+```
+
+The event names did not change, so the apply reminder (D26) and the toasts kept working
+untouched. The form partial owning its own header and footer is what lets a validation failure be
+one swap of one element.
+
+What is left of our JavaScript is smaller than before: `openModal` is gone from both page files,
+and `send`/`failed`/`applyConfig` moved to `site.js` where both pages share one copy. The two
+hooks that remain are a listener that hides the modal when a save succeeds, and one that puts the
+placeholder back when the modal closes so the next open does not flash the last form.
+
+Note that `.modal-dialog-scrollable` is deliberately not used: with the form between
+`.modal-content` and the header/footer, that class's flex layout does not apply cleanly. A long
+form scrolls the page, as it did before.
+
