@@ -76,10 +76,14 @@ dotnet run --project src/Techie.Pbx.Web
 **UI**
 - **Allowed client libraries (and nothing else without asking):** Bootstrap, **bootstrap-table**,
   **sweetalert2**, and **htmx**. All vendored locally under wwwroot/lib — no CDN, no npm build step.
+- **Modals:** create/edit/delete **forms live in Bootstrap modals** — a server-rendered partial
+  (htmx `hx-get` loads it into the modal body, the form posts via htmx and swaps back validation
+  errors or a 204 + `HX-Trigger`). **sweetalert2 is only for alerts, confirms and toasts** —
+  never for forms.
 - **htmx** is the workhorse: Razor Pages returns HTML partials, and htmx handles table refresh,
   modal submit, and polling (`hx-trigger="every 5s"`) for live status like registration state.
   JavaScript we write ourselves stays minimal — a few lines of glue, not a framework.
-- Lists are **tables** (bootstrap-table); create/edit/delete happen in **sweetalert2 modals**.
+- Lists are **tables** (bootstrap-table); create/edit/delete happen in **modals**.
 - API controllers use the same Entra ID cookie as the pages. Only our own pages call the API.
 
 **Asterisk config**
