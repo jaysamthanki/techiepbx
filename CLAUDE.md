@@ -83,7 +83,10 @@ dotnet run --project src/Techie.Pbx.Web
 - **htmx** is the workhorse: Razor Pages returns HTML partials, and htmx handles table refresh,
   modal submit, and polling (`hx-trigger="every 5s"`) for live status like registration state.
   JavaScript we write ourselves stays minimal — a few lines of glue, not a framework.
-- Lists are **tables** (bootstrap-table); create/edit/delete happen in **modals**.
+- Lists are **tables** (bootstrap-table); **rows are clickable and open the edit form** - no stack
+  of action buttons on the right of each row. Other row-level actions (show secret, regenerate,
+  delete) live as buttons in the edit modal's footer, so the table stays clean and edit is one
+  click anywhere on the row.
 - API controllers use the same Entra ID cookie as the pages. Only our own pages call the API.
 
 **Asterisk config**
