@@ -31,16 +31,24 @@ namespace Techie.Pbx.Asterisk.Config
         public const string VoicemailMainNumber = "*97";
 
         public static string Render(IEnumerable<Extension> extensions) =>
-            Render(extensions, new List<Trunk>(), new List<OutboundRoute>());
+            Render(extensions, new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>());
 
         public static string Render(IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks) =>
-            Render(extensions, trunks, new List<OutboundRoute>());
+            Render(extensions, trunks, new List<OutboundRoute>(), new List<InboundRoute>());
 
-        public static string Render(IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks, IEnumerable<OutboundRoute> routes)
+        public static string Render(IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks, IEnumerable<OutboundRoute> routes) =>
+            Render(extensions, trunks, routes, new List<InboundRoute>());
+
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
+            var inboundList = InboundRenderOrder(inbound, trunkList);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -99,22 +107,37 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             foreach (var trunk in trunkList)
-            {
-                var trunkName = ConfText.Safe(trunk.Name, "trunk name");
-
-                // Where inbound calls from this provider land. Until inbound routes exist
-                // (piece 11) there is nowhere to send them, so they end here rather than
-                // anywhere surprising (D38).
-                sb.Append('\n');
-                sb.Append($"[{ConfText.Safe(trunk.Context, "trunk context")}]\n");
-                sb.Append($"; Inbound calls from the {trunkName} trunk. No inbound routes yet.\n");
-                sb.Append($"exten => _X.,1,NoOp(Inbound call on trunk {trunkName} for ${{EXTEN}})\n");
-                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
-            }
+                AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList());
 
             AppendOutboundRoutes(sb, routeList, trunkList);
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// Enabled inbound routes for trunks that exist, DIDs first and each trunk's catch-all
+        /// last. Re-validated, so a row that reached the database another way cannot reach a conf
+        /// file.
+        /// </summary>
+        public static List<InboundRoute> InboundRenderOrder(IEnumerable<InboundRoute> routes, List<Trunk> enabledTrunks)
+        {
+            var enabled = routes.Where(r => r.Enabled).ToList();
+
+            foreach (var route in enabled)
+            {
+                var errors = route.Validate();
+                if (errors.Count > 0)
+                {
+                    var what = route.CatchAll ? "catch-all" : route.DID;
+                    throw new InvalidOperationException($"Inbound route '{what}' is invalid: {string.Join(" ", errors)}");
+                }
+            }
+
+            return enabled
+                .Where(r => enabledTrunks.Any(t => t.TrunkID == r.TrunkID))
+                .OrderBy(r => r.CatchAll)
+                .ThenBy(r => r.DID, StringComparer.Ordinal)
+                .ToList();
         }
 
         /// <summary>
@@ -138,6 +161,47 @@ namespace Techie.Pbx.Asterisk.Config
                 .OrderBy(r => r.Priority)
                 .ThenBy(r => r.Name, StringComparer.Ordinal)
                 .ToList();
+        }
+
+        /// <summary>
+        /// Where calls from one provider land: one entry per DID, sent on by the shared
+        /// destination helper (D36), and one entry for everything else — the trunk's catch-all
+        /// route if it has one, otherwise a hangup (D50).
+        ///
+        /// No includes and no ordering tricks are needed here, unlike outbound (D46): the DIDs are
+        /// literal extensions and the catch-all is a pattern, and Asterisk always prefers a literal
+        /// match to a pattern.
+        /// </summary>
+        private static void AppendTrunkContext(StringBuilder sb, Trunk trunk, List<InboundRoute> routes)
+        {
+            var trunkName = ConfText.Safe(trunk.Name, "trunk name");
+
+            sb.Append('\n');
+            sb.Append($"[{ConfText.Safe(trunk.Context, "trunk context")}]\n");
+            sb.Append($"; Inbound calls from the {trunkName} trunk\n");
+
+            foreach (var route in routes)
+            {
+                // Matched as the provider sends it, character for character (D51).
+                var number = ConfText.Safe(route.DialplanExtension, "DID");
+                var destination = route.ToDestination();
+                var what = route.CatchAll ? "any other number" : number;
+
+                if (route.Description.Length > 0)
+                    sb.Append($"; {ConfText.Safe(route.Description, "description")}\n");
+
+                sb.Append($"exten => {number},1,NoOp(Inbound {what} on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
+                sb.Append(DestinationDialplan.Lines(destination));
+            }
+
+            // Nothing claimed the rest, so the call ends here: unanswered, so the caller's own
+            // carrier tells them, and above all never falling through to somewhere that could
+            // dial out (D50).
+            if (!routes.Any(r => r.CatchAll))
+            {
+                sb.Append($"exten => _X.,1,NoOp(No inbound route for ${{EXTEN}} on {trunkName})\n");
+                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
+            }
         }
 
         /// <summary>

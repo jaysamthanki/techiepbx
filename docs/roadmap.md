@@ -17,7 +17,7 @@ this file is the **order**.
 | 8 | Destinations: shared "send call to X" model + dialplan helper | supporting | Done 2026-09-17 (D35 derived model, D36 helper; golden extensions.conf unchanged; deployed + lab-verified) |
 | 9 | Generic SIP trunk | F1 | Done 2026-09-17 (D37–D41). Lab-verified: Callcentric trunk created in the UI, config applied, `callcentric-reg` **Registered** to sip.callcentric.net, renewal confirmed, AMI status endpoint live. Outbound audio test deferred to piece 10 (needs a route). |
 | 10 | Outbound routes (international restricted by default) | supporting | **Done 2026-09-18** (D44–D48). Lab-verified end-to-end: real call from MicroSIP over the Callcentric trunk, answered and audio-bridged. Fixed en route: allowlist was missing `res_pjsip_pubsub` (chan_pjsip would not load — calls silently stalled), and trunk dial needs the full URI form. International patterns refused by validation. |
-| 11 | Inbound routes (DID → destination) | supporting | |
+| 11 | Inbound routes (DID → destination) | supporting | **In progress** 2026-09-19: model, schema 006, repository, dialplan and the Inbound routes page all done (D49–D51). **Not yet run on the lab VM** — and what Callcentric puts in `${EXTEN}` is still unverified (D51). |
 | 12 | Callcentric wizard (verify settings on lab VM first) | F1 | |
 | 13 | Voicemail | F2a | Done 2026-09-16, except email (piece 14). Lab-verified: UI enable -> voicemail.conf + dialplan -> real unanswered call -> message recorded in INBOX. |
 | 14 | Email notifications (voicemail to email first, then alerts) | F4 | |
@@ -175,3 +175,25 @@ Still to do:
   is wanted; it is one field and one line of renderer.
 - **The international guard assumes North American dialling** (D47). A UK or European site cannot
   write a route at all under it, and will need a deliberate per-system escape hatch.
+
+## Piece 11 detail (in progress, started 2026-09-19)
+
+Which number arriving on which trunk goes where. Schema `006_inbound_routes.sql`, a repository that
+checks the trunk and the destination still exist, and entries in each trunk's own context sent on
+by the shared destination helper (D36). The `from-trunk-<name>` placeholder from piece 9 is now
+only what a trunk with no routes gets (D50).
+
+This is the first consumer of the destination picker built in piece 8 (D35): the form renders
+`_DestinationSelect` and stores what it posts as `DestinationType` / `DestinationValue`, exactly
+as that decision said a feature would.
+
+Still to do:
+
+- **Take a real inbound call on the lab VM**, and above all **read the log for what Callcentric
+  actually puts in `${EXTEN}`** (D51). DIDs are matched exactly, so if the provider sends 10 digits
+  where an admin typed 11, the call goes to the catch-all instead. A normalisation step may be
+  needed once that is known.
+- Destinations are still only Extension, Voicemail and Hangup. Ring groups (piece 15) and IVRs
+  (piece 17) each add one, and inbound routes pick them up without changing (D35).
+- A route whose destination has since been deleted shows as "gone" in the table and hangs the call
+  up in the dialplan. There is no warning anywhere else that it needs fixing.

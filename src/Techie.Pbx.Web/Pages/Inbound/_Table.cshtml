@@ -1,0 +1,50 @@
+@model List<InboundRouteRow>
+@*
+    Clicking anywhere on a row opens its edit form (D48). Already grouped by trunk with each
+    catch-all last, which is the order the dialplan reads in, so it is not sortable.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="did">Number</th>
+            <th data-field="destination">Goes to</th>
+            <th data-field="trunk">Trunk</th>
+            <th data-field="description">Description</th>
+            <th data-field="enabled">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { inboundRouteID = row.InboundRouteID });
+
+            <tr data-edit-url="@editUrl">
+                <td class="font-monospace">@row.DID</td>
+                <td>
+                    @if (row.DestinationUsable)
+                    {
+                        @row.Destination
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="What this route pointed at is gone. The call will be hung up until it is fixed.">@row.Destination</span>
+                    }
+                </td>
+                <td>
+                    @if (row.TrunkUsable)
+                    {
+                        @row.Trunk
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="This route is left out of the generated dialplan until its trunk is back.">@row.Trunk</span>
+                    }
+                </td>
+                <td>@row.Description</td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>
