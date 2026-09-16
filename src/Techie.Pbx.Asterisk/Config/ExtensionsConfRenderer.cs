@@ -179,28 +179,49 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append('\n');
             sb.Append($"[{ConfText.Safe(trunk.Context, "trunk context")}]\n");
             sb.Append($"; Inbound calls from the {trunkName} trunk\n");
+            sb.Append("; The provider puts the account user in the request URI and the DID in the To\n");
+            sb.Append("; header (verified on the wire, matching Callcentric's DID-routing guide), so\n");
+            sb.Append("; every call lands on one pattern and is dispatched by the number it was sent to.\n");
 
-            foreach (var route in routes)
+            // The dispatch block: DID routes first, then the fallthrough (D50). A GotoIf with
+            // only a true target falls through to the next line, so the checks chain naturally.
+            sb.Append("exten => _X.,1,Set(DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)})\n");
+            sb.Append($" same => n,NoOp(Inbound ${{DID}} on {trunkName})\n");
+
+            foreach (var route in routes.Where(r => !r.CatchAll))
             {
-                // Matched as the provider sends it, character for character (D51).
+                // Matched on the DID in the To header, character for character (D51).
                 var number = ConfText.Safe(route.DialplanExtension, "DID");
-                var destination = route.ToDestination();
-                var what = route.CatchAll ? "any other number" : number;
+                var label = $"r{route.InboundRouteID}";
 
-                if (route.Description.Length > 0)
-                    sb.Append($"; {ConfText.Safe(route.Description, "description")}\n");
+                sb.Append($" same => n,GotoIf($[\"${{DID}}\" = \"{number}\"]?{label})\n");
+            }
 
-                sb.Append($"exten => {number},1,NoOp(Inbound {what} on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
+            // Nothing claimed the call, so it ends here: unanswered, so the caller's own carrier
+            // tells them, and above all never falling through to somewhere that could dial out
+            // (D50). A catch-all route claims it instead.
+            var catchAll = routes.FirstOrDefault(r => r.CatchAll);
+            if (catchAll is null)
+            {
+                sb.Append($" same => n(none),NoOp(No inbound route for ${{DID}} on {trunkName})\n");
+                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
+            }
+            else
+            {
+                var destination = catchAll.ToDestination();
+                sb.Append($" same => n(none),NoOp(Inbound catch-all on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
                 sb.Append(DestinationDialplan.Lines(destination));
             }
 
-            // Nothing claimed the rest, so the call ends here: unanswered, so the caller's own
-            // carrier tells them, and above all never falling through to somewhere that could
-            // dial out (D50).
-            if (!routes.Any(r => r.CatchAll))
+            // The route targets: each is a labeled jump destination for its GotoIf above.
+            foreach (var route in routes.Where(r => !r.CatchAll))
             {
-                sb.Append($"exten => _X.,1,NoOp(No inbound route for ${{EXTEN}} on {trunkName})\n");
-                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
+                var number = ConfText.Safe(route.DialplanExtension, "DID");
+                var destination = route.ToDestination();
+                var label = $"r{route.InboundRouteID}";
+
+                sb.Append($" same => n({label}),NoOp(Inbound {number} on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
+                sb.Append(DestinationDialplan.Lines(destination));
             }
         }
 
