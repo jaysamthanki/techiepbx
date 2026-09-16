@@ -21,16 +21,22 @@ namespace Techie.Pbx.Web.Pages.Extensions
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly ExtensionRepository extensions;
+        private readonly ConfigPendingMarker pending;
         private readonly SettingsRepository settings;
+
+        /// <summary>Whether the database has changed since the last apply, for the page shell.</summary>
+        public bool ConfigPending { get; private set; }
 
         public IndexModel()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.pending = new ConfigPendingMarker(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
         {
+            this.ConfigPending = this.pending.IsPending;
         }
 
         /// <summary>The create or edit form, which the page shows in a sweetalert2 modal.</summary>
@@ -54,6 +60,12 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 Number = extension.Number,
             });
         }
+
+        /// <summary>
+        /// The "apply is due" banner, which asks the marker file rather than remembering anything
+        /// in the browser: reload the page, or open a second one, and the answer is the same (D26).
+        /// </summary>
+        public PartialViewResult OnGetPending() => this.Partial("_ApplyPending", this.pending.IsPending);
 
         /// <summary>
         /// The five second poll: one badge per extension, each marked for an out-of-band swap so
@@ -150,15 +162,14 @@ namespace Techie.Pbx.Web.Pages.Extensions
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
-        /// "extensionsChanged" refreshes the table, "configChanged" raises the apply reminder and
-        /// "pbxToast" says what happened.
+        /// "extensionsChanged" refreshes the table and the apply banner, "pbxToast" says what
+        /// happened.
         /// </summary>
         private IActionResult Changed(string message)
         {
             var events = new Dictionary<string, object?>
             {
                 ["extensionsChanged"] = null,
-                ["configChanged"] = null,
                 ["pbxToast"] = new { message },
             };
 

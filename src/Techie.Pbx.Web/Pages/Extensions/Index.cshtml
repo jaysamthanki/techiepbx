@@ -16,9 +16,7 @@
     </div>
 </div>
 
-<div id="apply-pending" class="alert alert-warning d-none">
-    Extensions have changed since the last apply. Choose <strong>Apply config</strong> to write them to Asterisk.
-</div>
+<partial name="_ApplyPending" model="Model.ConfigPending" />
 
 @* The table arrives from the Table handler, and comes back whenever something changed. *@
 <div id="extensions-table" hx-get="@tableUrl" hx-trigger="load, extensionsChanged from:body">

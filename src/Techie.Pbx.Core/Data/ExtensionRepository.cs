@@ -10,16 +10,20 @@ namespace Techie.Pbx.Core.Data
         private const int SqliteConstraintError = 19;
 
         private readonly Database database;
+        private readonly ConfigPendingMarker pending;
 
         public ExtensionRepository(Database database)
         {
             this.database = database;
+            this.pending = new ConfigPendingMarker(database);
         }
 
         public void Delete(long extensionID)
         {
             using var connection = this.database.Open();
             connection.Execute("DELETE FROM Extensions WHERE ExtensionID = @extensionID", new { extensionID });
+
+            this.pending.Raise();
         }
 
         public List<Extension> GetAll()
@@ -50,6 +54,8 @@ namespace Techie.Pbx.Core.Data
                 extension.ExtensionID = connection.ExecuteScalar<long>(
                     "INSERT INTO Extensions (Number, Name, Secret, Enabled) VALUES (@Number, @Name, @Secret, @Enabled); SELECT last_insert_rowid();",
                     extension);
+
+                this.pending.Raise();
                 return extension.ExtensionID;
             }
             catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)
@@ -70,6 +76,8 @@ namespace Techie.Pbx.Core.Data
                     extension);
                 if (rows == 0)
                     throw new ValidationFailedException($"ExtensionID {extension.ExtensionID} does not exist.");
+
+                this.pending.Raise();
             }
             catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)
             {

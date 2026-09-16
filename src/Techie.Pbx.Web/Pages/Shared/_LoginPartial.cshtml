@@ -1,8 +1,15 @@
-﻿@using System.Security.Principal
+@using Techie.Pbx.Web.Security
 
 <ul class="navbar-nav">
 @if (User.Identity?.IsAuthenticated == true)
 {
+        @if (User.Identity?.AuthenticationType == LocalBypassSettings.AuthenticationType)
+        {
+            <span class="navbar-text text-danger fw-semibold me-3"
+                  title="Entra sign-in was bypassed because this address is in LocalAuthenticationBypass:AllowedNetworks.">
+                Local sign-in bypass
+            </span>
+        }
         <span class="navbar-text text-dark">Hello @User.Identity?.Name!</span>
         <li class="nav-item">
             <a class="nav-link text-dark" asp-area="MicrosoftIdentity" asp-controller="Account" asp-action="SignOut">Sign out</a>

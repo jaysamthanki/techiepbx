@@ -28,7 +28,7 @@ namespace Techie.Pbx.Web.Controllers
         [HttpPost("apply")]
         public IActionResult Apply()
         {
-            var applier = ConfigApplier.FromDatabase(this.settings, this.extensions);
+            var applier = ConfigApplier.FromDatabase(PbxDatabase.Current, this.settings, this.extensions);
 
             try
             {
