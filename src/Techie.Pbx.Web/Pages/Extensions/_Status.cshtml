@@ -1,0 +1,6 @@
+@model List<StatusBadge>
+@* Nothing but out-of-band badges: the page swaps none of this response in directly. *@
+@foreach (var badge in Model)
+{
+    <partial name="_StatusBadge" model="badge" />
+}

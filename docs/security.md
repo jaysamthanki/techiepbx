@@ -23,6 +23,11 @@ software.
 
 ### Web process
 - Never runs as root, never calls sudo, never shells out with string-built commands.
+- The API shares the session cookie, so every browser call carries an antiforgery token in the
+  `RequestVerificationToken` header and controllers validate it by default (D23). A call without
+  a session gets 401, not a redirect (D20).
+- SIP secrets are never rendered into a list or a table. They go to the browser one at a time,
+  when an admin asks for that one extension, and the request is logged without the value.
 - Intended systemd hardening: `NoNewPrivileges=true`, `ProtectSystem=strict` with explicit
   `ReadWritePaths`, `PrivateTmp=true`, `ProtectHome=true`, minimal `CapabilityBoundingSet`.
   Don't add code that would need these relaxed without recording a decision.
@@ -61,4 +66,3 @@ Deliberately deferred. Don't treat them as done.
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |
 | `modules.conf` uses `autoload = yes` | Unneeded modules loaded | Generate an explicit allowlist |
-| API calls without a session get a login redirect rather than 401 | Awkward for `fetch` | Fix when the first API-backed page is built |

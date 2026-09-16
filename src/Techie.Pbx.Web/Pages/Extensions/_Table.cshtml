@@ -1,0 +1,51 @@
+@model List<ExtensionRow>
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var formUrl = Url.Page("Index", "Form");
+}
+
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="number"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="number" data-sortable="true">Number</th>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+            <th data-field="registration">Registration</th>
+            <th data-field="actions" class="text-end">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var badge = new StatusBadge { Number = row.Number, State = row.State };
+            var editUrl = Url.Page("Index", "Form", new { extensionID = row.ExtensionID });
+
+            <tr>
+                <td class="font-monospace">@row.Number</td>
+                <td>@row.Name</td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+                <td><partial name="_StatusBadge" model="badge" /></td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="pbxExtensions.openModal('@editUrl')">Edit</button>
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="pbxExtensions.showSecret(@row.ExtensionID)">Password</button>
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="pbxExtensions.regenerateSecret(@row.ExtensionID, '@row.Number')">Regenerate</button>
+                        <button type="button" class="btn btn-outline-danger"
+                                hx-post="@deleteUrl"
+                                hx-vals='{"extensionID": @row.ExtensionID}'
+                                hx-swap="none"
+                                hx-confirm="Delete extension @row.Number (@row.Name)? Apply config afterwards to take it out of Asterisk.">Delete</button>
+                    </div>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
