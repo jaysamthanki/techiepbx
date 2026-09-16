@@ -136,7 +136,7 @@ minimum.
 |---|---|---|
 | **Outbound routes** | Trunks, follow me | Dial pattern → trunk. Restrict international dialing by default (toll fraud). |
 | **Inbound routes** | Trunks | DID → destination |
-| **Destinations** | Inbound routes, IVR, ring groups, voicemail | One shared "send the call to X" picker and dialplan helper used by every feature |
+| **Destinations** | Inbound routes, IVR, ring groups, voicemail | One shared "send the call to X" picker and dialplan helper used by every feature. **Built 2026-09-17** (D35, D36): types so far are Extension, Voicemail and Hangup; each new feature adds its own |
 | **Feature codes** | Voicemail, IVR recording | `*43` echo exists; `*97` voicemail etc. |
 | **Audio file handling** | IVR, voicemail greetings | Storage, format conversion |
 | **Time conditions** | Probably IVR / inbound routes (business hours) | Not requested. Ask before building. |

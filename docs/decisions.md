@@ -350,3 +350,52 @@ live Asterisk.
 `logger` and `manager` are not `.so` files: the logger and AMI are part of the Asterisk core, and
 both names are reload classes the `Reload` action accepts alongside real module names.
 
+### D35. Destinations are derived, not stored: no Destinations table (2026-09-17)
+A destination is "extension 1001" or "the mailbox on 1001" or "hang up" — a **reference**, and
+everything it refers to already exists in a table of its own. So there is no `Destinations`
+table, and **this piece adds no schema script**:
+
+- **The list** an admin picks from is computed. `DestinationCatalog.All(extensions)` is a pure
+  function that turns the rows a caller already loaded into choices: enabled extensions, the
+  mailboxes that are actually switched on, and Hangup. Ring groups, IVRs and trunks each add
+  their own source to it as they are built, and every picker in the UI gains the entries without
+  being touched.
+- **A stored choice** is two columns on the feature that made it —
+  `InboundRoutes.DestinationType` / `DestinationValue`, `IvrKeys.DestinationType` /
+  `DestinationValue` — written by the feature's own schema script when that feature is built.
+  `Destination` (Type + Value) is what they hand around; `Destination.Key` ("Extension:1001") is
+  the single-string form a `<select>` posts, and `TryParse` reads it back.
+
+Why not rows in a table: a `Destinations` row per extension would be a copy of something that
+already exists, and every rename, renumber, disable or delete would have to be mirrored into it.
+That is the sync problem FreePBX-style schemas have, and there is nothing to buy with it here —
+we never need to attach anything to a destination, only point at one.
+
+The cost is that a stored choice can dangle: delete extension 1001 and an inbound route still
+says `Extension:1001`. Foreign keys would have caught that; instead `DestinationCatalog.Find`
+answers null for a destination that no longer resolves, the shared picker shows it as "no longer
+available" rather than quietly selecting the first entry, and each consuming feature validates on
+save. **This is the trade-off to revisit** if dangling references turn out to be common in
+practice: the answer then is not a `Destinations` table but a "what points at this extension?"
+check before delete.
+
+Type is stored **by name**, never by ordinal, so reordering the enum cannot repoint live routes.
+The enum lives in `Core.Models`, not `Contracts` — `Contracts` is only for messages between the
+web app and the root helper, and a destination is not one.
+
+### D36. One dialplan helper writes every "send the call here" (2026-09-17)
+`DestinationDialplan.Steps` / `.Lines` is the only code that knows what sending a call to a
+destination looks like: `Goto(internal,1001,1)` for an extension, `VoiceMail(1001@default,u)` +
+`Hangup()` for a mailbox, `Hangup()` for hanging up. Inbound routes, IVR keys and ring group
+failover will all call it rather than each writing its own `VoiceMail(...)`.
+
+An extension destination goes in through `Goto(internal,<number>,1)` — the same dialplan entry an
+internal call uses — so an inbound call gets the extension's voicemail fallback for free, and
+there is one description of "what happens when you call 1001" rather than two that drift.
+
+`ExtensionsConfRenderer` now writes its own busy/unavailable fallback through the helper, and
+the golden `extensions.conf` is **unchanged**, which is the proof that the helper says what the
+renderer used to say. What stayed in the renderer is the `GotoIf` on `DIALSTATUS`: choosing
+*which* greeting a caller hears is the extension feature's decision, not part of what a
+destination is. The helper takes that choice as a parameter (`VoicemailGreeting`).
+

@@ -104,6 +104,27 @@ Each extension gets an explicit `exten =>` line rather than a pattern like `_1XX
 numbers that exist in the database can be dialled. Feature codes use FreePBX-style numbers
 (`*43` echo test) since that's what users already know.
 
+### Destinations
+
+Most features end the same way: "and then the call goes *there*". Inbound routes, IVR keys, ring
+group failover and follow-me all need the same list and the same dialplan, so there is one of
+each (D35, D36).
+
+```
+ Extensions table ─┐
+ (ring groups)  ───┼─▶ DestinationCatalog.All ─▶ choices ─▶ _DestinationSelect.cshtml
+ (IVRs)         ───┘                                            │  posts Destination.Key
+                                                                ▼
+ feature table: DestinationType + DestinationValue ─▶ Destination ─▶ DestinationDialplan ─▶ conf
+```
+
+A destination is a **reference** (type + value), never a copy, and the list is computed rather
+than stored, so there is nothing to keep in step when an extension is renamed or deleted. What a
+feature stores is those two fields in two columns of its own table; what it writes into the
+dialplan comes from `DestinationDialplan`, which is the only code that knows the syntax. An
+extension destination is `Goto(internal,<number>,1)` — in by the same door an internal call uses,
+so the extension's own voicemail fallback applies without being written twice.
+
 ### NAT
 
 Cloud VMs only see a private IP; the public IP is 1:1 NAT in front of them. Without telling

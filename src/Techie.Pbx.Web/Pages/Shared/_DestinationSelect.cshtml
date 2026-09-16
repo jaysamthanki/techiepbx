@@ -1,0 +1,36 @@
+@using Techie.Pbx.Web.Pages.Shared
+@model DestinationSelect
+@*
+    The shared destination picker (D35). Every feature that sends a call somewhere renders this
+    and gets the same list, grouped the same way, posting the same string.
+
+    Nothing uses it yet: inbound routes, IVRs and ring groups are the features that will, and it
+    is here so that all three pick it up rather than each growing a select of their own.
+*@
+<select class="form-select"
+        id="@Model.ElementID"
+        name="@Model.Name"
+        required="@(Model.Required ? "required" : null)">
+
+    @if (Model.Placeholder != null)
+    {
+        <option value="" selected="@(Model.SelectedKey == null ? "selected" : null)">@Model.Placeholder</option>
+    }
+
+    @foreach (var group in Model.Choices.GroupBy(c => c.GroupName))
+    {
+        <optgroup label="@group.Key">
+            @foreach (var choice in group)
+            {
+                <option value="@choice.Destination.Key" selected="@(Model.IsSelected(choice) ? "selected" : null)">@choice.Label</option>
+            }
+        </optgroup>
+    }
+
+    @if (Model.MissingKey != null)
+    {
+        <optgroup label="No longer available">
+            <option value="@Model.MissingKey" selected>@Model.MissingKey — choose something else</option>
+        </optgroup>
+    }
+</select>

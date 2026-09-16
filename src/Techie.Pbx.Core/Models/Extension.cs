@@ -35,6 +35,12 @@ namespace Techie.Pbx.Core.Models
         public string VoicemailPin { get; set; } = "";
 
         /// <summary>
+        /// What counts as an extension number. Public because a destination points at one, and
+        /// two places deciding what a number looks like is one place too many.
+        /// </summary>
+        public static bool IsValidNumber(string number) => NumberPattern().IsMatch(number);
+
+        /// <summary>
         /// Returns a list of problems; empty means valid. These values end up in Asterisk
         /// config files, so the rules are deliberately strict.
         /// </summary>
