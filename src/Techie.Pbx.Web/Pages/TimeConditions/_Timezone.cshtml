@@ -2,6 +2,7 @@
 @model TimezoneForm
 @{
     var saveUrl = Url.Page("Index", "Timezone");
+    var clockUrl = Url.Page("Index", "Clock");
 }
 @*
     The server timezone, inline in the page header. It is a record, not a lever: Asterisk matches
@@ -21,7 +22,12 @@
                    maxlength="64" autocomplete="off" placeholder="@AsteriskSettings.DefaultTimezone" />
             <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
             <span class="text-secondary">Server time now:</span>
-            <partial name="_Clock" model='DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz")' />
+            @* Swaps only its own text (innerHTML), never the element: replacing the element
+               each tick would re-insert the server's surrounding whitespace into this flex
+               row and shuffle the card (D65). *@
+            <span id="tc-server-time" class="font-monospace"
+                  hx-get="@clockUrl" hx-trigger="every 5s" hx-swap="innerHTML"
+                  title="The clock every open-hours check is matched against">@DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz")</span>
             <span class="form-text mb-0">
                 The IANA zone this server's clock is set to, e.g. Europe/London. Written into the
                 generated dialplan as a comment; blank means @AsteriskSettings.DefaultTimezone.
