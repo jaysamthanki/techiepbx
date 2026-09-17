@@ -1,0 +1,13 @@
+@model TimeConditionHolidayForm
+@*
+    One holiday row: the date the site is closed on, and where that one day sends a call when it
+    should not be the condition's holiday destination (D63). Keyed like an open-hours row, for
+    the same reason.
+*@
+<div class="input-group input-group-sm mb-2 tc-row" data-key="@Model.Key">
+    <input type="hidden" name="holidays.Index" value="@Model.Key" />
+    <input type="date" class="form-control font-monospace" style="max-width: 12rem"
+           id="tc-holiday-@Model.Key-date" name="holidays[@Model.Key].date" value="@Model.Date" />
+    <partial name="_DestinationSelect" model="Model.Choices" />
+    <button type="button" class="btn btn-outline-danger tc-remove" title="Remove this holiday">&times;</button>
+</div>

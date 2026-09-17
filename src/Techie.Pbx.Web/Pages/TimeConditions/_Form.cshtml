@@ -1,0 +1,148 @@
+@using Techie.Pbx.Core.Models
+@model TimeConditionForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
+    and footer together, so a validation failure comes back with the modal still open.
+
+    The open-hours and holiday rows are added and removed in the browser. Each row's field names
+    are indexed by its key rather than its position, with an "hours.Index"/"holidays.Index" hidden
+    field per row telling ASP.NET Core which keys exist, so removing a row posts the rows that
+    are left without anything having to be renumbered. The blank rows the Add buttons copy sit in
+    <template> elements with the placeholder key the page's JavaScript swaps for a real one.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title">@(Model.IsNew ? "Add time condition" : $"Edit time condition {Model.Name}")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="timeConditionID" value="@Model.TimeConditionID" />
+
+    <div class="row">
+        <div class="col-8 mb-3">
+            <label class="form-label" for="tc-name">Name</label>
+            <input class="form-control" id="tc-name" name="name" value="@Model.Name"
+                   maxlength="64" autocomplete="off" required />
+        </div>
+        <div class="col-4 mb-3">
+            <label class="form-label" for="tc-play-extension">Play extension</label>
+            <input class="form-control font-monospace" id="tc-play-extension" name="playExtension"
+                   value="@Model.PlayExtension" inputmode="numeric" maxlength="6" autocomplete="off" />
+            <div class="form-text">
+                2 to 6 digits, or blank. Dial it to see which way this condition decides right
+                now. Without one it cannot be picked as a destination.
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="tc-description">Description</label>
+        <input class="form-control" id="tc-description" name="description" value="@Model.Description"
+               maxlength="128" autocomplete="off" />
+        <div class="form-text">Optional. Written as a comment above the check in the generated dialplan.</div>
+    </div>
+
+    @* Open hours: a row per window, days first because the days are the wider choice (D62). *@
+    <fieldset class="border rounded p-3 mb-3" id="tc-hours">
+        <legend class="float-none w-auto px-2 fs-6 text-secondary">Open hours</legend>
+
+        <div class="tc-rows">
+            @foreach (var row in Model.Hours)
+            {
+                <partial name="_HoursRow" model="row" />
+            }
+        </div>
+
+        <template id="tc-hours-template">
+            <partial name="_HoursRow" model="Model.HoursTemplate" />
+        </template>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary tc-add-hours">Add hours</button>
+
+        <div class="form-text mt-2">
+            When the site is open: every row that matches sends the call to the open destination.
+            No rows at all means the condition is closed around the clock.
+        </div>
+    </fieldset>
+
+    @* Holidays: a row per date, each optionally overriding where that one day goes (D63). *@
+    <fieldset class="border rounded p-3 mb-3" id="tc-holidays">
+        <legend class="float-none w-auto px-2 fs-6 text-secondary">Holidays</legend>
+
+        <div class="tc-rows">
+            @foreach (var row in Model.Holidays)
+            {
+                <partial name="_HolidayRow" model="row" />
+            }
+        </div>
+
+        <template id="tc-holidays-template">
+            <partial name="_HolidayRow" model="Model.HolidayTemplate" />
+        </template>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary tc-add-holidays">Add holiday</button>
+
+        <div class="form-text mt-2">
+            A holiday wins over the open hours, whatever day it falls on. A holiday comes round
+            every year: the year is not part of the match (D64).
+        </div>
+    </fieldset>
+
+    <div class="row">
+        <div class="col-4 mb-3">
+            <label class="form-label" for="tc-open-destination">When open</label>
+            <partial name="_DestinationSelect" model="Model.OpenDestinationChoices" />
+        </div>
+        <div class="col-4 mb-3">
+            <label class="form-label" for="tc-closed-destination">When closed</label>
+            <partial name="_DestinationSelect" model="Model.ClosedDestinationChoices" />
+        </div>
+        <div class="col-4 mb-3">
+            <label class="form-label" for="tc-holiday-destination">On holidays</label>
+            <partial name="_DestinationSelect" model="Model.HolidayDestinationChoices" />
+        </div>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="tc-enabled" name="enabled" value="true"
+               checked="@(Model.Enabled ? "checked" : null)" />
+        <label class="form-check-label" for="tc-enabled">Enabled</label>
+        <div class="form-text">A disabled condition is left out of the generated dialplan.</div>
+    </div>
+    </div>
+
+    @* Deleting lives here now that the table has no button column (D48). *@
+    <div class="modal-footer justify-content-between">
+        <div>
+            @if (!Model.IsNew)
+            {
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@deleteUrl"
+                        hx-vals='{"timeConditionID": @Model.TimeConditionID}'
+                        hx-swap="none"
+                        hx-confirm="Delete time condition @Model.Name? Calls sent to it stop working at the next apply.">Delete</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>
