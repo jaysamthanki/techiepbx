@@ -768,7 +768,8 @@ Choices worth naming:
   `AnnouncementStore` still resolves it and checks it is inside the base directory before writing
   or deleting. It cannot fail today; it is there so that it fails loudly the day something builds
   a path from something else.
-- **Permissions follow D18.** Files are 0640 and directories 0750, owner the web user, group read
+- **Permissions follow D18.** Files are 0640 and directories 0750 **plus setgid (02750)**, owner the
+  web user, group read
   for `asterisk` — the same model the generated conf files use. The installer creates the base
   directory `root:asterisk` and **setgid**, so what the web user creates under it is group-owned by
   `asterisk`; our code sets the mode on directories it creates itself and leaves an existing base
