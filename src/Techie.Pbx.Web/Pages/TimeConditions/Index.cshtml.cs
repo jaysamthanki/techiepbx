@@ -63,9 +63,11 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         /// <summary>
         /// The server's clock, ticking every five seconds in the timezone box. It is the clock
         /// Asterisk matches the open hours against (D65), so it belongs beside the zone name.
+        /// Plain text, swapped into the clock span's innerHTML: no element of the card is
+        /// ever replaced, so nothing around it can move.
         /// </summary>
-        public PartialViewResult OnGetClock() =>
-            this.Partial("_Clock", DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz", CultureInfo.InvariantCulture));
+        public ContentResult OnGetClock() =>
+            this.Content(DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz", CultureInfo.InvariantCulture), "text/plain");
 
         /// <summary>The create or edit form, which the page shows in the Bootstrap modal.</summary>
         public IActionResult OnGetForm(long? timeConditionID)
