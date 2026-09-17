@@ -23,6 +23,7 @@ namespace Techie.Pbx.Web.Controllers
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
+        private readonly TimeConditionRepository timeConditions;
         private readonly TrunkRepository trunks;
 
         public ConfigController()
@@ -34,6 +35,7 @@ namespace Techie.Pbx.Web.Controllers
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.routes = new OutboundRouteRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
+            this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
 
@@ -42,7 +44,7 @@ namespace Techie.Pbx.Web.Controllers
         {
             var applier = ConfigApplier.FromDatabase(
                 PbxDatabase.Current, this.settings, this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements, this.ivrs);
+                this.ringGroups, this.announcements, this.ivrs, this.timeConditions);
 
             try
             {

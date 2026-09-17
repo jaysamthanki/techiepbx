@@ -15,7 +15,8 @@ Status: **Done**, **Partial**, **Planned**.
 | F4 | [Email notifications](#f4-email-notifications) | Planned |
 | F5 | [Call reports](#f5-call-reports) | Planned |
 | F6 | [IVRs](#f6-ivrs) | Partial |
-| F7 | [Announcements](#f7-announcements) | Planned |
+| F7 | [Announcements](#f7-announcements) | Partial |
+| F8 | [Time conditions](#f8-time-conditions) | Planned |
 
 Plus the [supporting pieces](#supporting-pieces) these features can't work without.
 
@@ -148,6 +149,20 @@ Built first because IVR greetings (F6) and inbound destinations both reuse it.
   as a destination from an inbound route / IVR key / ring group failover (D57).
 - Name, description, enabled flag. Replacing the audio keeps the same announcement.
 
+## F8. Time conditions
+
+"Open hours go here, closed hours go there, holidays somewhere else." One form per condition —
+there is deliberately no time-group entity to reference first (D62).
+
+- Optional **play extension**: dial it to see which way the condition decides right now, and
+  target it as a destination from an inbound route, IVR key or ring group failover (D62).
+- **Open hours**: rows of weekday-picker + time range; no rows means always closed.
+- **Holidays**: a date list, each optionally carrying its own destination override; a holiday
+  beats open hours, and repeats every year — `GotoIfTime` has no year field (D63, D64).
+- Three destinations: when open, when closed, on holidays — anything the shared picker offers.
+- The clock is Asterisk's system-local time; a single Timezone setting records which zone that
+  is (D65).
+
 ---
 
 ## Supporting pieces
@@ -162,5 +177,5 @@ minimum.
 | **Destinations** | Inbound routes, IVR, ring groups, voicemail | One shared "send the call to X" picker and dialplan helper used by every feature. **Built 2026-09-17** (D35, D36): types so far are Extension, Voicemail and Hangup; each new feature adds its own |
 | **Feature codes** | Voicemail, IVR recording | `*43` echo exists; `*97` voicemail etc. |
 | **Audio file handling** | IVR, voicemail greetings | Storage, format conversion |
-| **Time conditions** | Probably IVR / inbound routes (business hours) | Not requested. Ask before building. |
+| **Time conditions** | Inbound routes, IVRs, anything needing business-hours routing | **Requested 2026-09-19.** One form per condition: open hours → destination, closed → destination, holidays → destination, with per-holiday overrides. No time-group entity (D62). F8. |
 | **Music on hold** | Ring groups, transfers | Asterisk default may be enough. Ask. |

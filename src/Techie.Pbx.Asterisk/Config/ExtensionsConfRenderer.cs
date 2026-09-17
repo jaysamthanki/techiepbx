@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Techie.Pbx.Asterisk.Audio;
 using Techie.Pbx.Core.Models;
@@ -62,6 +63,25 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string IvrTimeoutExtension = "t";
 
+        /// <summary>
+        /// Where a time condition sends a call outside its open hours. It is also where the checks
+        /// fall through to, so it is written first of the three and needs no Goto of its own (D63).
+        /// </summary>
+        public const string TimeConditionClosedLabel = "closed";
+
+        /// <summary>Where a holiday with no override of its own leads.</summary>
+        public const string TimeConditionHolidayLabel = "holiday";
+
+        /// <summary>
+        /// And the prefix for a holiday that does have one: "h1" is the first such date of the
+        /// year. Numbered by position rather than by row ID, so a saved condition renders the same
+        /// whether its rules have been rewritten since or not.
+        /// </summary>
+        public const string TimeConditionHolidayPrefix = "h";
+
+        /// <summary>Where a time condition sends a call inside its open hours.</summary>
+        public const string TimeConditionOpenLabel = "open";
+
         public static string Render(IEnumerable<Extension> extensions) =>
             Render(extensions, new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>());
 
@@ -102,7 +122,35 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<InboundRoute> inbound,
             IEnumerable<RingGroup> ringGroups,
             IEnumerable<Announcement> announcements,
-            IEnumerable<Ivr> ivrs)
+            IEnumerable<Ivr> ivrs) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, new List<TimeCondition>());
+
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, AsteriskSettings.DefaultTimezone);
+
+        /// <param name="timezone">
+        /// The IANA zone this server's clock is recorded as being in. Written into a time
+        /// condition's context as a comment and nowhere else: Asterisk matches GotoIfTime against
+        /// its own local time, so this is documentation, not a setting that changes behaviour (D65).
+        /// </param>
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            string timezone)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
@@ -115,6 +163,7 @@ namespace Techie.Pbx.Asterisk.Config
             var announcementRows = announcements.ToList();
             var announcementList = AnnouncementRenderOrder(announcementRows);
             var ivrList = IvrRenderOrder(ivrs, announcementRows);
+            var timeConditionList = TimeConditionRenderOrder(timeConditions);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -172,6 +221,9 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var ivr in ivrList)
                 AppendIvrEntry(sb, ivr);
 
+            foreach (var condition in timeConditionList)
+                AppendTimeConditionEntry(sb, condition);
+
             // Extensions in a context are matched before anything it includes, so the phones and
             // feature codes above always win over a route pattern (D46).
             if (routeList.Count > 0)
@@ -183,6 +235,9 @@ namespace Techie.Pbx.Asterisk.Config
 
             foreach (var ivr in ivrList)
                 AppendIvrContext(sb, ivr, ivr.GreetingIn(announcementRows)!, enabled);
+
+            foreach (var condition in timeConditionList)
+                AppendTimeConditionContext(sb, condition, timezone);
 
             foreach (var trunk in trunkList)
                 AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList());
@@ -319,6 +374,32 @@ namespace Techie.Pbx.Asterisk.Config
                 .Where(r => enabledTrunks.Any(t => t.TrunkID == r.TrunkID))
                 .OrderBy(r => r.Priority)
                 .ThenBy(r => r.Name, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The time conditions that get a context, by play extension. Re-validated, so a row that
+        /// reached the database another way cannot reach a conf file.
+        ///
+        /// Two things are needed, the same two a ring group needs: switched on, and a number to
+        /// dial. A condition with no rules at all is still written — it is simply always closed,
+        /// which is a state an admin can mean (D63).
+        /// </summary>
+        public static List<TimeCondition> TimeConditionRenderOrder(IEnumerable<TimeCondition> timeConditions)
+        {
+            var enabled = timeConditions.Where(t => t.Enabled).ToList();
+
+            foreach (var condition in enabled)
+            {
+                var errors = condition.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Time condition '{condition.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return enabled
+                .Where(t => t.IsPlayable)
+                .OrderBy(t => t.PlayExtension.Length)
+                .ThenBy(t => t.PlayExtension, StringComparer.Ordinal)
                 .ToList();
         }
 
@@ -519,6 +600,140 @@ namespace Techie.Pbx.Asterisk.Config
             group.MemberList()
                 .Where(m => enabledExtensions.Any(e => string.Equals(e.Number, m, StringComparison.Ordinal)))
                 .ToList();
+
+        /// <summary>
+        /// One time condition's checks, in a context of its own (D63).
+        ///
+        /// A context per condition for the reason an IVR has one (D59): what is written here is a
+        /// chain of labelled priorities, and labels belong to an extension. Like a menu's, this
+        /// context <b>includes nothing</b>, so a call that arrived from outside can never fall
+        /// through to anywhere that dials out.
+        ///
+        /// The order is holidays, then open hours, then the fall-through. A holiday wins over the
+        /// weekly rules because that is what a holiday is for, and a call that matched nothing is
+        /// closed by definition — which is why "closed" is the fall-through and needs no check of
+        /// its own, and why a condition with no open hours is simply always closed.
+        /// </summary>
+        private static void AppendTimeConditionContext(StringBuilder sb, TimeCondition condition, string timezone)
+        {
+            var context = ConfText.Safe(condition.Context, "time condition context");
+            var number = ConfText.Safe(condition.PlayExtension, "time condition play extension");
+            var name = ConfText.Safe(condition.Name, "time condition name");
+            var zone = ConfText.Safe(timezone, "system timezone");
+
+            var holidays = condition.HolidayRules();
+            var weekly = condition.WeeklyRules();
+
+            sb.Append('\n');
+            sb.Append($"[{context}]\n");
+            sb.Append($"; {name}: the open/closed check, reached by the Goto on {number} in [{InternalContext}].\n");
+            sb.Append("; Nothing is included here, so a caller can never fall through to a route out.\n");
+            sb.Append($"; The clock is Asterisk's own: every GotoIfTime below is matched against the\n");
+            sb.Append($"; server's local time, which this system records as {zone} (D65).\n");
+
+            // Answered before the check so that whatever is on the other side — an announcement, a
+            // menu, a mailbox — starts on a channel that is already up. The cost, and it is worth
+            // knowing: a caller sent on to an extension hears silence rather than ringback (D63).
+            sb.Append("exten => s,1,Answer()\n");
+            sb.Append($" same => n,NoOp(Time condition {number} {name})\n");
+
+            if (holidays.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append("; Holidays are checked first and win over the open hours. A GotoIfTime date\n");
+                sb.Append("; has no year in it, so each of these comes round every year (D64).\n");
+
+                for (var index = 0; index < holidays.Count; index++)
+                {
+                    var rule = holidays[index];
+                    var label = rule.HasOverride
+                        ? TimeConditionHolidayPrefix + (index + 1).ToString(CultureInfo.InvariantCulture)
+                        : TimeConditionHolidayLabel;
+
+                    sb.Append($" same => n,GotoIfTime(*,*,{DateFields(rule)}?{label})\n");
+                }
+            }
+
+            if (weekly.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append("; Open hours\n");
+
+                foreach (var rule in weekly)
+                {
+                    var times = ConfText.Safe(rule.TimeRange(), "open hours");
+                    var days = ConfText.Safe(rule.DaysField(), "open days");
+
+                    sb.Append($" same => n,GotoIfTime({times},{days},*,*?{TimeConditionOpenLabel})\n");
+                }
+            }
+            else
+            {
+                sb.Append('\n');
+                sb.Append("; No open hours are set, so this condition is always closed.\n");
+            }
+
+            AppendTimeConditionTarget(sb, number, TimeConditionClosedLabel, "closed", condition.ToClosedDestination());
+
+            if (weekly.Count > 0)
+                AppendTimeConditionTarget(sb, number, TimeConditionOpenLabel, "open", condition.ToOpenDestination());
+
+            if (holidays.Any(r => !r.HasOverride))
+                AppendTimeConditionTarget(sb, number, TimeConditionHolidayLabel, "holiday", condition.ToHolidayDestination());
+
+            for (var index = 0; index < holidays.Count; index++)
+            {
+                var rule = holidays[index];
+                if (!rule.HasOverride)
+                    continue;
+
+                var label = TimeConditionHolidayPrefix + (index + 1).ToString(CultureInfo.InvariantCulture);
+                AppendTimeConditionTarget(sb, number, label, $"holiday {DateWords(rule)}", rule.ToDestination()!);
+            }
+        }
+
+        /// <summary>
+        /// The way into a time condition: one entry in the internal context, exactly as an
+        /// announcement and an IVR get one (D57, D59). Dialling the number is the test button — it
+        /// says which way the condition decides right now — and an inbound route, an IVR key or a
+        /// ring group's failover arrive by the same door.
+        /// </summary>
+        private static void AppendTimeConditionEntry(StringBuilder sb, TimeCondition condition)
+        {
+            var number = ConfText.Safe(condition.PlayExtension, "time condition play extension");
+            var name = ConfText.Safe(condition.Name, "time condition name");
+
+            sb.Append('\n');
+            sb.Append($"; {name} (time condition)\n");
+
+            if (condition.Description.Length > 0)
+                sb.Append($"; {ConfText.Safe(condition.Description, "time condition description")}\n");
+
+            sb.Append($"exten => {number},1,Goto({ConfText.Safe(condition.Context, "time condition context")},s,1)\n");
+        }
+
+        /// <summary>
+        /// One labelled end of a time condition: a NoOp saying which way the clock went, and then
+        /// the destination itself through the shared helper (D36). An empty destination is a
+        /// Hangup, because a call has to end somewhere.
+        /// </summary>
+        private static void AppendTimeConditionTarget(StringBuilder sb, string number, string label, string what, Destination destination)
+        {
+            sb.Append('\n');
+            sb.Append($" same => n({ConfText.Safe(label, "time condition label")}),NoOp(Time condition {number} {ConfText.Safe(what, "time condition case")} to {ConfText.Safe(destination.Key, "destination")})\n");
+            sb.Append(DestinationDialplan.Lines(destination));
+        }
+
+        /// <summary>
+        /// The day-of-month and month fields of a GotoIfTime spec, e.g. "25,dec". The year the rule
+        /// was written with is not among them: the dialplan has nowhere to put one (D64).
+        /// </summary>
+        private static string DateFields(TimeConditionRule rule) =>
+            $"{ConfText.Safe(rule.DayOfMonthField(), "holiday day")},{ConfText.Safe(rule.MonthField(), "holiday month")}";
+
+        /// <summary>The same date the way a comment should read it: "25 dec".</summary>
+        private static string DateWords(TimeConditionRule rule) =>
+            $"{ConfText.Safe(rule.DayOfMonthField(), "holiday day")} {ConfText.Safe(rule.MonthField(), "holiday month")}";
 
         /// <summary>
         /// Where calls from one provider land: one entry per DID, sent on by the shared

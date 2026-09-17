@@ -23,6 +23,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
+        private readonly TimeConditionRepository timeConditions;
         private readonly TrunkRepository trunks;
         private readonly ConfigPendingMarker pending;
         private readonly ConfigApplier applier;
@@ -41,6 +42,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.ringGroups = new RingGroupRepository(this.database);
             this.routes = new OutboundRouteRepository(this.database);
             this.settings = new SettingsRepository(this.database);
+            this.timeConditions = new TimeConditionRepository(this.database);
             this.trunks = new TrunkRepository(this.database);
             this.pending = new ConfigPendingMarker(this.database);
 
@@ -48,7 +50,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var ami = new AmiSettings { Port = 1, Username = "tnpbx", Secret = "not-a-real-secret", TimeoutSeconds = 1 };
             this.applier = new ConfigApplier(
                 this.confDirectory, new PjsipTransport(), this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements, this.ivrs, ami, this.pending);
+                this.ringGroups, this.announcements, this.ivrs, this.timeConditions, ami, this.pending);
         }
 
         public void Dispose()
@@ -279,7 +281,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var applier = ConfigApplier.FromDatabase(
                 this.database, this.settings, this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements, this.ivrs);
+                this.ringGroups, this.announcements, this.ivrs, this.timeConditions);
             var changed = applier.Write();
 
             Assert.Contains("pjsip.conf", changed.Select(f => f.FileName));

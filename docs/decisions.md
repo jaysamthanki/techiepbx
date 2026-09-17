@@ -922,4 +922,41 @@ from source), and that the `invalid` prompt is installed in the core sounds. A m
 fatal — Playback logs a warning and the menu carries on to the next line — but the caller hears
 silence instead of "that's not a valid extension".
 
+### D62. Time conditions are built as one form per condition, not FreePBX's two (2026-09-19)
+FreePBX splits the feature into "time groups" (ranges of time) and "time conditions" (a group plus
+two destinations). That split is its data model showing through, not what an admin thinks: nobody
+builds "9–5 Mon–Fri" first and wires it up second. Here one **`TimeConditions`** row is the whole
+answer for one number — three destinations (open, closed, holiday) chosen in one form (F8) — and
+the rules that say when each applies sit in **`TimeConditionRules`**, written and replaced in one
+save the way an IVR's digit map is (D59). A condition that needs the same hours twice is a second
+row, and since conditions are destinations, one can even route into another.
+
+### D63. Holidays are checked before open hours, and a holiday can carry its own destination (2026-09-19)
+A condition's context checks the holiday dates first, so a holiday wins over hours that would
+otherwise be open — the order an admin expects. Each holiday date may carry a **destination of its
+own**, overriding the condition's holiday destination for that one day ("Christmas goes to the
+closed message, every other holiday to voicemail"); empty means the condition's holiday
+destination is used. Both kinds of rule live in one table with a `Kind` column, because they are
+edited in one form and always read together.
+
+### D64. A holiday repeats every year: `GotoIfTime` has no year field (2026-09-19)
+The date field of a `GotoIfTime` spec is day-of-month and month — no year — so a holiday rule
+matches "25 December", every year, forever. The stored `HolidayDate` keeps its year (it is real
+metadata: when the admin entered it), but the renderer strips it, and validation refuses two
+holidays on the same month/day because the second `GotoIfTime` could never be reached. FreePBX
+has the same limitation; there is no honest way to widen it without evaluating time in the
+dialplan with functions rather than `GotoIfTime`, which is not worth the surface.
+
+### D65. The clock is Asterisk's own local time; the timezone setting records which one that is (2026-09-19)
+`GotoIfTime` evaluates against the system clock of the machine Asterisk runs on. Rather than
+build a timezone engine, the one **`Timezone`** setting stores the IANA name of the zone the
+server is expected to run in (`America/Los_Angeles`); the generated context states it in a
+comment, and it is the installer's job to agree `/etc/localtime` with it. Documentation, not
+behaviour — the honest version of a setting that would otherwise silently not work.
+
+### D66. Time conditions need no new module (2026-09-19)
+`GotoIfTime` ships in `pbx_config`, which the allowlist already loads; the contexts use nothing
+but `Answer`, `NoOp`, `GotoIfTime`, `Goto`, `Set` and the destination helper, all already allowed.
+The allowlist is unchanged.
+
 

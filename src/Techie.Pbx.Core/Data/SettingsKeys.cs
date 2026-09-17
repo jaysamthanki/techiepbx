@@ -32,6 +32,14 @@ namespace Techie.Pbx.Core.Data
         /// <summary>Public IP when the server is behind 1:1 NAT. Unset means no NAT.</summary>
         public const string SipExternalAddress = "Sip.ExternalAddress";
 
+        /// <summary>
+        /// The IANA zone this server's clock is meant to be in, e.g. "Europe/London". A record,
+        /// not a lever: Asterisk matches a time condition against its own local time, so what
+        /// actually decides open from closed is the machine's timezone. This is written into the
+        /// generated dialplan as a comment so the two can be compared (D65).
+        /// </summary>
+        public const string SystemTimezone = "System.Timezone";
+
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
             AsteriskConfDirectory,
@@ -44,6 +52,7 @@ namespace Techie.Pbx.Core.Data
             SipPort,
             SipLocalNets,
             SipExternalAddress,
+            SystemTimezone,
         };
 
         private static readonly HashSet<string> SecretKeys = new(StringComparer.Ordinal)

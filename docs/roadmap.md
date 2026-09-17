@@ -24,7 +24,8 @@ this file is the **order**.
 | 15 | Ring groups: ring all + hunt | F3 | |
 | 16 | Follow me | F2b | |
 | 16a | Announcements (upload/record, convert, play ext, destination type) | F7 | **Done 2026-09-19** (D55–D57), lab-verified: MP3 uploaded through the UI -> ffmpeg converted to 8 kHz mono WAV -> apply -> `dialplan show 7100@internal` shows Answer/Playback/Hangup live, file at `/var/lib/asterisk/sounds/tnpbx/announcements/1/` 0640 group asterisk. IVR (17) reuses the audio handling. |
-| 17 | IVRs (uses announcement audio) | F6 | **Built 2026-09-19** (D58–D61), **pending lab verification**. Model + schema `009_ivrs.sql` + repository, `ivr-<IvrID>` contexts in `extensions.conf`, `Ivr` destination type, `func_timeout.so` added to the allowlist, and the IVRs page (table, modal form, greeting picker, fixed 12-key digit map). See [piece 17 detail](#piece-17-detail-built-2026-09-19-not-yet-lab-verified). |
+| 17 | IVRs (uses announcement audio) | F6 | **Done 2026-09-19** (D58–D61), lab-verified: IVR "Main menu" at 7102 created through the UI, greeting = holiday-test announcement, key 1 → ext 1003 — dialed live from MicroSIP, greeting played, digit routing + direct dial confirmed by the user. Model + schema `009_ivrs.sql` + repository, `ivr-<IvrID>` contexts in `extensions.conf`, `Ivr` destination type, `func_timeout.so` in the allowlist, IVRs page. See [piece 17 detail](#piece-17-detail-built-2026-09-19-not-yet-lab-verified). |
+| 17a | Time conditions | F8 | **Backend built 2026-09-19** (D62–D66), UI pending. Model + schema `010_time_conditions.sql` + repository with validation, `tc-<TimeConditionID>` contexts (holidays first, then weekly GotoIfTime, then closed), `TimeCondition` destination type, Timezone setting. No module additions. |
 | 18 | Call reports | F5 | |
 | 19 | Helper: Unix socket, peer credential check, first commands (firewall) | | |
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |

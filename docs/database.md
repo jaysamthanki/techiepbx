@@ -99,6 +99,40 @@ absent — the caller gets the IVR's invalid handling (D59). A table rather than
 | `DestinationType` / `DestinationValue` | TEXT | Where that key sends the call (D35) |
 | | | `UNIQUE (IvrID, Digit)`: one menu cannot use a key twice |
 
+### TimeConditions (010)
+
+The business-hours switch (F8). One row is the whole condition: three destinations, no
+time-group entity to reference (D62). Rules live in `TimeConditionRules` and are replaced
+wholesale in one save, the way an IVR's digit map is.
+
+| Column | Type | Notes |
+|---|---|---|
+| `TimeConditionID` | INTEGER PK | Also names the context, `tc-<TimeConditionID>` (D62) |
+| `Name` | TEXT, unique | Up to 64 chars |
+| `Description` | TEXT | Optional. Dialplan comment |
+| `PlayExtension` | TEXT, optional | Digits; collision-checked against extensions, ring groups, announcements, IVRs and other conditions (D57, D62). Empty = no dialplan entry, not a destination |
+| `OpenDestinationType` / `OpenDestinationValue` | TEXT | Where a call inside the open hours goes (D35) |
+| `ClosedDestinationType` / `ClosedDestinationValue` | TEXT | Where a call outside them goes |
+| `HolidayDestinationType` / `HolidayDestinationValue` | TEXT | Where a call on a holiday date goes, unless that date overrides it (D63) |
+| `Enabled` | INTEGER | 0/1, default 1 |
+
+### TimeConditionRules (010)
+
+One row per line of the condition: either a weekly open window or a holiday date. `Kind` says
+which fields mean anything, because the two are edited in one form and always read together (D62,
+D63). `ON DELETE CASCADE`: a rule has no life without its condition.
+
+| Column | Type | Notes |
+|---|---|---|
+| `TimeConditionRuleID` | INTEGER PK | |
+| `TimeConditionID` | INTEGER FK → `TimeConditions` | |
+| `Kind` | INTEGER | 0 = weekly, 1 = holiday |
+| `DaysMask` | INTEGER | Bit per weekday, Monday = 1. Weekly only |
+| `StartTime` / `EndTime` | TEXT | `HH:MM` window. Weekly only |
+| `HolidayDate` | TEXT | `YYYY-MM-DD`. Holiday only; the year is stored but never matched (D64) |
+| `DestinationType` / `DestinationValue` | TEXT | Holiday-only override destination; empty = the condition's holiday destination (D63) |
+| `SortOrder` | INTEGER | The order the rules are written in |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).

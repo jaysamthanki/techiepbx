@@ -13,6 +13,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Where a normal Debian install keeps Asterisk's config.</summary>
         public const string DefaultConfDirectory = "/etc/asterisk";
 
+        /// <summary>
+        /// What a fresh Debian server's clock is set to until somebody says otherwise, which is
+        /// also the honest thing to write into the dialplan when nobody has (D65).
+        /// </summary>
+        public const string DefaultTimezone = "Etc/UTC";
+
         public static string ConfDirectory(IReadOnlyDictionary<string, string> settings) =>
             Text(settings, SettingsKeys.AsteriskConfDirectory) ?? DefaultConfDirectory;
 
@@ -47,6 +53,24 @@ namespace Techie.Pbx.Asterisk.Config
 
             return transport;
         }
+
+        /// <summary>
+        /// The IANA zone recorded for this server, e.g. "Europe/London". Anything that is not
+        /// shaped like a zone name falls back to the default rather than throwing, for the same
+        /// reason a non-numeric port does — and because this one is written into a conf file, where
+        /// a stray character would be an apply that fails over a comment (D65).
+        /// </summary>
+        public static string Timezone(IReadOnlyDictionary<string, string> settings)
+        {
+            var value = Text(settings, SettingsKeys.SystemTimezone);
+
+            return value != null && IsZoneName(value) ? value : DefaultTimezone;
+        }
+
+        /// <summary>Letters, digits and the few punctuation marks a zone name is made of.</summary>
+        private static bool IsZoneName(string value) =>
+            value.Length <= 64 &&
+            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+');
 
         /// <summary>A blank value counts as not set, so clearing a field in the UI works.</summary>
         private static string? Text(IReadOnlyDictionary<string, string> settings, string key) =>
