@@ -21,6 +21,12 @@ namespace Techie.Pbx.Core.Models
         /// <summary>End the call. Needs no value.</summary>
         Hangup,
 
+        /// <summary>
+        /// Send the caller to a menu. The value is the IVR's play extension, which is why an IVR
+        /// without one cannot be a destination (D59).
+        /// </summary>
+        Ivr,
+
         /// <summary>Ring several phones. The value is the ring group's number (D54).</summary>
         RingGroup,
 

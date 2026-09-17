@@ -12,6 +12,7 @@ namespace Techie.Pbx.Core.Models
     {
         public const string AnnouncementsGroup = "Announcements";
         public const string ExtensionsGroup = "Extensions";
+        public const string IvrsGroup = "IVRs";
         public const string OtherGroup = "Other";
         public const string RingGroupsGroup = "Ring groups";
         public const string VoicemailGroup = "Voicemail";
@@ -33,9 +34,17 @@ namespace Techie.Pbx.Core.Models
         public static List<DestinationChoice> All(
             IEnumerable<Extension> extensions,
             IEnumerable<RingGroup> ringGroups,
-            IEnumerable<Announcement> announcements)
+            IEnumerable<Announcement> announcements) =>
+            All(extensions, ringGroups, announcements, new List<Ivr>());
+
+        public static List<DestinationChoice> All(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs)
         {
             var usable = InNumberOrder(extensions);
+            var announcementList = announcements.ToList();
             var choices = new List<DestinationChoice>();
 
             foreach (var extension in usable)
@@ -73,7 +82,7 @@ namespace Techie.Pbx.Core.Models
             // Only the ones a call can actually reach: switched on, with audio uploaded, and with
             // a play extension to Goto. Without all three there is nothing to send a call to, so
             // offering it would be offering a dead end (D56).
-            foreach (var announcement in announcements
+            foreach (var announcement in announcementList
                 .Where(a => a.IsPlayable)
                 .OrderBy(a => a.PlayExtension.Length)
                 .ThenBy(a => a.PlayExtension, StringComparer.Ordinal))
@@ -83,6 +92,22 @@ namespace Techie.Pbx.Core.Models
                     Destination = announcement.ToDestination(),
                     GroupName = AnnouncementsGroup,
                     Label = $"{announcement.PlayExtension} {announcement.Name}",
+                });
+            }
+
+            // Same three conditions as an announcement's, plus the greeting: an IVR whose
+            // announcement is gone, switched off or has no audio yet is not in the dialplan
+            // either, so sending a call to it would be sending it nowhere (D58).
+            foreach (var ivr in ivrs
+                .Where(i => i.IsPlayable && i.GreetingIn(announcementList) != null)
+                .OrderBy(i => i.PlayExtension.Length)
+                .ThenBy(i => i.PlayExtension, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = ivr.ToDestination(),
+                    GroupName = IvrsGroup,
+                    Label = $"{ivr.PlayExtension} {ivr.Name}",
                 });
             }
 
@@ -111,12 +136,20 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<Extension> extensions,
             IEnumerable<RingGroup> ringGroups,
             IEnumerable<Announcement> announcements,
+            Destination? destination) =>
+            Find(extensions, ringGroups, announcements, new List<Ivr>(), destination);
+
+        public static DestinationChoice? Find(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
             Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions, ringGroups, announcements)
+            return All(extensions, ringGroups, announcements, ivrs)
                 .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 

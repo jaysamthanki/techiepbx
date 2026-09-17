@@ -155,6 +155,13 @@ namespace Techie.Pbx.Core.Data
             if (announcement != null)
                 errors.Add($"Announcement '{announcement.Name}' already plays on {group.Number}.");
 
+            // And the same both-ways check against an IVR's play extension (D59).
+            var ivr = new IvrRepository(this.database).GetAll()
+                .FirstOrDefault(i => string.Equals(i.PlayExtension, group.Number, StringComparison.Ordinal));
+
+            if (ivr != null)
+                errors.Add($"IVR '{ivr.Name}' already plays on {group.Number}.");
+
             foreach (var member in group.MemberList().Where(m => Extension.IsValidNumber(m)))
             {
                 var extension = extensions.FirstOrDefault(e => string.Equals(e.Number, member, StringComparison.Ordinal));
@@ -169,7 +176,9 @@ namespace Techie.Pbx.Core.Data
             {
                 var all = this.GetAll();
 
-                if (DestinationCatalog.Find(extensions, all, announcements, group.ToDestination()) == null)
+                var ivrs = new IvrRepository(this.database).GetAll();
+
+                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, group.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
                 else if (LoopsBack(group, all))
                     errors.Add("That destination comes back round to this group, so a call nobody answers would ring for ever.");

@@ -24,7 +24,7 @@ this file is the **order**.
 | 15 | Ring groups: ring all + hunt | F3 | |
 | 16 | Follow me | F2b | |
 | 16a | Announcements (upload/record, convert, play ext, destination type) | F7 | **Done 2026-09-19** (D55–D57), lab-verified: MP3 uploaded through the UI -> ffmpeg converted to 8 kHz mono WAV -> apply -> `dialplan show 7100@internal` shows Answer/Playback/Hangup live, file at `/var/lib/asterisk/sounds/tnpbx/announcements/1/` 0640 group asterisk. IVR (17) reuses the audio handling. |
-| 17 | IVRs (uses announcement audio) | F6 | |
+| 17 | IVRs (uses announcement audio) | F6 | **Built 2026-09-19** (D58–D61), **pending lab verification**. Model + schema `009_ivrs.sql` + repository, `ivr-<IvrID>` contexts in `extensions.conf`, `Ivr` destination type, `func_timeout.so` added to the allowlist, and the IVRs page (table, modal form, greeting picker, fixed 12-key digit map). See [piece 17 detail](#piece-17-detail-built-2026-09-19-not-yet-lab-verified). |
 | 18 | Call reports | F5 | |
 | 19 | Helper: Unix socket, peer credential check, first commands (firewall) | | |
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |
@@ -198,3 +198,29 @@ Still to do:
   (piece 17) each add one, and inbound routes pick them up without changing (D35).
 - A route whose destination has since been deleted shows as "gone" in the table and hangs the call
   up in the dialplan. There is no warning anywhere else that it needs fixing.
+
+## Piece 17 detail (built 2026-09-19, not yet lab-verified)
+
+The auto attendant (F6), in two parts: the model, schema `009_ivrs.sql`, repository and renderer
+(D58–D61), then the page.
+
+The page is the same shape as the other list pages — a shell htmx fills, the shared Bootstrap
+modal for the form (D42), rows that open their own edit form (D48) — with one thing of its own:
+the **digit map editor is twelve fixed rows**, one per key a caller can press, each a shared
+`_DestinationSelect`. A row left on "Not used" is dropped on save, so adding and removing keys is
+choosing and clearing destinations and the editor needs no JavaScript at all. The menu being
+edited is in its own keys' picker, because "press 9 to hear this again" is a feature (D59); the
+final-destination loop check is the repository's, not the form's.
+
+Still to do:
+
+- **Verify on the lab VM**: `func_timeout.so` is actually built (D61), the core `invalid` prompt is
+  installed, and a real call to a menu's play extension plays the greeting, takes a key, times out
+  to the final destination and — with direct dial on — reaches an extension.
+- **The inbound routes and ring groups forms still offer only the destinations they knew about when
+  they were written**: inbound routes offer extensions and voicemail only, ring groups those plus
+  ring groups. Both repositories accept announcements and IVRs, and both tables label them, so this
+  is one line in each page's `Fill` — but until it is done, **an inbound DID cannot be pointed at an
+  IVR from the UI**, which is the main way a menu is meant to be reached.
+- The loop check follows IVR → IVR only, so ring group → IVR → ring group is still possible to
+  build (D59).

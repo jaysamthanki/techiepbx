@@ -118,12 +118,14 @@ namespace Techie.Pbx.Core.Data
             if (errors.Count == 0)
             {
                 // Every source the catalog knows about, so that a route can be pointed at a ring
-                // group or an announcement as well as an extension or a mailbox (D35, D56).
+                // group, an announcement or an IVR as well as an extension or a mailbox
+                // (D35, D56, D59).
                 var extensions = new ExtensionRepository(this.database).GetAll();
                 var ringGroups = new RingGroupRepository(this.database).GetAll();
                 var announcements = new AnnouncementRepository(this.database).GetAll();
+                var ivrs = new IvrRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, route.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, route.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
             }
 

@@ -66,6 +66,39 @@ gets no mailbox whatever these say.
 | `AudioFile` | TEXT | Stored file name (`<slug>.wav`); empty = no audio yet |
 | `Enabled` | INTEGER | 0/1, default 1 |
 
+### Ivrs (009)
+
+The auto attendant (F6). The greeting is a **reference** to an announcement rather than audio of
+its own (D58), so `AnnouncementID` is a real foreign key: an announcement an IVR still greets with
+cannot be deleted.
+
+| Column | Type | Notes |
+|---|---|---|
+| `IvrID` | INTEGER PK | Also names the menu's dialplan context, `ivr-<IvrID>` (D59) |
+| `Name` | TEXT, unique | Up to 64 chars |
+| `Description` | TEXT | Optional, default ''. Becomes a dialplan comment |
+| `AnnouncementID` | INTEGER FK → `Announcements` | Required. The greeting, played with `Background()` (D58) |
+| `PlayExtension` | TEXT, optional | Digits; collision-checked against extensions, ring groups, announcements and other IVRs, both ways (D57). Empty = no dialplan entry, not a destination |
+| `TimeoutSeconds` | INTEGER | Default 10. The wait for a key, and the gap allowed between digits of a directly dialled extension |
+| `Retries` | INTEGER | Default 3. Second chances after a timeout or an unused key; 0 gives up at the first |
+| `EnableDirectDial` | INTEGER | 0/1, default 0. One `Goto` entry per enabled extension in the menu's context (D60) |
+| `DestinationType` / `DestinationValue` | TEXT | Where a caller who chose nothing goes (D35). Empty type-only `Hangup` = hang up |
+| `Enabled` | INTEGER | 0/1, default 1 |
+
+### IvrEntries (009)
+
+The digit map: one row per key that does something. A digit with no row is not a setting, it is
+absent — the caller gets the IVR's invalid handling (D59). A table rather than a list in one column
+(unlike ring group members, D53) because each key carries a destination and order means nothing.
+
+| Column | Type | Notes |
+|---|---|---|
+| `IvrEntryID` | INTEGER PK | |
+| `IvrID` | INTEGER FK → `Ivrs` | `ON DELETE CASCADE`: a key has no life without its menu |
+| `Digit` | TEXT | One character: `0`-`9`, `*` or `#` |
+| `DestinationType` / `DestinationValue` | TEXT | Where that key sends the call (D35) |
+| | | `UNIQUE (IvrID, Digit)`: one menu cannot use a key twice |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).

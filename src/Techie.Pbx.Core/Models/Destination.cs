@@ -87,6 +87,12 @@ namespace Techie.Pbx.Core.Models
                         errors.Add("An Announcement destination needs a play extension of 2 to 6 digits.");
                     break;
 
+                // And an IVR's, which is the number a caller dials to hear the menu (D59).
+                case DestinationType.Ivr:
+                    if (!Extension.IsValidNumber(this.Value))
+                        errors.Add("An IVR destination needs a play extension of 2 to 6 digits.");
+                    break;
+
                 case DestinationType.Hangup:
                     if (this.Value.Length > 0)
                         errors.Add("A Hangup destination has nothing to point at.");

@@ -31,6 +31,37 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>FreePBX's number for "listen to my own messages", which users already know.</summary>
         public const string VoicemailMainNumber = "*97";
 
+        /// <summary>
+        /// Where an IVR sends a caller who has run out of retries: a named extension in the menu's
+        /// own context, so the final destination is written once however many ways lead to it.
+        /// A caller cannot reach it by pressing keys — a keypad cannot spell it.
+        /// </summary>
+        public const string IvrFinalExtension = "final";
+
+        /// <summary>
+        /// Asterisk's own "the caller pressed something this context has no extension for"
+        /// extension. Every digit an IVR's menu does not use lands here (D59).
+        /// </summary>
+        public const string IvrInvalidExtension = "i";
+
+        /// <summary>
+        /// "I'm sorry, that's not a valid extension", from Asterisk's core sounds — the same file
+        /// its own sample dialplan plays from an `i` extension.
+        /// </summary>
+        public const string IvrInvalidPrompt = "invalid";
+
+        /// <summary>How many times round the menu this caller has been, so far.</summary>
+        public const string IvrRetriesVariable = "IVR_RETRIES";
+
+        /// <summary>The priority label the retry paths jump back to: the greeting, not the setup.</summary>
+        public const string IvrStartLabel = "start";
+
+        /// <summary>
+        /// Asterisk's own "the caller pressed nothing in time" extension, which is where WaitExten
+        /// sends the call by itself.
+        /// </summary>
+        public const string IvrTimeoutExtension = "t";
+
         public static string Render(IEnumerable<Extension> extensions) =>
             Render(extensions, new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>());
 
@@ -61,14 +92,29 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<OutboundRoute> routes,
             IEnumerable<InboundRoute> inbound,
             IEnumerable<RingGroup> ringGroups,
-            IEnumerable<Announcement> announcements)
+            IEnumerable<Announcement> announcements) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, new List<Ivr>());
+
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
             var inboundList = InboundRenderOrder(inbound, trunkList);
             var groupList = RingGroupRenderOrder(ringGroups, enabled);
-            var announcementList = AnnouncementRenderOrder(announcements);
+
+            // The raw rows as well as the render order: an announcement that is only ever an IVR's
+            // greeting has no play extension, so it is not in the list that gets dialplan entries.
+            var announcementRows = announcements.ToList();
+            var announcementList = AnnouncementRenderOrder(announcementRows);
+            var ivrList = IvrRenderOrder(ivrs, announcementRows);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -123,6 +169,9 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var announcement in announcementList)
                 AppendAnnouncement(sb, announcement);
 
+            foreach (var ivr in ivrList)
+                AppendIvrEntry(sb, ivr);
+
             // Extensions in a context are matched before anything it includes, so the phones and
             // feature codes above always win over a route pattern (D46).
             if (routeList.Count > 0)
@@ -131,6 +180,9 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("; Calls to the outside world, tried in the order the routes are listed\n");
                 sb.Append($"include => {OutboundContext}\n");
             }
+
+            foreach (var ivr in ivrList)
+                AppendIvrContext(sb, ivr, ivr.GreetingIn(announcementRows)!, enabled);
 
             foreach (var trunk in trunkList)
                 AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList());
@@ -190,6 +242,35 @@ namespace Techie.Pbx.Asterisk.Config
                 .Where(r => enabledTrunks.Any(t => t.TrunkID == r.TrunkID))
                 .OrderBy(r => r.CatchAll)
                 .ThenBy(r => r.DID, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The IVRs that get a menu, by play extension. Re-validated, so a row that reached the
+        /// database another way cannot reach a conf file.
+        ///
+        /// Three things are needed, the same three an announcement needs (D56) with the greeting
+        /// standing in for the audio: the IVR is switched on, it has a number to dial, and the
+        /// announcement it greets with is there, switched on and has audio. Without the greeting
+        /// the menu would answer and then sit in silence, which is worse than the number simply
+        /// not existing (D58).
+        /// </summary>
+        public static List<Ivr> IvrRenderOrder(IEnumerable<Ivr> ivrs, IEnumerable<Announcement> announcements)
+        {
+            var enabled = ivrs.Where(i => i.Enabled).ToList();
+            var announcementList = announcements.ToList();
+
+            foreach (var ivr in enabled)
+            {
+                var errors = ivr.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"IVR '{ivr.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return enabled
+                .Where(i => i.IsPlayable && i.GreetingIn(announcementList) != null)
+                .OrderBy(i => i.PlayExtension.Length)
+                .ThenBy(i => i.PlayExtension, StringComparer.Ordinal)
                 .ToList();
         }
 
@@ -271,6 +352,120 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($"exten => {number},1,Answer()\n");
             sb.Append($" same => n,Playback({prompt})\n");
             sb.Append(DestinationDialplan.Lines(Destination.Hangup));
+        }
+
+        /// <summary>
+        /// One IVR's menu, in a context of its own (D59).
+        ///
+        /// A context per IVR rather than entries in <see cref="InternalContext"/>, because the keys
+        /// a caller presses are matched as extensions of the context the call is in: "press 1"
+        /// means an extension called <c>1</c>, and putting those in the internal context would make
+        /// single digits dialable from every phone in the building. The menu is reached only by the
+        /// Goto on its play extension, and — like a trunk's context (D50) — it includes nothing, so
+        /// a caller from outside can never fall through to anywhere that dials out.
+        /// </summary>
+        private static void AppendIvrContext(StringBuilder sb, Ivr ivr, Announcement greeting, List<Extension> enabledExtensions)
+        {
+            var context = ConfText.Safe(ivr.Context, "IVR context");
+            var number = ConfText.Safe(ivr.PlayExtension, "IVR play extension");
+            var name = ConfText.Safe(ivr.Name, "IVR name");
+
+            // The greeting is the announcement's own stored file, played from where the
+            // announcement feature already put it (D58). Safe() again, as everywhere else.
+            var prompt = ConfText.Safe(AnnouncementStore.PlaybackName(greeting), "IVR greeting prompt");
+            var final = ivr.ToFinalDestination();
+
+            sb.Append('\n');
+            sb.Append($"[{context}]\n");
+            sb.Append($"; {name}: the menu itself, reached by the Goto on {number} in [{InternalContext}].\n");
+            sb.Append("; Nothing is included here, so a caller can never fall through to a route out.\n");
+            sb.Append("exten => s,1,Answer()\n");
+
+            // The gap allowed between digits of a directly dialled extension. WaitExten's own
+            // argument is the wait for the first one.
+            sb.Append($" same => n,Set(TIMEOUT(digit)={ivr.TimeoutSeconds})\n");
+            sb.Append($" same => n,Set({IvrRetriesVariable}=0)\n");
+
+            // Background rather than Playback: a caller who already knows the menu can press a key
+            // over the greeting instead of sitting through it.
+            sb.Append($" same => n({IvrStartLabel}),Background({prompt})\n");
+            sb.Append($" same => n,WaitExten({ivr.TimeoutSeconds})\n");
+
+            // WaitExten sends a caller who pressed nothing to 't' itself, and a caller who pressed
+            // something unusable goes to 'i'. This line is for neither happening.
+            sb.Append($" same => n,Goto({IvrTimeoutExtension},1)\n");
+
+            foreach (var entry in ivr.Entries.OrderBy(e => IvrEntry.Rank(e.Digit)))
+            {
+                var digit = ConfText.Safe(entry.Digit, "IVR key");
+                var destination = entry.ToDestination();
+
+                sb.Append('\n');
+                sb.Append($"exten => {digit},1,NoOp(IVR {number} key {digit} to {ConfText.Safe(destination.Key, "destination")})\n");
+                sb.Append(DestinationDialplan.Lines(destination));
+            }
+
+            if (ivr.EnableDirectDial && enabledExtensions.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append("; Dial an extension straight from the menu. One entry each rather than a\n");
+                sb.Append("; pattern, as in the internal context, so only numbers that exist can be\n");
+                sb.Append("; reached from here (D12, D60).\n");
+
+                foreach (var extension in enabledExtensions)
+                {
+                    var extensionNumber = ConfText.Safe(extension.Number, "number");
+                    sb.Append($"exten => {extensionNumber},1,Goto({InternalContext},{extensionNumber},1)\n");
+                }
+            }
+
+            sb.Append('\n');
+            sb.Append("; Nothing was pressed in time\n");
+            sb.Append($"exten => {IvrTimeoutExtension},1,NoOp(IVR {number} timed out)\n");
+            AppendIvrRetry(sb, ivr);
+            sb.Append($" same => n,Goto(s,{IvrStartLabel})\n");
+
+            sb.Append('\n');
+            sb.Append("; A key with nothing behind it: every digit the menu does not use lands here\n");
+            sb.Append($"exten => {IvrInvalidExtension},1,NoOp(IVR {number} invalid entry ${{EXTEN}})\n");
+            AppendIvrRetry(sb, ivr);
+            sb.Append($" same => n,Playback({IvrInvalidPrompt})\n");
+            sb.Append($" same => n,Goto(s,{IvrStartLabel})\n");
+
+            sb.Append('\n');
+            sb.Append("; Out of retries, so the call goes where the menu says it should\n");
+            sb.Append($"exten => {IvrFinalExtension},1,NoOp(IVR {number} giving up to {ConfText.Safe(final.Key, "destination")})\n");
+            sb.Append(DestinationDialplan.Lines(final));
+        }
+
+        /// <summary>
+        /// The way into an IVR: one entry in the internal context, exactly as an announcement gets
+        /// one (D57). A user dialling the number, an inbound route and a destination all arrive
+        /// through it, so there is one description of how a menu starts rather than three.
+        /// </summary>
+        private static void AppendIvrEntry(StringBuilder sb, Ivr ivr)
+        {
+            var number = ConfText.Safe(ivr.PlayExtension, "IVR play extension");
+            var name = ConfText.Safe(ivr.Name, "IVR name");
+
+            sb.Append('\n');
+            sb.Append($"; {name} (menu)\n");
+
+            if (ivr.Description.Length > 0)
+                sb.Append($"; {ConfText.Safe(ivr.Description, "IVR description")}\n");
+
+            sb.Append($"exten => {number},1,Goto({ConfText.Safe(ivr.Context, "IVR context")},s,1)\n");
+        }
+
+        /// <summary>
+        /// The two lines both the timeout and the invalid paths start with: count this attempt,
+        /// and give up once there have been more of them than the IVR allows. Retries is how many
+        /// second chances a caller gets, so 0 means the first mistake ends the menu.
+        /// </summary>
+        private static void AppendIvrRetry(StringBuilder sb, Ivr ivr)
+        {
+            sb.Append($" same => n,Set({IvrRetriesVariable}=$[${{{IvrRetriesVariable}}} + 1])\n");
+            sb.Append($" same => n,GotoIf($[${{{IvrRetriesVariable}}} > {ivr.Retries}]?{IvrFinalExtension},1)\n");
         }
 
         /// <summary>

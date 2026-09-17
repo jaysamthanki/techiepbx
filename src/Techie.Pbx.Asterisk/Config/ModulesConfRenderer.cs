@@ -66,6 +66,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "app_echo.so",              // Echo(), the *43 test
                 "app_voicemail.so",         // VoiceMail() and VoiceMailMain()
                 "func_callerid.so",         // ${CALLERID(num)}, which *97 needs
+                "func_timeout.so",          // TIMEOUT(digit), the gap an IVR allows between keys (D61)
             }),
 
             ("Audio: the formats our prompts and messages are stored in", new[]

@@ -813,4 +813,113 @@ need no check: they all start with `*` and a play extension is digits only, whic
 channel that is already up, Asterisk's Answer application returns immediately and does nothing, so
 the guard would buy nothing and cost two modules (`func_channel`, `app_exec`) on the allowlist.
 
+### D58. An IVR's greeting is a reference to an announcement, not audio of its own (2026-09-19)
+`Ivrs.AnnouncementID` is a required foreign key, and the menu plays that announcement's stored
+file. The user's own description of the feature is "the IVR plays an announcement", and taking it
+literally means this piece adds **no audio handling at all**: no second upload endpoint, no second
+ffmpeg call, no second place a file name could come from, and one answer to "where do prompts
+live" (D55, D56).
+
+What follows from it:
+
+- **Recording a greeting is recording an announcement.** Upload or record it on the announcements
+  page, and the menu that references it is playing the new audio at the next apply. An announcement
+  that exists only to be a greeting simply has no play extension, so it gets no dialplan entry of
+  its own — it is audio with a name.
+- **The reference cannot dangle.** The foreign key means an announcement an IVR still greets with
+  cannot be deleted; `AnnouncementRepository.Delete` turns that constraint into "point the IVR at
+  another announcement first", the way a trunk with routes does (D44).
+- **A menu with nothing to play is not written.** The renderer leaves out any IVR whose greeting is
+  missing, switched off or has no audio yet, exactly as it leaves out an announcement with no audio
+  (D56), and the repository refuses to save one so the admin is told where they can see it. Answering
+  a call and then sitting in silence is worse than the number not existing.
+
+The one judgement here worth revisiting: an announcement's **Enabled** flag silences it as a
+greeting as well as removing its own dial-in entry. "Switched off" reading as "not used anywhere"
+is the least surprising meaning, but it does mean switching one off takes its menus off the air
+with it. If that turns out to be the wrong trade, the change is one clause in `Ivr.GreetingIn`.
+
+Rejected: **audio columns on `Ivrs`**, i.e. an IVR owning its own recording. It would double the
+upload path, the conversion, the permissions and the file naming to save one dropdown, and it would
+make "the same greeting on two menus" a copy instead of a reference (D35's whole argument).
+
+### D59. One dialplan context per IVR, and the digit map is a table (2026-09-19)
+**A context of its own, `ivr-<IvrID>`.** The keys a caller presses are matched as extensions of the
+context the call is in: "press 1" is an extension called `1`. Putting those in `[internal]` would
+make single digits dialable from every phone in the building and would collide with the numbering
+plan, so each menu gets a context and the internal context gets one entry — the play extension,
+which does `Goto(ivr-<n>,s,1)`. Named by ID because the ID never changes and a menu name is free
+text a context name could not survive (D37's problem, solved the way D56 solved it for directories).
+
+Like a trunk's context (D38, D50), a menu **includes nothing**. A caller who reached an IVR from
+outside can never fall through to an outbound route, and a test asserts it.
+
+The menu itself, in the shape Asterisk already has for this:
+
+```
+exten => s,1,Answer()
+ same => n,Set(TIMEOUT(digit)=10)      ; the gap allowed between digits
+ same => n,Set(IVR_RETRIES=0)
+ same => n(start),Background(tnpbx/announcements/2/menu-greeting)
+ same => n,WaitExten(10)
+ same => n,Goto(t,1)
+```
+
+`Background` rather than `Playback`, so a caller who already knows the menu can press a key over the
+greeting; `t` and `i` are Asterisk's own "pressed nothing" and "pressed something we have no
+extension for" extensions, which is what makes a free digit need no row and no flag. Both count the
+try, and both give up to a named `final` extension once there have been more tries than `Retries`
+allows — so the final destination is written once, through the shared helper (D36), however many
+ways lead to it. `Retries = 0` means the first mistake ends the menu. An empty final destination is
+`Hangup()`.
+
+**The digit map is `IvrEntries`, a table**, unlike a ring group's members (D53): each key carries a
+destination of its own, and order means nothing (the renderer sorts into keypad order, 0-9 then `*`
+and `#`). `ON DELETE CASCADE`, because a key has no life of its own; an update replaces the whole
+map rather than merging it, because the form posts the whole menu.
+
+**An IVR is a destination the same way an announcement is** (D57): `DestinationType.Ivr` stores the
+play extension, `DestinationDialplan` writes `Goto(internal,<number>,1)`, and an IVR with no play
+extension is not offered. The play extension is collision-checked against extensions, ring groups,
+announcements and other IVRs, **in both directions** as D57 requires.
+
+Loops are refused where they are silent: an IVR's **final** destination may not lead back round to
+itself (the same chain-walk ring groups use, D54), because a caller who says nothing would be passed
+between menus for ever. A **key** pointing at its own menu is allowed — that is "press 9 to hear this
+again", and it only happens when somebody presses it. Known gap: the walk follows IVR-to-IVR only,
+so a cross-feature ring, e.g. ring group → IVR → ring group, is still possible to build.
+
+### D60. Direct dial is off by default and is one entry per extension (2026-09-19)
+`EnableDirectDial` writes an explicit `exten => 1001,1,Goto(internal,1001,1)` per **enabled**
+extension into the menu's context, rather than a pattern like `_XXXX`. That is D12's rule applied
+where it matters most: only numbers that exist can be reached, and a caller feeling around a menu
+cannot discover which numbers do.
+
+Off by default, because it is a convenience that quietly widens what an outside caller can reach —
+turning it on should be a decision, not something a site gets by accident.
+
+The cost, worth knowing before someone reports it as a bug: with direct dial on and a key `1` in the
+menu, a caller who presses 1 waits `TIMEOUT(digit)` before the call goes to option 1, because
+Asterisk can see that more digits could still make `1001`. FreePBX behaves the same way for the same
+reason. Single-digit keys and extension numbers cannot actually collide — an extension is 2 to 6
+digits — so this is a delay, never a wrong destination.
+
+### D61. `func_timeout.so` added to the module allowlist (2026-09-19)
+`TIMEOUT(digit)` is a dialplan **function**, and functions live in modules: without
+`func_timeout.so` the menu's `Set(TIMEOUT(digit)=...)` fails at call time with nothing in the config
+to explain it. It is the only thing this piece has to widen (D31), and it was checked rather than
+assumed — everything else an IVR calls is either already on the list (`app_playback` for the
+greeting and the invalid prompt, `app_dial`, `app_voicemail`, `pbx_config`) or is an Asterisk
+**builtin** that no module provides: `Answer`, `Background`, `WaitExten`, `Set`, `Goto`, `GotoIf`,
+`NoOp` and `Hangup` are all registered by the core.
+
+The list is now 37 modules. Still absent and still waiting: `res_pjsip_refer`, `res_musiconhold`,
+`cdr_*`, `app_stack`, `res_pjsip_mwi`.
+
+**To verify on the lab VM**, in the same spirit as D45's note about `ss-noservice`: that
+`func_timeout.so` is actually built (it is a standard function module, but our Asterisk is built
+from source), and that the `invalid` prompt is installed in the core sounds. A missing prompt is not
+fatal — Playback logs a warning and the menu carries on to the next line — but the caller hears
+silence instead of "that's not a valid extension".
+
 
