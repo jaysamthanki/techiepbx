@@ -14,7 +14,7 @@ Status: **Done**, **Partial**, **Planned**.
 | F3 | [Ring groups](#f3-ring-groups) (including hunt groups) | Planned |
 | F4 | [Email notifications](#f4-email-notifications) | Planned |
 | F5 | [Call reports](#f5-call-reports) | Planned |
-| F6 | [IVRs](#f6-ivrs) | Planned |
+| F6 | [IVRs](#f6-ivrs) | Partial |
 | F7 | [Announcements](#f7-announcements) | Planned |
 
 Plus the [supporting pieces](#supporting-pieces) these features can't work without.
@@ -120,11 +120,21 @@ Retention period needs deciding.
 
 Auto attendant: "Press 1 for sales, 2 for support."
 
-- Greeting audio, digit → destination mapping, direct dial to extensions (optional),
-  timeout and invalid-key handling with retry count, then a final destination.
-- Destinations: extension, ring group, voicemail, another IVR, hang up.
-- Audio: upload a file (converted to a format Asterisk plays) and/or record by phone via a
-  feature code. Conversion tooling adds surface, so pick one approach deliberately.
+- **Greeting is an announcement** (F7), referenced rather than owned, so there is one audio
+  store, one upload path and one set of checks (D58). Recording a greeting is recording an
+  announcement; one with no play extension is simply audio with a name.
+- Digit → destination mapping (0-9, `*`, `#`), each key any destination the shared picker
+  offers: extension, voicemail, ring group, announcement, another IVR, hang up (D35, D59).
+- Timeout and invalid-key handling with a retry count, then a final destination. A menu lives
+  in a context of its own, `ivr-<IvrID>`, and includes nothing (D59).
+- Optional **play extension**: dial it from any phone to hear the menu, or target it as a
+  destination from an inbound route / another IVR key / ring group failover (D57, D59).
+- Optional **direct dial** to extensions, off by default and written as one dialplan entry per
+  enabled extension so only numbers that exist can be reached (D60).
+
+Not built: recording a greeting by phone via a feature code (the browser recorder on F7 covers
+it), and the loop check follows IVR → IVR only, so a cross-feature ring is still possible to
+build (D59).
 
 ## F7. Announcements
 

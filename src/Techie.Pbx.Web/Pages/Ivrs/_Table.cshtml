@@ -1,0 +1,45 @@
+@model List<IvrRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="name"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="play" data-sortable="true">Play extension</th>
+            <th data-field="greeting">Greeting</th>
+            <th data-field="timeout">Timeout</th>
+            <th data-field="retries">Retries</th>
+            <th data-field="directdial">Direct dial</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { ivrID = row.IvrID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.PlayExtension</td>
+                <td>
+                    @if (row.GreetingUsable)
+                    {
+                        @row.Greeting
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="This menu's greeting is switched off or has no audio, so the menu is left out of the dialplan until it is fixed.">@row.Greeting</span>
+                    }
+                </td>
+                <td>@row.TimeoutSeconds s</td>
+                <td>@row.Retries</td>
+                <td>@(row.DirectDial ? "Yes" : "No")</td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>

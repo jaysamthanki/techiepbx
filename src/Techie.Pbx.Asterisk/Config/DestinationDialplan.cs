@@ -67,6 +67,12 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.Announcement =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // And once more for an IVR: its play extension's entry in the internal context is
+                // the one door into the menu, so a destination, an inbound route and a user
+                // dialling the number all arrive the same way (D59).
+                DestinationType.Ivr =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
+
                 DestinationType.Voicemail =>
                     new List<string>
                     {

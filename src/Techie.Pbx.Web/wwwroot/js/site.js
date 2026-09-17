@@ -68,7 +68,7 @@ window.pbx = (function () {
         toast: function (icon, text) {
             Swal.fire({
                 toast: true,
-                position: 'top-end',
+                position: 'bottom',
                 icon: icon,
                 title: text,
                 showConfirmButton: false,

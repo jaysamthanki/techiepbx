@@ -1,0 +1,34 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "IVRs";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">IVRs</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add IVR</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    An auto attendant: "press 1 for sales, 2 for support". The greeting is an announcement, so
+    record or upload it on the announcements page and point a menu at it. Give the menu a play
+    extension and anyone can dial it to hear it — and an inbound route, a ring group or another
+    menu can send calls to it.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="ivrs-table" hx-get="@tableUrl" hx-trigger="load, ivrsChanged from:body">
+    <p class="text-secondary">Loading IVRs…</p>
+</div>
+
+<partial name="_FormModal" />

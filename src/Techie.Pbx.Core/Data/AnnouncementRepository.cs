@@ -29,7 +29,18 @@ namespace Techie.Pbx.Core.Data
         public void Delete(long announcementID)
         {
             using var connection = this.database.Open();
-            connection.Execute("DELETE FROM Announcements WHERE AnnouncementID = @announcementID", new { announcementID });
+
+            try
+            {
+                connection.Execute("DELETE FROM Announcements WHERE AnnouncementID = @announcementID", new { announcementID });
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)
+            {
+                // An IVR still greets with it (D58). Deleting the menu as well would be a
+                // surprise; saying so is not.
+                throw new ValidationFailedException(
+                    "This announcement is still an IVR's greeting. Point the IVR at another announcement first.");
+            }
 
             this.pending.Raise();
         }
@@ -113,6 +124,12 @@ namespace Techie.Pbx.Core.Data
                 if (new RingGroupRepository(this.database).GetAll()
                     .Any(g => string.Equals(g.Number, number, StringComparison.Ordinal)))
                     errors.Add($"Ring group {number} already uses that number.");
+
+                var ivr = new IvrRepository(this.database).GetAll()
+                    .FirstOrDefault(i => string.Equals(i.PlayExtension, number, StringComparison.Ordinal));
+
+                if (ivr != null)
+                    errors.Add($"IVR '{ivr.Name}' already plays on {number}.");
 
                 var clash = this.GetAll().FirstOrDefault(a =>
                     a.AnnouncementID != announcement.AnnouncementID &&

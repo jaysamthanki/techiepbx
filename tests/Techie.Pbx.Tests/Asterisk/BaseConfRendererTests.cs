@@ -72,6 +72,24 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// Every module a generated dialplan needs is on the list, because a missing one shows up
+        /// as a feature that quietly does not work (D31). The IVR menus are the newest claim on
+        /// it: Playback for the prompts and TIMEOUT(digit) for the gap between keys (D61).
+        /// Answer, Background, WaitExten, Set, Goto and GotoIf are Asterisk builtins and need no
+        /// module, which is why none is listed for them.
+        /// </summary>
+        [Theory]
+        [InlineData("pbx_config.so")]
+        [InlineData("app_dial.so")]
+        [InlineData("app_playback.so")]
+        [InlineData("app_voicemail.so")]
+        [InlineData("func_timeout.so")]
+        public void The_allowlist_carries_what_the_dialplan_calls(string module)
+        {
+            Assert.Contains(module, ModulesConfRenderer.Modules);
+        }
+
+        /// <summary>
         /// The things a PBX gets attacked through that we do not use: other channel drivers,
         /// anonymous SIP identification, and the HTTP server.
         /// </summary>

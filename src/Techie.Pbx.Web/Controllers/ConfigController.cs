@@ -19,6 +19,7 @@ namespace Techie.Pbx.Web.Controllers
         private readonly AnnouncementRepository announcements;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
+        private readonly IvrRepository ivrs;
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
@@ -29,6 +30,7 @@ namespace Techie.Pbx.Web.Controllers
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
+            this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.routes = new OutboundRouteRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -40,7 +42,7 @@ namespace Techie.Pbx.Web.Controllers
         {
             var applier = ConfigApplier.FromDatabase(
                 PbxDatabase.Current, this.settings, this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements);
+                this.ringGroups, this.announcements, this.ivrs);
 
             try
             {
