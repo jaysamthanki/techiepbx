@@ -73,6 +73,12 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.Ivr =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // And a time condition, which is the same shape again: its play extension's entry
+                // is the one door into the open/closed check, so whatever the clock says happens
+                // once, written once (D63).
+                DestinationType.TimeCondition =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
+
                 DestinationType.Voicemail =>
                     new List<string>
                     {

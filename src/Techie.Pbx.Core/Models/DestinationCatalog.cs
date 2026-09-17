@@ -15,6 +15,7 @@ namespace Techie.Pbx.Core.Models
         public const string IvrsGroup = "IVRs";
         public const string OtherGroup = "Other";
         public const string RingGroupsGroup = "Ring groups";
+        public const string TimeConditionsGroup = "Time conditions";
         public const string VoicemailGroup = "Voicemail";
 
         /// <summary>
@@ -41,7 +42,15 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<Extension> extensions,
             IEnumerable<RingGroup> ringGroups,
             IEnumerable<Announcement> announcements,
-            IEnumerable<Ivr> ivrs)
+            IEnumerable<Ivr> ivrs) =>
+            All(extensions, ringGroups, announcements, ivrs, new List<TimeCondition>());
+
+        public static List<DestinationChoice> All(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions)
         {
             var usable = InNumberOrder(extensions);
             var announcementList = announcements.ToList();
@@ -111,6 +120,22 @@ namespace Techie.Pbx.Core.Models
                 });
             }
 
+            // A time condition needs the same two things a ring group does — switched on, and a
+            // number to Goto — and nothing else: what it decides is the clock's business, and a
+            // condition with no rules at all is simply always closed (D63).
+            foreach (var condition in timeConditions
+                .Where(t => t.IsPlayable)
+                .OrderBy(t => t.PlayExtension.Length)
+                .ThenBy(t => t.PlayExtension, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = condition.ToDestination(),
+                    GroupName = TimeConditionsGroup,
+                    Label = $"{condition.PlayExtension} {condition.Name}",
+                });
+            }
+
             choices.Add(new DestinationChoice
             {
                 Destination = Destination.Hangup,
@@ -144,12 +169,21 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<RingGroup> ringGroups,
             IEnumerable<Announcement> announcements,
             IEnumerable<Ivr> ivrs,
+            Destination? destination) =>
+            Find(extensions, ringGroups, announcements, ivrs, new List<TimeCondition>(), destination);
+
+        public static DestinationChoice? Find(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
             Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions, ringGroups, announcements, ivrs)
+            return All(extensions, ringGroups, announcements, ivrs, timeConditions)
                 .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 

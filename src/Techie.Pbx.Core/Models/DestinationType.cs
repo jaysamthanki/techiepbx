@@ -30,6 +30,13 @@ namespace Techie.Pbx.Core.Models
         /// <summary>Ring several phones. The value is the ring group's number (D54).</summary>
         RingGroup,
 
+        /// <summary>
+        /// Send the caller on by the time of day: open hours one way, closed another, holidays a
+        /// third. The value is the condition's play extension, which is why one without a play
+        /// extension cannot be a destination (D63).
+        /// </summary>
+        TimeCondition,
+
         /// <summary>Take a message. The value is the number of the extension that owns the box.</summary>
         Voicemail,
     }

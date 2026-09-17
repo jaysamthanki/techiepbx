@@ -234,6 +234,12 @@ namespace Techie.Pbx.Core.Data
                 if (announcement != null)
                     errors.Add($"Announcement '{announcement.Name}' already plays on {number}.");
 
+                var condition = new TimeConditionRepository(this.database).GetAll()
+                    .FirstOrDefault(t => string.Equals(t.PlayExtension, number, StringComparison.Ordinal));
+
+                if (condition != null)
+                    errors.Add($"Time condition '{condition.Name}' already uses {number}.");
+
                 var clash = all.FirstOrDefault(i =>
                     i.IvrID != ivr.IvrID && string.Equals(i.PlayExtension, number, StringComparison.Ordinal));
 
@@ -246,13 +252,14 @@ namespace Techie.Pbx.Core.Data
                 // The IVR being saved is part of the world its own keys can point at: a menu whose
                 // key 9 repeats the menu is allowed, and is the only reason this list includes it.
                 var others = all.Where(i => i.IvrID != ivr.IvrID).Append(ivr).ToList();
+                var conditions = new TimeConditionRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, ivr.ToFinalDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, ivr.ToFinalDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
 
                 foreach (var entry in ivr.Entries)
                 {
-                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, entry.ToDestination()) == null)
+                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, entry.ToDestination()) == null)
                         errors.Add($"Where key {entry.Digit} goes is not there any more. Choose another.");
                 }
 

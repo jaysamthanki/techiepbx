@@ -162,6 +162,13 @@ namespace Techie.Pbx.Core.Data
             if (ivr != null)
                 errors.Add($"IVR '{ivr.Name}' already plays on {group.Number}.");
 
+            // And against a time condition's, for the third time and the same reason (D63).
+            var condition = new TimeConditionRepository(this.database).GetAll()
+                .FirstOrDefault(t => string.Equals(t.PlayExtension, group.Number, StringComparison.Ordinal));
+
+            if (condition != null)
+                errors.Add($"Time condition '{condition.Name}' already uses {group.Number}.");
+
             foreach (var member in group.MemberList().Where(m => Extension.IsValidNumber(m)))
             {
                 var extension = extensions.FirstOrDefault(e => string.Equals(e.Number, member, StringComparison.Ordinal));
@@ -177,8 +184,9 @@ namespace Techie.Pbx.Core.Data
                 var all = this.GetAll();
 
                 var ivrs = new IvrRepository(this.database).GetAll();
+                var conditions = new TimeConditionRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, group.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, conditions, group.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
                 else if (LoopsBack(group, all))
                     errors.Add("That destination comes back round to this group, so a call nobody answers would ring for ever.");

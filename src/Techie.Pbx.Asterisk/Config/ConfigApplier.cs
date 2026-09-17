@@ -34,6 +34,14 @@ namespace Techie.Pbx.Asterisk.Config
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigApplier));
 
+        /// <summary>
+        /// The IANA zone this server's clock is recorded as being in. A property rather than
+        /// another constructor argument because it changes nothing about what Asterisk does: it is
+        /// written into a time condition's context as a comment, so that an admin reading the
+        /// dialplan can see which zone the hours were meant to be in (D65).
+        /// </summary>
+        public string Timezone { get; set; } = AsteriskSettings.DefaultTimezone;
+
         private readonly string confDirectory;
         private readonly PjsipTransport transport;
         private readonly ExtensionRepository extensions;
@@ -43,6 +51,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly RingGroupRepository ringGroups;
         private readonly AnnouncementRepository announcements;
         private readonly IvrRepository ivrs;
+        private readonly TimeConditionRepository timeConditions;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -56,6 +65,7 @@ namespace Techie.Pbx.Asterisk.Config
             RingGroupRepository ringGroups,
             AnnouncementRepository announcements,
             IvrRepository ivrs,
+            TimeConditionRepository timeConditions,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
@@ -68,6 +78,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.ringGroups = ringGroups;
             this.announcements = announcements;
             this.ivrs = ivrs;
+            this.timeConditions = timeConditions;
             this.ami = ami;
             this.pending = pending;
         }
@@ -87,7 +98,8 @@ namespace Techie.Pbx.Asterisk.Config
             InboundRouteRepository inbound,
             RingGroupRepository ringGroups,
             AnnouncementRepository announcements,
-            IvrRepository ivrs)
+            IvrRepository ivrs,
+            TimeConditionRepository timeConditions)
         {
             var values = settings.GetAll();
 
@@ -101,8 +113,12 @@ namespace Techie.Pbx.Asterisk.Config
                 ringGroups,
                 announcements,
                 ivrs,
+                timeConditions,
                 AsteriskSettings.Ami(values),
-                new ConfigPendingMarker(database));
+                new ConfigPendingMarker(database))
+            {
+                Timezone = AsteriskSettings.Timezone(values),
+            };
         }
 
         /// <summary>
@@ -158,6 +174,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allGroups = this.ringGroups.GetAll();
             var allAnnouncements = this.announcements.GetAll();
             var allIvrs = this.ivrs.GetAll();
+            var allTimeConditions = this.timeConditions.GetAll();
 
             return new List<GeneratedFile>
             {
@@ -169,7 +186,8 @@ namespace Techie.Pbx.Asterisk.Config
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
-                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs)),
+                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
+                    all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions, this.Timezone)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
         }

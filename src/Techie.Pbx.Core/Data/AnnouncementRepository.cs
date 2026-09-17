@@ -131,6 +131,12 @@ namespace Techie.Pbx.Core.Data
                 if (ivr != null)
                     errors.Add($"IVR '{ivr.Name}' already plays on {number}.");
 
+                var condition = new TimeConditionRepository(this.database).GetAll()
+                    .FirstOrDefault(t => string.Equals(t.PlayExtension, number, StringComparison.Ordinal));
+
+                if (condition != null)
+                    errors.Add($"Time condition '{condition.Name}' already uses {number}.");
+
                 var clash = this.GetAll().FirstOrDefault(a =>
                     a.AnnouncementID != announcement.AnnouncementID &&
                     string.Equals(a.PlayExtension, number, StringComparison.Ordinal));

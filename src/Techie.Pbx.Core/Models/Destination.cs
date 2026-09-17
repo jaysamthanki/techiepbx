@@ -93,6 +93,12 @@ namespace Techie.Pbx.Core.Models
                         errors.Add("An IVR destination needs a play extension of 2 to 6 digits.");
                     break;
 
+                // And a time condition's, which is the number that runs the open/closed check (D63).
+                case DestinationType.TimeCondition:
+                    if (!Extension.IsValidNumber(this.Value))
+                        errors.Add("A time condition destination needs a play extension of 2 to 6 digits.");
+                    break;
+
                 case DestinationType.Hangup:
                     if (this.Value.Length > 0)
                         errors.Add("A Hangup destination has nothing to point at.");
