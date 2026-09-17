@@ -41,8 +41,16 @@ namespace Techie.Pbx.Asterisk.Audio
         private const UnixFileMode AudioFileMode =
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead;
 
-        /// <summary>The same, plus the execute bits a directory needs to be entered.</summary>
+        /// <summary>
+        /// The same, plus the execute bits a directory needs to be entered, plus setgid. Without
+        /// setgid, a file created inside gets the web user's primary group (techie), not the
+        /// directory's asterisk group — the /etc/asterisk trick (D18) works because the conf writer
+        /// only writes into the setgid base, and this store creates directories itself, so the bit
+        /// has to be carried along. Linux propagates a directory's setgid to its files' group and
+        /// to its subdirectories' setgid, so one bit fixes every level below.
+        /// </summary>
         private const UnixFileMode AudioDirectoryMode =
+            UnixFileMode.SetGroup |
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
             UnixFileMode.GroupRead | UnixFileMode.GroupExecute;
 
