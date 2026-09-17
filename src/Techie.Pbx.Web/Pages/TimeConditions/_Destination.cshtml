@@ -1,0 +1,14 @@
+@model DestinationLabel
+@*
+    One destination cell. Three of them per row, so the cell reads short — "IVR 7102" — and the
+    catalog's own wording is the tooltip. A destination that is not there any more is a badge, the
+    way it is on the inbound routes table: the call is hung up until an admin fixes it.
+*@
+@if (Model.Usable)
+{
+    <span title="@Model.Full">@Model.Short</span>
+}
+else
+{
+    <span class="badge text-bg-warning" title="@Model.Full">@Model.Short</span>
+}

@@ -1,0 +1,34 @@
+@model List<TimeConditionRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="name"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="play" data-sortable="true">Play extension</th>
+            <th data-field="open">When open</th>
+            <th data-field="closed">When closed</th>
+            <th data-field="holiday">On holidays</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { timeConditionID = row.TimeConditionID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.PlayExtension</td>
+                <td><partial name="_Destination" model="row.OpenDestination" /></td>
+                <td><partial name="_Destination" model="row.ClosedDestination" /></td>
+                <td><partial name="_Destination" model="row.HolidayDestination" /></td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>
