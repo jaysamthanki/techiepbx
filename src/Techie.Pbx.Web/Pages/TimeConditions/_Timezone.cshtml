@@ -1,0 +1,41 @@
+@using Techie.Pbx.Asterisk.Config
+@model TimezoneForm
+@{
+    var saveUrl = Url.Page("Index", "Timezone");
+}
+@*
+    The server timezone, inline in the page header. It is a record, not a lever: Asterisk matches
+    every open-hours check against its own clock, and this says which zone that clock is meant to
+    be in (D65). It is here rather than on a settings page because there is no settings page, and
+    this is the only screen where the value means anything.
+
+    The post swaps this whole block back, so an error comes back in place with the box still filled
+    in the way it was typed.
+*@
+<form class="card mb-3" hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="card-body py-2">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <label class="col-form-label col-form-label-sm text-secondary mb-0" for="tc-timezone">Server timezone</label>
+            <input class="form-control form-control-sm font-monospace" id="tc-timezone" name="timezone"
+                   value="@Model.Timezone" style="max-width: 16rem"
+                   maxlength="64" autocomplete="off" placeholder="@AsteriskSettings.DefaultTimezone" />
+            <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+            <span class="form-text mb-0">
+                The IANA zone this server's clock is set to, e.g. Europe/London. Written into the
+                generated dialplan as a comment; blank means @AsteriskSettings.DefaultTimezone.
+            </span>
+        </div>
+
+        @if (Model.Errors.Count > 0)
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-2">
+                <ul class="mb-0 ps-3">
+                    @foreach (var error in Model.Errors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+</form>

@@ -67,8 +67,12 @@ namespace Techie.Pbx.Asterisk.Config
             return value != null && IsZoneName(value) ? value : DefaultTimezone;
         }
 
-        /// <summary>Letters, digits and the few punctuation marks a zone name is made of.</summary>
-        private static bool IsZoneName(string value) =>
+        /// <summary>
+        /// Letters, digits and the few punctuation marks a zone name is made of. Public because the
+        /// UI that edits the setting checks it the same way this does, rather than keeping a second
+        /// copy of the rule that could drift from the one that decides what gets written.
+        /// </summary>
+        public static bool IsZoneName(string value) =>
             value.Length <= 64 &&
             value.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+');
 
