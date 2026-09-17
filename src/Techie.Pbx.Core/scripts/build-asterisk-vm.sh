@@ -57,7 +57,8 @@ apt-get update -q
 apt-get install -y -q --no-install-recommends \
   build-essential pkg-config ca-certificates wget bzip2 patch openssl procps iproute2 \
   libedit-dev libjansson-dev libxml2-dev uuid-dev libsqlite3-dev libssl-dev \
-  libncurses-dev libsrtp2-dev
+  libncurses-dev libsrtp2-dev \
+  ffmpeg libicu76
 
 # --- service account ---------------------------------------------------------
 
@@ -112,6 +113,11 @@ fi
 
 mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
 chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
+# Announcement audio (converted uploads) lands here; setgid so app-written files stay
+# group-readable by asterisk (D18, same model as /etc/asterisk).
+mkdir -p /var/lib/asterisk/sounds/tnpbx/announcements
+chown -R asterisk:asterisk /var/lib/asterisk/sounds/tnpbx
+chmod 2770 /var/lib/asterisk/sounds/tnpbx /var/lib/asterisk/sounds/tnpbx/announcements
 chown root:asterisk /etc/asterisk
 # setgid (2770): the web user is in the asterisk group and writes generated config here, and
 # every file it creates has to end up group-owned by asterisk so asterisk can read it (D18).

@@ -142,9 +142,18 @@ namespace Techie.Pbx.Core.Data
         {
             var errors = group.Validate();
             var extensions = new ExtensionRepository(this.database).GetAll();
+            var announcements = new AnnouncementRepository(this.database).GetAll();
 
             if (extensions.Any(e => string.Equals(e.Number, group.Number, StringComparison.Ordinal)))
                 errors.Add($"Extension {group.Number} already uses that number.");
+
+            // The check announcements make in the other direction (D57). One-sided would leave the
+            // hole open from whichever side happened to be created second.
+            var announcement = announcements.FirstOrDefault(a =>
+                string.Equals(a.PlayExtension, group.Number, StringComparison.Ordinal));
+
+            if (announcement != null)
+                errors.Add($"Announcement '{announcement.Name}' already plays on {group.Number}.");
 
             foreach (var member in group.MemberList().Where(m => Extension.IsValidNumber(m)))
             {
@@ -160,7 +169,7 @@ namespace Techie.Pbx.Core.Data
             {
                 var all = this.GetAll();
 
-                if (DestinationCatalog.Find(extensions, all, group.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, all, announcements, group.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
                 else if (LoopsBack(group, all))
                     errors.Add("That destination comes back round to this group, so a call nobody answers would ring for ever.");

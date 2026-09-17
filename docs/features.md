@@ -15,6 +15,7 @@ Status: **Done**, **Partial**, **Planned**.
 | F4 | [Email notifications](#f4-email-notifications) | Planned |
 | F5 | [Call reports](#f5-call-reports) | Planned |
 | F6 | [IVRs](#f6-ivrs) | Planned |
+| F7 | [Announcements](#f7-announcements) | Planned |
 
 Plus the [supporting pieces](#supporting-pieces) these features can't work without.
 
@@ -124,6 +125,18 @@ Auto attendant: "Press 1 for sales, 2 for support."
 - Destinations: extension, ring group, voicemail, another IVR, hang up.
 - Audio: upload a file (converted to a format Asterisk plays) and/or record by phone via a
   feature code. Conversion tooling adds surface, so pick one approach deliberately.
+
+## F7. Announcements
+
+A recorded message a caller hears: "we are closed for the holiday", "calls may be recorded".
+Built first because IVR greetings (F6) and inbound destinations both reuse it.
+
+- Upload an audio file a browser or phone actually produces (MP3, MP4/M4A from an iPhone,
+  WAV, WebM, Ogg), or record one in the browser. Converted on upload by ffmpeg to the one
+  stored format, 16-bit 8 kHz mono WAV (D55).
+- Optional **play extension**: dial it from any phone to hear the announcement, or target it
+  as a destination from an inbound route / IVR key / ring group failover (D57).
+- Name, description, enabled flag. Replacing the audio keeps the same announcement.
 
 ---
 

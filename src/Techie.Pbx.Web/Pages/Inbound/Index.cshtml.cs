@@ -17,14 +17,18 @@ namespace Techie.Pbx.Web.Pages.Inbound
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AnnouncementRepository announcements;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
+        private readonly RingGroupRepository ringGroups;
         private readonly TrunkRepository trunks;
 
         public IndexModel()
         {
+            this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
+            this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
 
@@ -58,13 +62,15 @@ namespace Techie.Pbx.Web.Pages.Inbound
         public PartialViewResult OnGetTable()
         {
             var allExtensions = this.extensions.GetAll();
+            var allGroups = this.ringGroups.GetAll();
+            var allAnnouncements = this.announcements.GetAll();
             var allTrunks = this.trunks.GetAll();
 
             var rows = this.inbound.GetAll()
                 .Select(route =>
                 {
                     var trunk = allTrunks.FirstOrDefault(t => t.TrunkID == route.TrunkID);
-                    var choice = DestinationCatalog.Find(allExtensions, route.ToDestination());
+                    var choice = DestinationCatalog.Find(allExtensions, allGroups, allAnnouncements, route.ToDestination());
 
                     return new InboundRouteRow
                     {

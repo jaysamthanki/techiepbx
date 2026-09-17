@@ -62,7 +62,7 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 "pbx_config.so",            // extensions.conf itself
                 "app_dial.so",              // Dial()
-                "app_playback.so",          // Playback()
+                "app_playback.so",          // Playback(): prompts, and the announcements (D55)
                 "app_echo.so",              // Echo(), the *43 test
                 "app_voicemail.so",         // VoiceMail() and VoiceMailMain()
                 "func_callerid.so",         // ${CALLERID(num)}, which *97 needs
@@ -75,7 +75,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "codec_gsm.so",             // prompts ship as GSM, voicemail records wav49
                 "format_gsm.so",
                 "format_pcm.so",
-                "format_wav.so",
+                "format_wav.so",            // reads the 8 kHz mono WAV an announcement is stored as (D55)
                 "format_wav_gsm.so",
             }),
         };

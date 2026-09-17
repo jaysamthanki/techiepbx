@@ -1,0 +1,41 @@
+@model List<AnnouncementRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="name"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="play" data-sortable="true">Play extension</th>
+            <th data-field="audio">Audio</th>
+            <th data-field="description">Description</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { announcementID = row.AnnouncementID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.PlayExtension</td>
+                <td>
+                    @if (row.AudioUsable)
+                    {
+                        @row.Audio
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="There is nothing to play. Open the announcement and upload or record its audio.">@row.Audio</span>
+                    }
+                </td>
+                <td class="text-secondary">@row.Description</td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>

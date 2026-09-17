@@ -55,6 +55,17 @@ gets no mailbox whatever these say.
 | `VoicemailAttachRecording` | INTEGER | 0/1, default 1 |
 | `VoicemailDeleteAfterEmail` | INTEGER | 0/1, default 0. Never rendered as `delete=yes` without an address to email |
 
+### Announcements (008)
+
+| Column | Type | Notes |
+|---|---|---|
+| `AnnouncementID` | INTEGER PK | Also names the audio directory (D56) |
+| `Name` | TEXT, unique | Up to 64 chars; drives the stored file name (slug) |
+| `Description` | TEXT | Optional, default '' |
+| `PlayExtension` | TEXT, optional | Digits; collision-checked against extensions, ring groups, feature codes (D57). Empty = no dialplan entry, not a destination |
+| `AudioFile` | TEXT | Stored file name (`<slug>.wav`); empty = no audio yet |
+| `Enabled` | INTEGER | 0/1, default 1 |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).

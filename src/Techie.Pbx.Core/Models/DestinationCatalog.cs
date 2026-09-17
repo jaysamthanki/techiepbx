@@ -10,6 +10,7 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public static class DestinationCatalog
     {
+        public const string AnnouncementsGroup = "Announcements";
         public const string ExtensionsGroup = "Extensions";
         public const string OtherGroup = "Other";
         public const string RingGroupsGroup = "Ring groups";
@@ -26,7 +27,13 @@ namespace Techie.Pbx.Core.Models
         public static List<DestinationChoice> All(IEnumerable<Extension> extensions) =>
             All(extensions, new List<RingGroup>());
 
-        public static List<DestinationChoice> All(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups)
+        public static List<DestinationChoice> All(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups) =>
+            All(extensions, ringGroups, new List<Announcement>());
+
+        public static List<DestinationChoice> All(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements)
         {
             var usable = InNumberOrder(extensions);
             var choices = new List<DestinationChoice>();
@@ -63,6 +70,22 @@ namespace Techie.Pbx.Core.Models
                 });
             }
 
+            // Only the ones a call can actually reach: switched on, with audio uploaded, and with
+            // a play extension to Goto. Without all three there is nothing to send a call to, so
+            // offering it would be offering a dead end (D56).
+            foreach (var announcement in announcements
+                .Where(a => a.IsPlayable)
+                .OrderBy(a => a.PlayExtension.Length)
+                .ThenBy(a => a.PlayExtension, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = announcement.ToDestination(),
+                    GroupName = AnnouncementsGroup,
+                    Label = $"{announcement.PlayExtension} {announcement.Name}",
+                });
+            }
+
             choices.Add(new DestinationChoice
             {
                 Destination = Destination.Hangup,
@@ -81,12 +104,19 @@ namespace Techie.Pbx.Core.Models
         public static DestinationChoice? Find(IEnumerable<Extension> extensions, Destination? destination) =>
             Find(extensions, new List<RingGroup>(), destination);
 
-        public static DestinationChoice? Find(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups, Destination? destination)
+        public static DestinationChoice? Find(IEnumerable<Extension> extensions, IEnumerable<RingGroup> ringGroups, Destination? destination) =>
+            Find(extensions, ringGroups, new List<Announcement>(), destination);
+
+        public static DestinationChoice? Find(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions, ringGroups)
+            return All(extensions, ringGroups, announcements)
                 .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 

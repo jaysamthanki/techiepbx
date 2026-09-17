@@ -9,6 +9,12 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public enum DestinationType
     {
+        /// <summary>
+        /// Play a recorded message and hang up. The value is the announcement's play extension,
+        /// which is why an announcement without one cannot be a destination (D56).
+        /// </summary>
+        Announcement,
+
         /// <summary>Ring a phone. The value is the extension number.</summary>
         Extension,
 

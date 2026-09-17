@@ -41,6 +41,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly OutboundRouteRepository routes;
         private readonly InboundRouteRepository inbound;
         private readonly RingGroupRepository ringGroups;
+        private readonly AnnouncementRepository announcements;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -52,6 +53,7 @@ namespace Techie.Pbx.Asterisk.Config
             OutboundRouteRepository routes,
             InboundRouteRepository inbound,
             RingGroupRepository ringGroups,
+            AnnouncementRepository announcements,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
@@ -62,6 +64,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.routes = routes;
             this.inbound = inbound;
             this.ringGroups = ringGroups;
+            this.announcements = announcements;
             this.ami = ami;
             this.pending = pending;
         }
@@ -79,7 +82,8 @@ namespace Techie.Pbx.Asterisk.Config
             TrunkRepository trunks,
             OutboundRouteRepository routes,
             InboundRouteRepository inbound,
-            RingGroupRepository ringGroups)
+            RingGroupRepository ringGroups,
+            AnnouncementRepository announcements)
         {
             var values = settings.GetAll();
 
@@ -91,6 +95,7 @@ namespace Techie.Pbx.Asterisk.Config
                 routes,
                 inbound,
                 ringGroups,
+                announcements,
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database));
         }
@@ -146,6 +151,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allRoutes = this.routes.GetAll();
             var allInbound = this.inbound.GetAll();
             var allGroups = this.ringGroups.GetAll();
+            var allAnnouncements = this.announcements.GetAll();
 
             return new List<GeneratedFile>
             {
@@ -157,7 +163,7 @@ namespace Techie.Pbx.Asterisk.Config
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
-                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks, allRoutes, allInbound, allGroups)),
+                new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
         }

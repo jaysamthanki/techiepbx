@@ -1,0 +1,37 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Announcements";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Announcements</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add announcement</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    A recorded message a caller hears, then the call ends. Upload a file or record one here; it is
+    converted to the one format Asterisk plays. Give an announcement a play extension and anyone
+    can dial it to listen — and an inbound route or a ring group can send calls to it.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="announcements-table" hx-get="@tableUrl" hx-trigger="load, announcementsChanged from:body">
+    <p class="text-secondary">Loading announcements…</p>
+</div>
+
+<partial name="_FormModal" />
+
+@section Scripts {
+    <script src="~/js/announcements.js" asp-append-version="true"></script>
+}
