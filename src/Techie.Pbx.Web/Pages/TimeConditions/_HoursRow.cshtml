@@ -1,0 +1,26 @@
+@model TimeConditionHoursForm
+@*
+    One open-hours row: the weekdays it covers and the window it opens. Rendered both for a stored
+    rule and, inside the <template>, as the blank row the Add button copies (D62). The names are
+    indexed by the row's key, and the "hours.Index" hidden field is what tells ASP.NET Core the
+    key exists, so rows can be removed in any order without renumbering.
+*@
+<div class="input-group input-group-sm mb-2 tc-row" data-key="@Model.Key">
+    <input type="hidden" name="hours.Index" value="@Model.Key" />
+    <span class="input-group-text" style="padding-right: 0.1rem;">
+        @foreach (var day in TimeConditionHoursForm.Weekdays)
+        {
+            var inputId = $"tc-hours-{Model.Key}-day-{day.Bit}";
+            <input class="form-check-input mt-0 me-1 tc-day" type="checkbox"
+                   id="@inputId" name="hours[@Model.Key].days" value="@day.Bit"
+                   checked="@(Model.IsTicked(day.Bit) ? "checked" : null)" />
+            <label class="form-check-label me-1" for="@inputId" title="@day.Label">@day.Label</label>
+        }
+    </span>
+    <input type="time" class="form-control font-monospace" style="max-width: 8rem"
+           id="tc-hours-@Model.Key-start" name="hours[@Model.Key].startTime" value="@Model.StartTime" />
+    <span class="input-group-text">to</span>
+    <input type="time" class="form-control font-monospace" style="max-width: 8rem"
+           id="tc-hours-@Model.Key-end" name="hours[@Model.Key].endTime" value="@Model.EndTime" />
+    <button type="button" class="btn btn-outline-danger tc-remove" title="Remove these hours">&times;</button>
+</div>
