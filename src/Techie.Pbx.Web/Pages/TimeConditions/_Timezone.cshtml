@@ -20,6 +20,8 @@
                    value="@Model.Timezone" style="max-width: 16rem"
                    maxlength="64" autocomplete="off" placeholder="@AsteriskSettings.DefaultTimezone" />
             <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+            <span class="text-secondary">Server time now:</span>
+            <partial name="_Clock" model='DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz")' />
             <span class="form-text mb-0">
                 The IANA zone this server's clock is set to, e.g. Europe/London. Written into the
                 generated dialplan as a comment; blank means @AsteriskSettings.DefaultTimezone.

@@ -60,6 +60,13 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
             this.Timezone = new TimezoneForm { Timezone = this.settings.Get(SettingsKeys.SystemTimezone) ?? "" };
         }
 
+        /// <summary>
+        /// The server's clock, ticking every five seconds in the timezone box. It is the clock
+        /// Asterisk matches the open hours against (D65), so it belongs beside the zone name.
+        /// </summary>
+        public PartialViewResult OnGetClock() =>
+            this.Partial("_Clock", DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz", CultureInfo.InvariantCulture));
+
         /// <summary>The create or edit form, which the page shows in the Bootstrap modal.</summary>
         public IActionResult OnGetForm(long? timeConditionID)
         {
