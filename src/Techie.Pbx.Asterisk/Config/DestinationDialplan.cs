@@ -60,6 +60,13 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.RingGroup =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // And again for an announcement: the play extension's own entry already answers,
+                // plays the file and hangs up, so there is one description of what an announcement
+                // does rather than two that drift (D56). An announcement with no play extension
+                // never becomes a destination, which is why there is always somewhere to Goto.
+                DestinationType.Announcement =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
+
                 DestinationType.Voicemail =>
                     new List<string>
                     {

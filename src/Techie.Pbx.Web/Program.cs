@@ -109,6 +109,7 @@ namespace Techie.Pbx.Web
             app.MapControllers();
 
             PbxDatabase.Open(DatabasePath(app));
+            PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
 
             Log.Info("TNPBX web starting");
             app.Run();

@@ -706,4 +706,110 @@ trunk's codecs and match addresses. A members table would add a join for what is
 as a list. Members are extension numbers, validated against existing enabled extensions, and
 the group number is collision-checked against extensions and feature codes.
 
+### D55. ffmpeg is a required system dependency, and 8 kHz mono WAV is the one stored format (2026-09-19)
+Announcements accept what browsers and phones actually produce — MP3, MP4/M4A, WAV, WebM, Ogg —
+and store exactly one thing: **16-bit 8 kHz mono PCM WAV**. Every upload is converted on the way
+in by `ffmpeg`, run by the unprivileged web user as a fixed argv list, never a shell string:
+
+```
+ffmpeg -nostdin -hide_banner -loglevel error -y -i <temp> -vn -map_metadata -1
+       -ac 1 -ar 8000 -acodec pcm_s16le -f wav <temp>.wav
+```
+
+One format in the store means no transcoding at call time, no format negotiation to reason about,
+and a file size that is a reliable clock (16,000 bytes a second), which is where the length in the
+table comes from. 8 kHz is what a narrowband SIP call carries anyway, so nothing is being thrown
+away that would have reached the caller.
+
+**ffmpeg is therefore required, not optional**: the installer does `apt install ffmpeg`, and the
+lab VM script already installs it. If it is missing, an upload **fails with a message that names
+ffmpeg and the apt command**, and nothing is written. The alternative — storing the file as it
+arrived — was rejected outright: Asterisk would accept the config, and the fault would only appear
+as silence on a real call.
+
+What guards the upload, in order, before ffmpeg is started at all:
+
+- **A 20 MB cap**, counted while spooling, so a large upload is refused rather than buffered.
+- **A content signature check**, not the file name: RIFF/WAVE, OggS, the EBML header, `ftyp`, an
+  ID3 tag or an MPEG frame sync. A name is attacker-controlled and ffmpeg is a large program to
+  hand an arbitrary file to. A test asserts this ordering by pointing the converter at a program
+  that cannot start and checking the error is about the format, not about ffmpeg.
+
+Recording in the browser uses **MediaRecorder** and posts the blob through the same form and the
+same endpoint as a chosen file, so there is one upload path with one set of checks. Chrome and
+Firefox produce WebM/Opus, Safari and iPhones produce MP4/AAC; both are on the accepted list, and
+the container is read from the bytes rather than trusted from the blob's type. The JavaScript is a
+few lines: `DataTransfer` puts the blob into the form's own file input. No new client library.
+
+**The `modules.conf` allowlist is unchanged.** `app_playback.so`, `format_wav.so` and
+`format_pcm.so` are already on it (D31) and are between them exactly what playing this file needs,
+so this feature widens nothing. That was checked rather than assumed, and the comments in
+`ModulesConfRenderer` now say which modules the announcements depend on.
+
+### D56. Announcement audio: one directory per announcement under the Asterisk sounds path (2026-09-19)
+Audio lives at **`<base>/announcements/<AnnouncementID>/<name-slug>.wav`**, where the base is the
+`Announcements:SoundsPath` setting, default **`/var/lib/asterisk/sounds/tnpbx`**. The dialplan
+plays it as `Playback(tnpbx/announcements/<ID>/<name-slug>)` — no extension, so Asterisk picks the
+format it has, and relative, because Asterisk resolves a relative prompt name under its own sounds
+directory.
+
+Choices worth naming:
+
+- **The directory is the ID, the file is the name.** The ID never changes, so nothing has to move
+  when an announcement is renamed except the file itself; the file carries the name so that an
+  admin reading `extensions.conf` or listing the directory can tell what a prompt is without
+  looking it up. Renaming an announcement renames the file, in the same save.
+- **The stored name is derived, never the uploaded one.** `Announcement.SlugFor` reduces the name
+  to lower-case letters, digits and dashes. `,`, `&` and `)` would each end a `Playback()` argument
+  early, and a path separator would leave the directory entirely, so none of them survive. The
+  result is matched against `^[a-z0-9][a-z0-9-]{0,47}\.wav$` again by the model, again by the
+  store before it touches a path, and again by `ConfText.Safe` in the renderer.
+- **Nothing from the browser reaches a path.** A path is an integer and a derived name, and
+  `AnnouncementStore` still resolves it and checks it is inside the base directory before writing
+  or deleting. It cannot fail today; it is there so that it fails loudly the day something builds
+  a path from something else.
+- **Permissions follow D18.** Files are 0640 and directories 0750, owner the web user, group read
+  for `asterisk` — the same model the generated conf files use. The installer creates the base
+  directory `root:asterisk` and **setgid**, so what the web user creates under it is group-owned by
+  `asterisk`; our code sets the mode on directories it creates itself and leaves an existing base
+  alone rather than chmod-ing the installer's work away.
+- **The database says what the file is called; the disk says whether it is there.** The renderer
+  writes an entry for any announcement with a file name stored, and the UI reads the file to show
+  its size and length — so a row naming a file that is missing shows "File missing" in the table
+  and a warning in the form, rather than a length for nothing.
+
+The one sharp edge: **`SoundsPath` has to stay at `<asterisk sounds dir>/tnpbx`**, because the
+`tnpbx/announcements` prefix the dialplan uses is a constant. Point the setting somewhere else and
+the files are written where Playback will not look. See the open question in
+[roadmap.md](roadmap.md#piece-16-detail-started-2026-09-19).
+
+### D57. A play extension is optional, and is what makes an announcement a destination (2026-09-19)
+`Announcements.PlayExtension` is digits, 2 to 6, or blank. When it is set the announcement gets a
+dialplan entry in the `internal` context — `Answer()`, `Playback(...)`, `Hangup()` — so anyone can
+dial it to hear what callers hear. That is the test button, and it costs one dialplan entry.
+
+It is also the whole of the destination mechanism. `DestinationType.Announcement` stores the play
+extension as its value, and `DestinationDialplan` writes `Goto(internal,<number>,1)` — in by the
+same door a user dialling it uses, exactly as an extension and a ring group destination already do
+(D36). So there is one description of what an announcement does, not two.
+
+The consequence, and it is deliberate: **an announcement with no play extension cannot be chosen as
+a destination.** There is nothing to Goto. `DestinationCatalog` leaves it out, along with ones that
+are switched off or have no audio yet, for the same reason disabled extensions are left out (D35) —
+offering a choice that leads nowhere is worse than not offering it.
+
+Rejected: giving every announcement a hidden internal extension so it could always be a
+destination. It would put a dialplan entry in for every row whether anyone wanted one or not, and
+an admin reading `extensions.conf` would find numbers nobody chose.
+
+Because a play extension shares the number space with extensions and ring groups, it is
+collision-checked against both, **in both directions** — `AnnouncementRepository` refuses a number a
+ring group has, and `RingGroupRepository` now refuses a number an announcement plays on. A one-sided
+check would leave the hole open from whichever side happened to be created second. Feature codes
+need no check: they all start with `*` and a play extension is digits only, which a test pins down.
+
+`Answer()` is written unconditionally rather than guarded by a `${CHANNEL(state)}` test. On a
+channel that is already up, Asterisk's Answer application returns immediately and does nothing, so
+the guard would buy nothing and cost two modules (`func_channel`, `app_exec`) on the allowlist.
+
 

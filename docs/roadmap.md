@@ -23,7 +23,8 @@ this file is the **order**.
 | 14 | Email notifications (voicemail to email first, then alerts) | F4 | |
 | 15 | Ring groups: ring all + hunt | F3 | |
 | 16 | Follow me | F2b | |
-| 17 | IVRs (with audio file handling) | F6 | |
+| 16a | Announcements (upload/record, convert, play ext, destination type) | F7 | **Done 2026-09-19** (D55–D57), lab-verified: MP3 uploaded through the UI -> ffmpeg converted to 8 kHz mono WAV -> apply -> `dialplan show 7100@internal` shows Answer/Playback/Hangup live, file at `/var/lib/asterisk/sounds/tnpbx/announcements/1/` 0640 group asterisk. IVR (17) reuses the audio handling. |
+| 17 | IVRs (uses announcement audio) | F6 | |
 | 18 | Call reports | F5 | |
 | 19 | Helper: Unix socket, peer credential check, first commands (firewall) | | |
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |

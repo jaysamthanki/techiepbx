@@ -1,4 +1,5 @@
 using System.Text;
+using Techie.Pbx.Asterisk.Audio;
 using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Config
@@ -51,13 +52,23 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<Trunk> trunks,
             IEnumerable<OutboundRoute> routes,
             IEnumerable<InboundRoute> inbound,
-            IEnumerable<RingGroup> ringGroups)
+            IEnumerable<RingGroup> ringGroups) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, new List<Announcement>());
+
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements)
         {
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
             var inboundList = InboundRenderOrder(inbound, trunkList);
             var groupList = RingGroupRenderOrder(ringGroups, enabled);
+            var announcementList = AnnouncementRenderOrder(announcements);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -109,6 +120,9 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var group in groupList)
                 AppendRingGroup(sb, group, enabled);
 
+            foreach (var announcement in announcementList)
+                AppendAnnouncement(sb, announcement);
+
             // Extensions in a context are matched before anything it includes, so the phones and
             // feature codes above always win over a route pattern (D46).
             if (routeList.Count > 0)
@@ -124,6 +138,33 @@ namespace Techie.Pbx.Asterisk.Config
             AppendOutboundRoutes(sb, routeList, trunkList);
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// The announcements that get a dialplan entry, by play extension. Re-validated, so a row
+        /// that reached the database another way cannot reach a conf file.
+        ///
+        /// Three things are needed before an announcement is worth writing: it is switched on, it
+        /// has audio, and it has a number to dial. Without the number there is no extension to
+        /// write; without the audio the entry would be a Playback of nothing, which Asterisk
+        /// reports mid-call as a warning rather than refusing up front (D56).
+        /// </summary>
+        public static List<Announcement> AnnouncementRenderOrder(IEnumerable<Announcement> announcements)
+        {
+            var enabled = announcements.Where(a => a.Enabled).ToList();
+
+            foreach (var announcement in enabled)
+            {
+                var errors = announcement.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Announcement '{announcement.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return enabled
+                .Where(a => a.IsPlayable)
+                .OrderBy(a => a.PlayExtension.Length)
+                .ThenBy(a => a.PlayExtension, StringComparer.Ordinal)
+                .ToList();
         }
 
         /// <summary>
@@ -198,6 +239,38 @@ namespace Techie.Pbx.Asterisk.Config
                 .OrderBy(r => r.Priority)
                 .ThenBy(r => r.Name, StringComparer.Ordinal)
                 .ToList();
+        }
+
+        /// <summary>
+        /// One announcement: answer, play the file, hang up (D56). The entry lives in the internal
+        /// context like an extension, so a user can dial it and a destination can Goto it, and
+        /// both get the same three lines.
+        ///
+        /// Answer() is written unconditionally. A call arriving here from a phone or from a trunk
+        /// has not been answered yet and Playback on an unanswered channel is early media at best;
+        /// on a channel that is already up — a Goto from somewhere that answered first — Asterisk's
+        /// Answer application returns immediately and does nothing, so there is nothing to guard
+        /// and no ${CHANNEL(state)} test worth the modules it would need.
+        /// </summary>
+        private static void AppendAnnouncement(StringBuilder sb, Announcement announcement)
+        {
+            var number = ConfText.Safe(announcement.PlayExtension, "announcement play extension");
+            var name = ConfText.Safe(announcement.Name, "announcement name");
+
+            // The file name was derived by us and matched against a strict pattern before it was
+            // stored, and it still goes through Safe: a row that arrived another way cannot write
+            // a second Playback argument or comment the rest of the entry out.
+            var prompt = ConfText.Safe(AnnouncementStore.PlaybackName(announcement), "announcement prompt");
+
+            sb.Append('\n');
+            sb.Append($"; {name}\n");
+
+            if (announcement.Description.Length > 0)
+                sb.Append($"; {ConfText.Safe(announcement.Description, "announcement description")}\n");
+
+            sb.Append($"exten => {number},1,Answer()\n");
+            sb.Append($" same => n,Playback({prompt})\n");
+            sb.Append(DestinationDialplan.Lines(Destination.Hangup));
         }
 
         /// <summary>

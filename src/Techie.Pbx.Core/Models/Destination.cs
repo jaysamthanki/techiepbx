@@ -81,6 +81,12 @@ namespace Techie.Pbx.Core.Models
                         errors.Add("A RingGroup destination needs a group number of 2 to 6 digits.");
                     break;
 
+                // And so does an announcement's play extension, for the same reason (D56).
+                case DestinationType.Announcement:
+                    if (!Extension.IsValidNumber(this.Value))
+                        errors.Add("An Announcement destination needs a play extension of 2 to 6 digits.");
+                    break;
+
                 case DestinationType.Hangup:
                     if (this.Value.Length > 0)
                         errors.Add("A Hangup destination has nothing to point at.");
