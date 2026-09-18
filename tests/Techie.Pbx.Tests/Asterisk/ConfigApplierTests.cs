@@ -74,7 +74,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new[]
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
-                    "manager.conf", "pjsip.conf", "notify.conf", "extensions.conf", "voicemail.conf",
+                    "manager.conf", "pjsip.conf", "pjsip_notify.conf", "extensions.conf", "voicemail.conf",
                 },
                 files.Select(f => f.FileName));
 
