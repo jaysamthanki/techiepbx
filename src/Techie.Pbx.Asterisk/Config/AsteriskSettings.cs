@@ -15,10 +15,12 @@ namespace Techie.Pbx.Asterisk.Config
         public const string DefaultConfDirectory = "/etc/asterisk";
 
         /// <summary>
-        /// What a fresh Debian server's clock is set to until somebody says otherwise, which is
-        /// also the honest thing to write into the dialplan when nobody has (D65).
+        /// The zone open hours are read in until somebody chooses another one. It is UTC because
+        /// that is what a TNPBX server's clock is meant to be set to (D74), and because an explicit
+        /// zone in every GotoIfTime beats an implied one. The value itself lives with the list it
+        /// is the first entry of.
         /// </summary>
-        public const string DefaultTimezone = "Etc/UTC";
+        public const string DefaultTimezone = SystemTimezones.Utc;
 
         public static string ConfDirectory(IReadOnlyDictionary<string, string> settings) =>
             Text(settings, SettingsKeys.AsteriskConfDirectory) ?? DefaultConfDirectory;
@@ -66,10 +68,11 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
-        /// The IANA zone recorded for this server, e.g. "Europe/London". Anything that is not
-        /// shaped like a zone name falls back to the default rather than throwing, for the same
-        /// reason a non-numeric port does — and because this one is written into a conf file, where
-        /// a stray character would be an apply that fails over a comment (D65).
+        /// The IANA zone a time condition's open hours are written in, e.g. "Europe/London". It is
+        /// named in every GotoIfTime the dialplan generates, so it decides behaviour and not just
+        /// what a comment says (D74). Anything that is not shaped like a zone name falls back to
+        /// the default rather than throwing, for the same reason a non-numeric port does: a bad
+        /// row must not be able to fail an apply, and the settings page is what reports it.
         /// </summary>
         public static string Timezone(IReadOnlyDictionary<string, string> settings)
         {

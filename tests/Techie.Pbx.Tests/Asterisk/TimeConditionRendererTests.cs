@@ -225,9 +225,9 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = Render(SampleTimeConditions()[4]);
 
-            Assert.Contains(" same => n,GotoIfTime(*,*,1,jan?h1)\n", actual);
-            Assert.Contains(" same => n,GotoIfTime(*,*,4,jul?holiday)\n", actual);
-            Assert.Contains(" same => n,GotoIfTime(*,*,25,dec?holiday)\n", actual);
+            Assert.Contains(" same => n,GotoIfTime(*,*,1,jan,Europe/London?h1)\n", actual);
+            Assert.Contains(" same => n,GotoIfTime(*,*,4,jul,Europe/London?holiday)\n", actual);
+            Assert.Contains(" same => n,GotoIfTime(*,*,25,dec,Europe/London?holiday)\n", actual);
             Assert.Contains(" same => n(h1),NoOp(Time condition 600 holiday 1 jan to Hangup)\n same => n,Hangup()\n", actual);
             Assert.Contains(" same => n(holiday),NoOp(Time condition 600 holiday to Announcement:700)\n", actual);
         }
@@ -238,8 +238,8 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = Render(SampleTimeConditions()[4]);
 
-            Assert.Contains(" same => n,GotoIfTime(09:00-17:00,mon-fri,*,*?open)\n", actual);
-            Assert.Contains(" same => n,GotoIfTime(09:00-12:30,sat,*,*?open)\n", actual);
+            Assert.Contains(" same => n,GotoIfTime(09:00-17:00,mon-fri,*,*,Europe/London?open)\n", actual);
+            Assert.Contains(" same => n,GotoIfTime(09:00-12:30,sat,*,*,Europe/London?open)\n", actual);
         }
 
         [Fact]
@@ -291,15 +291,16 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// The zone is a comment and nothing else: Asterisk matches these checks against its own
-        /// local clock, so what is written here is what the hours were meant to mean (D65).
+        /// The zone is the last argument of every GotoIfTime, not a comment: Asterisk evaluates
+        /// the checks in that zone against a UTC clock, so local hours just work (D74).
         /// </summary>
         [Fact]
-        public void The_recorded_timezone_is_written_into_the_context_as_a_comment()
+        public void The_zone_is_the_last_argument_of_every_GotoIfTime()
         {
             var actual = Render(SampleTimeConditions()[4]);
 
-            Assert.Contains("; server's local time, which this system records as Europe/London (D65).\n", actual);
+            Assert.Contains("; The hours below are LOCAL time in Europe/London: every GotoIfTime names that zone as\n", actual);
+            Assert.DoesNotContain("?open)\n", actual.Replace(",Europe/London?open)\n", ""));
         }
 
         [Fact]

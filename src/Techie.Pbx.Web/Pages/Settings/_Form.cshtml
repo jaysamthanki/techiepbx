@@ -7,6 +7,14 @@
     var defaultText = Model.Descriptor.Default.Length > 0
         ? $"Leave it blank to go back to the default, {Model.Descriptor.Default}."
         : "Leave it blank to store nothing at all, which is this setting's default.";
+
+    // A dropdown has no blank entry, so the wording about clearing the box does not apply to one.
+    var choiceText = Model.Descriptor.Default.Length > 0
+        ? $"The default is {Model.Descriptor.Default}, the first entry in the list."
+        : "";
+
+    // Nothing stored means the code is using the default, so that is what the list should show.
+    var selectedChoice = Model.Value is { Length: > 0 } stored ? stored : Model.Descriptor.Default;
 }
 @*
     The whole contents of the shared Bootstrap modal: header, body and footer are inside the form
@@ -63,6 +71,19 @@
                     <text>Nothing is stored yet.</text>
                 }
             </div>
+        }
+        else if (Model.Descriptor.Choices.Count > 0)
+        {
+            @* A key whose values are a list gets a dropdown of it, so nothing can be stored that
+               the generated config could not honour (D75). No blank option: the first choice is
+               the default, and "Reset to default" in the footer is the way back to it. *@
+            <select class="form-select font-monospace" id="setting-value" name="value" autocomplete="off">
+                @foreach (var choice in Model.Descriptor.Choices)
+                {
+                    <option value="@choice" selected="@(choice == selectedChoice ? "selected" : null)">@choice</option>
+                }
+            </select>
+            <div class="form-text">@choiceText</div>
         }
         else
         {

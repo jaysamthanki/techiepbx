@@ -1,25 +1,34 @@
 @using Techie.Pbx.Asterisk.Config
+@using Techie.Pbx.Core.Models
 @model TimezoneForm
 @{
     var saveUrl = Url.Page("Index", "Timezone");
     var clockUrl = Url.Page("Index", "Clock");
+    var selected = Model.Timezone is { Length: > 0 } zone ? zone : AsteriskSettings.DefaultTimezone;
 }
 @*
-    The server timezone, inline in the page header. It is a record, not a lever: Asterisk matches
-    every open-hours check against its own clock, and this says which zone that clock is meant to
-    be in (D65). It is here rather than on a settings page because there is no settings page, and
-    this is the only screen where the value means anything.
+    The zone the open hours on this page are written in, inline in the page header. It is a lever,
+    not a record: every GotoIfTime this page generates names it, so Asterisk evaluates the hours in
+    that zone whatever the server's clock says (D74). The server clock is meant to be UTC.
 
-    The post swaps this whole block back, so an error comes back in place with the box still filled
-    in the way it was typed.
+    A dropdown of the server's own zone database rather than a text box (D75), so a zone that can
+    be chosen is a zone Asterisk can resolve. There is no blank entry: Etc/UTC is the first one and
+    is what an unset setting means, so "no zone" and "UTC" would be the same choice written twice.
+
+    The post swaps this whole block back, so an error comes back in place with the zone still
+    showing what was chosen.
 *@
 <form class="card mb-3" hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
     <div class="card-body py-2">
         <div class="d-flex align-items-center flex-wrap gap-2">
-            <label class="col-form-label col-form-label-sm text-secondary mb-0" for="tc-timezone">Server timezone</label>
-            <input class="form-control form-control-sm font-monospace" id="tc-timezone" name="timezone"
-                   value="@Model.Timezone" style="max-width: 16rem"
-                   maxlength="64" autocomplete="off" placeholder="@AsteriskSettings.DefaultTimezone" />
+            <label class="col-form-label col-form-label-sm text-secondary mb-0" for="tc-timezone">Open hours timezone</label>
+            <select class="form-select form-select-sm font-monospace" id="tc-timezone" name="timezone"
+                    style="max-width: 20rem" autocomplete="off">
+                @foreach (var id in SystemTimezones.All)
+                {
+                    <option value="@id" selected="@(string.Equals(id, selected, StringComparison.Ordinal) ? "selected" : null)">@id</option>
+                }
+            </select>
             <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
             <span class="text-secondary">Server time now:</span>
             @* Its own hx-target is load-bearing: htmx attributes inherit from ancestors, and
@@ -27,10 +36,11 @@
                and each tick would replace the whole card with the time text. *@
             <span id="tc-server-time" class="font-monospace"
                   hx-get="@clockUrl" hx-target="this" hx-trigger="every 5s" hx-swap="innerHTML"
-                  title="The clock every open-hours check is matched against">@DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz")</span>
+                  title="The server's own clock, which is meant to be UTC">@DateTimeOffset.Now.ToString("ddd MMM d HH:mm:ss yyyy zzz")</span>
             <span class="form-text mb-0">
-                The IANA zone this server's clock is set to, e.g. Europe/London. Written into the
-                generated dialplan as a comment; blank means @AsteriskSettings.DefaultTimezone.
+                Open hours and holidays below are entered in this zone. Asterisk is told the zone
+                in every check it generates, so daylight saving is handled for you; the server's own
+                clock stays on UTC.
             </span>
         </div>
 

@@ -160,8 +160,9 @@ there is deliberately no time-group entity to reference first (D62).
 - **Holidays**: a date list, each optionally carrying its own destination override; a holiday
   beats open hours, and repeats every year — `GotoIfTime` has no year field (D63, D64).
 - Three destinations: when open, when closed, on holidays — anything the shared picker offers.
-- The clock is Asterisk's system-local time; a single Timezone setting records which zone that
-  is (D65).
+- The clock is meant to be UTC (the installer sets it); a single Timezone setting, chosen from
+  a dropdown, names the customer's zone. Every generated check tells Asterisk to evaluate in
+  that zone, so open hours are entered in local time (D74, D75).
 
 ---
 
