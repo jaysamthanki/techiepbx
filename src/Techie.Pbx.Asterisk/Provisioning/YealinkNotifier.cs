@@ -16,10 +16,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// </summary>
     public static class YealinkNotifier
     {
-        /// <summary>The notify.conf category that makes a phone re-fetch its config.</summary>
+        /// <summary>The pjsip_notify.conf category that makes a phone re-fetch its config.</summary>
         public const string CheckConfigNotification = "tnpbx-check-cfg";
 
-        /// <summary>The notify.conf category that makes a phone reboot.</summary>
+        /// <summary>The pjsip_notify.conf category that makes a phone reboot.</summary>
         public const string RebootNotification = "tnpbx-reboot";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(YealinkNotifier));

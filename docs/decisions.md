@@ -1263,8 +1263,10 @@ SIP NOTIFY through AMI PJSIPSendNotify to the linked extension's endpoint; an un
 cannot be notified and the push is skipped with a warning. Polling (D79) remains the safety
 net for both brands.
 
-### D91. notify.conf is a generated conf, and res_pjsip_notify joins the allowlist (2026-09-21)
+### D91. pjsip_notify.conf is a generated conf, and res_pjsip_notify joins the allowlist (2026-09-21)
 The NOTIFY categories (tnpbx-check-cfg = Event: check-sync, tnpbx-reboot = check-sync;reboot=true)
-are generated into notify.conf like any other conf file, and res_pjsip_notify.so joins the
-modules.conf allowlist to load it. Per D33, notify.conf is written but never live-reloaded:
-an apply that changes it reports a restart, which is rare since the categories are fixed.
+are generated into **pjsip_notify.conf** — the file Asterisk 22's res_pjsip_notify actually reads
+(`notify.conf` belongs to the dead chan_sip; discovered live on the lab VM when the module
+declined to load) — and res_pjsip_notify.so joins the modules.conf allowlist to load it.
+Per D33, pjsip_notify.conf is written but never live-reloaded: an apply that changes it reports
+a restart, which is rare since the categories are fixed.

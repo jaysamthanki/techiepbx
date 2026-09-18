@@ -14,7 +14,7 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Owns pjsip.conf. Reloading it re-reads every PJSIP object.</summary>
         public const string PjsipModule = "res_pjsip";
 
-        /// <summary>Owns notify.conf, the categories a Yealink phone is sent a NOTIFY of (D91).</summary>
+        /// <summary>Owns pjsip_notify.conf, the categories a Yealink phone is sent a NOTIFY of (D91).</summary>
         public const string NotifyModule = "res_pjsip_notify";
 
         /// <summary>Owns extensions.conf, i.e. what "dialplan reload" reloads.</summary>
@@ -189,7 +189,7 @@ namespace Techie.Pbx.Asterisk.Config
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
-                new("notify.conf", NotifyModule, NotifyConfRenderer.Render()),
+                new("pjsip_notify.conf", NotifyModule, NotifyConfRenderer.Render()),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions, this.Timezone)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
