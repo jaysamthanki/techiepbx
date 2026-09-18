@@ -22,6 +22,14 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string DefaultTimezone = SystemTimezones.Utc;
 
+        /// <summary>
+        /// The NTP server a phone is told to set its clock from until somebody chooses another one
+        /// (D84). A public pool rather than this server's own address: unlike D82's derived
+        /// offset, there is no reason for TNPBX itself to be in the loop here, and a customer with
+        /// an internal time source can point this setting at it instead.
+        /// </summary>
+        public const string DefaultNtpServer = "pool.ntp.org";
+
         public static string ConfDirectory(IReadOnlyDictionary<string, string> settings) =>
             Text(settings, SettingsKeys.AsteriskConfDirectory) ?? DefaultConfDirectory;
 
@@ -66,6 +74,13 @@ namespace Techie.Pbx.Asterisk.Config
 
             return transport;
         }
+
+        /// <summary>
+        /// The NTP server phones are given, or <see cref="DefaultNtpServer"/> when nobody has
+        /// chosen one (D84).
+        /// </summary>
+        public static string NtpServer(IReadOnlyDictionary<string, string> settings) =>
+            Text(settings, SettingsKeys.SystemNtpServer) ?? DefaultNtpServer;
 
         /// <summary>
         /// The IANA zone a time condition's open hours are written in, e.g. "Europe/London". It is

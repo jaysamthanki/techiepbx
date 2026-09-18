@@ -73,6 +73,28 @@ namespace Techie.Pbx.Core.Data
         public const string ProvisioningPassword = "Provisioning.Password";
 
         /// <summary>
+        /// The Polycom web UI's built-in "Polycom" (admin) account password. Polycom fixes the
+        /// username on both its device accounts, so only the password is ours to set. Written into
+        /// every generated phone config as <c>device.auth.localAdminPassword</c>, and reused as the
+        /// credential this app authenticates with when it pushes a config reload or reboot to a
+        /// phone over that same web UI (D84).
+        /// </summary>
+        public const string ProvisioningAdminPassword = "Provisioning.AdminPassword";
+
+        /// <summary>
+        /// The Polycom web UI's built-in "User" account password, written into every generated
+        /// phone config as <c>device.auth.localUserPassword</c> (D84).
+        /// </summary>
+        public const string ProvisioningUserPassword = "Provisioning.UserPassword";
+
+        /// <summary>
+        /// The NTP server phones are told to set their clock from, written into every phone's
+        /// config as <c>tcpIpApp.sntp.address</c>. Defaults to a public pool so most sites need not
+        /// touch it, but a site with its own time source can point here instead (D84).
+        /// </summary>
+        public const string SystemNtpServer = "System.NtpServer";
+
+        /// <summary>
         /// The IANA zone this server's clock is meant to be in, e.g. "Europe/London". A record,
         /// not a lever: Asterisk matches a time condition against its own local time, so what
         /// actually decides open from closed is the machine's timezone. This is written into the
@@ -98,6 +120,9 @@ namespace Techie.Pbx.Core.Data
             SipExternalAddress,
             ProvisioningUsername,
             ProvisioningPassword,
+            ProvisioningAdminPassword,
+            ProvisioningUserPassword,
+            SystemNtpServer,
             SystemTimezone,
         };
 
@@ -105,6 +130,8 @@ namespace Techie.Pbx.Core.Data
         {
             AmiSecret,
             ProvisioningPassword,
+            ProvisioningAdminPassword,
+            ProvisioningUserPassword,
         };
 
         public static IReadOnlyCollection<string> All => KnownKeys;

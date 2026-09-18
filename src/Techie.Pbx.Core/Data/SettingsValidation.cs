@@ -117,6 +117,21 @@ namespace Techie.Pbx.Core.Data
                         errors.Add($"Provisioning password must be {MinProvisioningPasswordLength} to 64 letters, digits, dots, dashes, underscores or tildes — it goes into the DHCP option 160 URL, where a colon or an @ would split it.");
                     break;
 
+                case SettingsKeys.ProvisioningAdminPassword:
+                    if (!ProvisioningPasswordPattern().IsMatch(text))
+                        errors.Add($"The Polycom web admin password must be {MinProvisioningPasswordLength} to 64 letters, digits, dots, dashes, underscores or tildes.");
+                    break;
+
+                case SettingsKeys.ProvisioningUserPassword:
+                    if (!ProvisioningPasswordPattern().IsMatch(text))
+                        errors.Add($"The Polycom web user password must be {MinProvisioningPasswordLength} to 64 letters, digits, dots, dashes, underscores or tildes.");
+                    break;
+
+                case SettingsKeys.SystemNtpServer:
+                    if (!HostPattern().IsMatch(text))
+                        errors.Add("NTP server must be a hostname or IP address, e.g. pool.ntp.org.");
+                    break;
+
                 case SettingsKeys.SystemTimezone:
                     Timezone(errors, text);
                     break;
@@ -237,9 +252,12 @@ namespace Techie.Pbx.Core.Data
         private static partial Regex HostPattern();
 
         /// <summary>
-        /// URL-safe characters only, because this ends up inside a URL (D77). The lower bound is
-        /// <see cref="MinProvisioningPasswordLength"/>, written out here because an attribute needs
-        /// a literal.
+        /// URL-safe characters only, because <see cref="SettingsKeys.ProvisioningPassword"/> ends
+        /// up inside a URL (D77). Reused for the two Polycom device account passwords too: they
+        /// are written into an XML attribute rather than a URL, but the same narrow charset also
+        /// keeps them clear of every character the conf renderers' own safety check refuses (D84).
+        /// The lower bound is <see cref="MinProvisioningPasswordLength"/>, written out here because
+        /// an attribute needs a literal.
         /// </summary>
         [GeneratedRegex(@"^[A-Za-z0-9._~\-]{8,64}$")]
         private static partial Regex ProvisioningPasswordPattern();

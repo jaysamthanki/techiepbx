@@ -23,12 +23,14 @@ namespace Techie.Pbx.Tests.Asterisk
 
         private static PolycomConfig SampleConfig() => new()
         {
+            AdminPassword = "AdminPass123",
             Extension = SampleExtension(),
             GmtOffsetSeconds = -25200,
             Phone = SamplePhone(),
             ServerAddress = "10.8.20.4",
             SipPort = 5060,
-            SntpAddress = "10.8.20.4",
+            SntpAddress = "pool.ntp.org",
+            UserPassword = "UserPass123",
         };
 
         private static Phone SamplePhone() => new()
@@ -133,6 +135,49 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// The two Polycom device account passwords, written whether or not the phone has an
+        /// extension: they are phone-level, not registration-level (D84).
+        /// </summary>
+        [Fact]
+        public void Device_web_passwords_are_written_when_set()
+        {
+            var actual = PolycomConfigRenderer.Render(SampleConfig());
+
+            Assert.Contains("device.auth.localAdminPassword=\"AdminPass123\"", actual);
+            Assert.Contains("device.auth.localUserPassword=\"UserPass123\"", actual);
+        }
+
+        /// <summary>
+        /// Each password is independent: a site that has only set one of the two Polycom accounts
+        /// does not get the other one written as an empty, and worse, working, password.
+        /// </summary>
+        [Fact]
+        public void Only_the_device_password_that_is_set_is_written()
+        {
+            var config = SampleConfig();
+            config.UserPassword = "";
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("device.auth.localAdminPassword=", actual);
+            Assert.DoesNotContain("device.auth.localUserPassword=", actual);
+        }
+
+        /// <summary>
+        /// Neither Polycom device password is a required setting, so a site that has not set
+        /// either gets no <c>device</c> element at all rather than one with blank passwords.
+        /// </summary>
+        [Fact]
+        public void Neither_device_password_set_means_no_device_element()
+        {
+            var config = SampleConfig();
+            config.AdminPassword = "";
+            config.UserPassword = "";
+
+            Assert.DoesNotContain("device.auth", PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
         /// The renderer re-validates rather than trusting that whatever loaded these rows checked
         /// them, exactly as the conf renderers do.
         /// </summary>
@@ -165,6 +210,20 @@ namespace Techie.Pbx.Tests.Asterisk
 
             // A zone this machine cannot name falls back to UTC rather than throwing.
             Assert.Equal(0, PolycomConfig.GmtOffsetFor("Mars/Olympus_Mons"));
+        }
+
+        /// <summary>
+        /// A western zone must render as a negative number of seconds, not a magnitude with the
+        /// sign lost somewhere in the cast to int (D84). Not pinned to -28800 alone: Los Angeles is
+        /// -28800 (PST) or -25200 (PDT) depending on when the test runs, and pinning to one would
+        /// make this fail for two weeks every spring and autumn.
+        /// </summary>
+        [Fact]
+        public void The_gmt_offset_is_negative_for_a_western_zone()
+        {
+            var offset = PolycomConfig.GmtOffsetFor("America/Los_Angeles");
+
+            Assert.True(offset is -28800 or -25200, $"Expected the Pacific standard or daylight offset, got {offset}.");
         }
 
         [Theory]

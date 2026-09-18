@@ -73,6 +73,18 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("prov.polling.period", Number(ProvisioningPollSeconds)),
             });
 
+            // Phone-level, not extension-level, so it goes out whether or not anyone has been
+            // assigned yet. Unset means left out rather than written blank: a blank password is
+            // worse than no opinion at all (D84).
+            var deviceAuth = new List<(string Name, string Value)>();
+            if (config.AdminPassword.Length > 0)
+                deviceAuth.Add(PolycomXml.Attribute("device.auth.localAdminPassword", config.AdminPassword, "device admin password"));
+            if (config.UserPassword.Length > 0)
+                deviceAuth.Add(PolycomXml.Attribute("device.auth.localUserPassword", config.UserPassword, "device user password"));
+
+            if (deviceAuth.Count > 0)
+                PolycomXml.Element(sb, "  ", "device", deviceAuth);
+
             if (config.Extension == null)
             {
                 PolycomXml.Comment(sb, "  ", "No extension is assigned to this phone yet, so it is given no registration.");

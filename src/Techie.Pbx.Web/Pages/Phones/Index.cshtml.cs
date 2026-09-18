@@ -2,8 +2,10 @@ using System.Text.Json;
 using log4net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Techie.Pbx.Asterisk.Provisioning;
 using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Web.Pages.Phones
 {
@@ -118,6 +120,34 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
+        /// Pushes a reboot to the phone over its own web UI, for when the daily poll (D79) is too
+        /// slow to wait for. Confirmed with sweetalert2 before htmx ever calls this (D84).
+        /// Best-effort like the push on save: a phone that cannot be reached is named in the toast,
+        /// but nothing here is a config change, so there is no undo and no apply.
+        /// </summary>
+        public async Task<IActionResult> OnPostReboot(long phoneID)
+        {
+            var phone = this.phones.GetByID(phoneID);
+            if (phone == null)
+                return this.NotFound();
+
+            if (phone.LastIP.Length == 0)
+                return this.Changed($"Phone {phone.Mac} has never provisioned, so there is no address to reboot it at.");
+
+            var stored = this.settings.GetAll();
+            if (!stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword) || adminPassword.Length == 0)
+                return this.Changed("Set Provisioning.AdminPassword on the Settings page before rebooting a phone.");
+
+            var sent = await PolycomPusher.PushReboot(phone.LastIP, adminPassword);
+
+            Log.Info($"Reboot pushed to phone {phone.Mac} at {phone.LastIP} by {this.User.Identity?.Name}: {(sent ? "accepted" : "not confirmed")}");
+
+            return this.Changed(sent
+                ? $"Reboot sent to {phone.Mac}."
+                : $"Could not reach {phone.Mac} at {phone.LastIP}; it will pick up any change at its next poll.");
+        }
+
+        /// <summary>
         /// Saves the three fields an admin owns. Everything else on the row was written by the
         /// phone and is left alone, so a save cannot overwrite what the last provisioning request
         /// recorded.
@@ -151,13 +181,11 @@ namespace Techie.Pbx.Web.Pages.Phones
                 return this.Partial("_Form", this.Fill(form));
             }
 
+            this.PushConfigReload(phone);
+
             Log.Info($"Phone {phone.Mac} updated by {this.User.Identity?.Name}");
             return this.Changed($"Phone {phone.Mac} saved.");
         }
-
-        /// <summary>A setting's stored value, or null.</summary>
-        private static string? Value(IReadOnlyDictionary<string, string> settings, string key) =>
-            settings.TryGetValue(key, out var value) ? value : null;
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
@@ -190,5 +218,27 @@ namespace Techie.Pbx.Web.Pages.Phones
 
             return form;
         }
+
+        /// <summary>
+        /// Tells the phone to fetch its new config right away, over its own web UI, the mechanism
+        /// the user's earlier FreePBX module used (D84). Fire-and-forget: not awaited, and a phone
+        /// that cannot be reached still gets there at its next poll (D79), so nothing here can
+        /// turn a successful save into a failed one.
+        /// </summary>
+        private void PushConfigReload(Phone phone)
+        {
+            if (phone.LastIP.Length == 0)
+                return;
+
+            var stored = this.settings.GetAll();
+            if (!stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword) || adminPassword.Length == 0)
+                return;
+
+            _ = PolycomPusher.PushUpdateConfig(phone.LastIP, adminPassword);
+        }
+
+        /// <summary>A setting's stored value, or null.</summary>
+        private static string? Value(IReadOnlyDictionary<string, string> settings, string key) =>
+            settings.TryGetValue(key, out var value) ? value : null;
     }
 }
