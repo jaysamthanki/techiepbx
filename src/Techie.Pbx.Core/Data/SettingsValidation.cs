@@ -18,10 +18,6 @@ namespace Techie.Pbx.Core.Data
         /// <summary>Longer than any of these values has any business being.</summary>
         public const int MaxValueLength = 1024;
 
-        /// <summary>A zone name that is certain to be in any real tzdata, used to tell a machine
-        /// with no zone database apart from an admin's typo.</summary>
-        private const string ProbeZone = "Europe/London";
-
         /// <summary>
         /// Every problem with this key and value; empty means it can be stored. Unknown keys are
         /// rejected here rather than only at the database, so the UI can say so too.
@@ -135,20 +131,19 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
-        /// The shape of an IANA zone name: letters, digits and the few punctuation marks one is
-        /// made of. This is the check that keeps a stray character out of a conf file (D65); that
-        /// the zone actually exists is a separate, stricter question asked when it is written.
+        /// The shape of an IANA zone name, which is <see cref="SystemTimezones.IsZoneName"/>: the
+        /// check that keeps a stray character out of a conf file. Kept here because the renderer's
+        /// settings object asks this question through this class, and one rule is what stops the
+        /// two from drifting.
         /// </summary>
-        public static bool IsZoneName(string value) =>
-            value.Length <= 64 &&
-            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+');
+        public static bool IsZoneName(string value) => SystemTimezones.IsZoneName(value);
 
         /// <summary>
         /// Whether this machine's zone database can be read at all. A machine without tzdata would
-        /// otherwise reject every zone an admin typed, including the right one, so on such a
+        /// otherwise reject every zone an admin chose, including the right one, so on such a
         /// machine the name is accepted on its shape alone.
         /// </summary>
-        public static bool ZoneDatabaseIsReadable() => TimeZoneInfo.TryFindSystemTimeZoneById(ProbeZone, out _);
+        public static bool ZoneDatabaseIsReadable() => SystemTimezones.IsListed;
 
         /// <summary>
         /// Only codecs whose modules are on the modules.conf allowlist, because a codec Asterisk
@@ -200,17 +195,24 @@ namespace Techie.Pbx.Core.Data
                 errors.Add($"{what} must be a whole number between 1 and 65535.");
         }
 
+        /// <summary>
+        /// The zone is chosen from a list now rather than typed (D75), so the rule is membership of
+        /// that list: it is the zone name that goes into every GotoIfTime a time condition writes,
+        /// and a name Asterisk cannot resolve would make the rule never match (D74). The shape check
+        /// comes first so that a value which arrived some other way is reported as the wrong kind of
+        /// thing rather than as a zone this server happens not to have.
+        /// </summary>
         private static void Timezone(List<string> errors, string text)
         {
             if (!IsZoneName(text))
             {
-                errors.Add($"'{text}' is not an IANA zone name. Write it as Region/City, e.g. Europe/London.");
+                errors.Add($"'{text}' is not an IANA zone name. Choose one from the list, e.g. Europe/London.");
                 return;
             }
 
             // The system's own zone database is the list, rather than one of ours to keep current.
-            if (!TimeZoneInfo.TryFindSystemTimeZoneById(text, out _) && ZoneDatabaseIsReadable())
-                errors.Add($"This server has no timezone called '{text}'. Write it as Region/City, e.g. Europe/London.");
+            if (!SystemTimezones.IsKnown(text) && SystemTimezones.IsListed)
+                errors.Add($"This server has no timezone called '{text}'. Choose one from the list, e.g. Europe/London.");
         }
 
         /// <summary>A hostname or IP address, the same shape a trunk's server host has to be.</summary>

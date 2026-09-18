@@ -114,8 +114,9 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Choices = SystemTimezones.All,
                 Default = AsteriskSettings.DefaultTimezone,
-                Description = "The IANA zone this server's clock is set to. Time conditions are matched against that clock; this records which zone it is meant to be, in a dialplan comment (D65).",
+                Description = "The zone a time condition's open hours and holidays are written in. Every check in the generated dialplan names it, so Asterisk evaluates the hours in that zone with daylight saving included, whatever the server's clock says — the clock itself is meant to be UTC (D74).",
                 Key = SettingsKeys.SystemTimezone,
                 Sample = "Europe/London",
             },

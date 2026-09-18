@@ -190,13 +190,15 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         }
 
         /// <summary>
-        /// The one setting this page edits (D65), which the settings page can also edit (D67). It
-        /// changes nothing Asterisk does — the zone is written into the generated dialplan as a
-        /// comment — but it does change a generated file, so the repository raises the "apply is
-        /// due" marker like it does for any other setting.
+        /// The one setting this page edits (D74), which the settings page can also edit (D67). It
+        /// decides how the hours on this page are read: the zone goes into every GotoIfTime the
+        /// dialplan generates, so changing it changes a generated file and the repository raises
+        /// the "apply is due" marker like it does for any other setting.
         ///
         /// The value is checked with the same rules the repository applies, so a zone it would
-        /// reject is reported here in place rather than thrown out of the save.
+        /// reject is reported here in place rather than thrown out of the save. The form posts a
+        /// zone chosen from the server's own list (D75); blank can now only come from something
+        /// that is not our form, and still means "back to the default".
         /// </summary>
         public IActionResult OnPostTimezone(string? timezone)
         {

@@ -1007,4 +1007,23 @@ exactly ulaw, alaw and gsm — the codec modules the modules.conf allowlist load
 because naming anything else would generate a pjsip.conf Asterisk cannot honour. Adding a
 codec means adding its module to the allowlist first, and then to this list.
 
+### D74. GotoIfTime names the zone: open hours are local time, the server clock is UTC (2026-09-20)
+This supersedes the documentation-only half of D65. Every `GotoIfTime` in a generated time
+condition gets the recorded timezone as its fifth argument (`GotoIfTime(9:00-17:00,mon-fri,
+*,*,America/Los_Angeles?open)`), so Asterisk evaluates the rule in that zone — DST included
+— whatever the server's own clock says. The clock itself is meant to be UTC: the installer
+(piece 21) will set it that way, so a TNPBX server is always predictable. Open hours and
+holidays are entered in the customer's local time, which is what the person programming
+them means by "nine to five". The zone is appended always, even for Etc/UTC (explicit beats
+implicit). Verified against the Asterisk 22 source on the lab VM before writing the renderer:
+`pbx_builtins.c` documents GotoIfTime as `<time range>,<days>,<dates>,<months>[,<timezone>]`
+and evaluates via `ast_check_timing2` in that zone.
+
+### D75. The timezone is chosen from a dropdown of the server's own zone list (2026-09-20)
+`System.Timezone` is edited as a dropdown built from `TimeZoneInfo.GetSystemTimeZones()`
+(Linux IANA ids, `Etc/UTC` first as the default), not free text — both on the time conditions
+page and in the general settings modal, which now renders a dropdown for list-backed keys
+(`SettingDescriptor.Choices`). Validation for the key becomes membership of that list, so a
+zone that cannot be evaluated can never reach the generated dialplan.
+
 

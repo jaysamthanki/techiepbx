@@ -9,6 +9,16 @@ namespace Techie.Pbx.Web.Pages.Settings
     public class SettingDescriptor
     {
         /// <summary>
+        /// The values this key may have, when they are a list rather than free text: the form shows
+        /// a dropdown of them instead of a box (D75). Empty means free text, which is most keys.
+        ///
+        /// There is no blank entry in that dropdown, so the way back to the built-in default is the
+        /// form's "Reset to default" button rather than clearing a box. Whatever is listed first
+        /// should therefore be the default, so that choosing it and resetting mean the same thing.
+        /// </summary>
+        public IReadOnlyList<string> Choices { get; set; } = Array.Empty<string>();
+
+        /// <summary>
         /// What happens when the setting is not stored, written the way the table should show it.
         /// Blank means there is no default and the feature simply does not work without a value.
         /// </summary>

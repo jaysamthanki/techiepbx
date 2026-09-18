@@ -137,9 +137,9 @@ namespace Techie.Pbx.Asterisk.Config
             Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, AsteriskSettings.DefaultTimezone);
 
         /// <param name="timezone">
-        /// The IANA zone this server's clock is recorded as being in. Written into a time
-        /// condition's context as a comment and nowhere else: Asterisk matches GotoIfTime against
-        /// its own local time, so this is documentation, not a setting that changes behaviour (D65).
+        /// The IANA zone a time condition's open hours are written in. It is named as the fifth
+        /// argument of every GotoIfTime the condition contexts generate, so Asterisk evaluates the
+        /// rule in that zone — DST and all — whatever the server's own clock is set to (D74).
         /// </param>
         public static string Render(
             IEnumerable<Extension> extensions,
@@ -628,8 +628,9 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($"[{context}]\n");
             sb.Append($"; {name}: the open/closed check, reached by the Goto on {number} in [{InternalContext}].\n");
             sb.Append("; Nothing is included here, so a caller can never fall through to a route out.\n");
-            sb.Append($"; The clock is Asterisk's own: every GotoIfTime below is matched against the\n");
-            sb.Append($"; server's local time, which this system records as {zone} (D65).\n");
+            sb.Append($"; The hours below are LOCAL time in {zone}: every GotoIfTime names that zone as\n");
+            sb.Append($"; its last argument, so Asterisk evaluates it there, daylight saving included.\n");
+            sb.Append($"; The server's own clock is UTC and is not what these are matched against (D74).\n");
 
             // Answered before the check so that whatever is on the other side — an announcement, a
             // menu, a mailbox — starts on a channel that is already up. The cost, and it is worth
@@ -650,7 +651,7 @@ namespace Techie.Pbx.Asterisk.Config
                         ? TimeConditionHolidayPrefix + (index + 1).ToString(CultureInfo.InvariantCulture)
                         : TimeConditionHolidayLabel;
 
-                    sb.Append($" same => n,GotoIfTime(*,*,{DateFields(rule)}?{label})\n");
+                    sb.Append($" same => n,GotoIfTime(*,*,{DateFields(rule)},{zone}?{label})\n");
                 }
             }
 
@@ -664,7 +665,7 @@ namespace Techie.Pbx.Asterisk.Config
                     var times = ConfText.Safe(rule.TimeRange(), "open hours");
                     var days = ConfText.Safe(rule.DaysField(), "open days");
 
-                    sb.Append($" same => n,GotoIfTime({times},{days},*,*?{TimeConditionOpenLabel})\n");
+                    sb.Append($" same => n,GotoIfTime({times},{days},*,*,{zone}?{TimeConditionOpenLabel})\n");
                 }
             }
             else
