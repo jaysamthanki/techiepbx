@@ -41,6 +41,21 @@ namespace Techie.Pbx.Tests.Asterisk
             ExternalAddress = "203.0.113.10",
         };
 
+        /// <summary>
+        /// The same NAT transport with TCP switched on and gsm added to the codecs, which is what
+        /// the two new SIP settings do (D70, D73). UDP and TCP share the port number on purpose:
+        /// they are different sockets, and 5060 is what a phone tries for either.
+        /// </summary>
+        private static PjsipTransport TcpTransport()
+        {
+            var transport = NatTransport();
+
+            transport.Codecs = new List<string> { "ulaw", "alaw", "gsm" };
+            transport.TcpPort = 5060;
+
+            return transport;
+        }
+
         private static string Expected(string fileName) =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Expected", fileName)).ReplaceLineEndings("\n");
 
@@ -49,6 +64,77 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = PjsipConfRenderer.Render(NatTransport(), SampleExtensions());
             Assert.Equal(Expected("pjsip.conf"), actual);
+        }
+
+        [Fact]
+        public void Pjsip_with_tcp_and_a_codec_list_matches_expected_file()
+        {
+            var actual = PjsipConfRenderer.Render(TcpTransport(), SampleExtensions());
+            Assert.Equal(Expected("pjsip-tcp.conf"), actual);
+        }
+
+        /// <summary>
+        /// No TCP port, no TCP transport: an unset port means the listener does not exist rather
+        /// than falling back to a default one (D70).
+        /// </summary>
+        [Fact]
+        public void Pjsip_has_no_tcp_transport_until_a_tcp_port_is_set()
+        {
+            var actual = PjsipConfRenderer.Render(new PjsipTransport(), SampleExtensions());
+
+            Assert.DoesNotContain(PjsipConfRenderer.TcpTransportName, actual);
+            Assert.DoesNotContain("protocol = tcp", actual);
+        }
+
+        /// <summary>The TCP bind comes from the TCP port setting, not from the UDP one.</summary>
+        [Fact]
+        public void The_tcp_transport_binds_the_tcp_port()
+        {
+            var transport = new PjsipTransport { TcpPort = 5062 };
+
+            var actual = PjsipConfRenderer.Render(transport, SampleExtensions());
+
+            Assert.Contains("[transport-udp]\ntype = transport\nprotocol = udp\nbind = 0.0.0.0:5060\n", actual);
+            Assert.Contains("[transport-tcp]\ntype = transport\nprotocol = tcp\nbind = 0.0.0.0:5062\n", actual);
+        }
+
+        /// <summary>
+        /// There is no TLS transport to render yet: without certificate management a TLS transport
+        /// has no cert_file, and res_pjsip refuses to load the file at all (D71).
+        /// </summary>
+        [Fact]
+        public void Pjsip_never_renders_a_tls_transport()
+        {
+            var actual = PjsipConfRenderer.Render(TcpTransport(), SampleExtensions());
+
+            Assert.DoesNotContain("protocol = tls", actual);
+            Assert.DoesNotContain("cert_file", actual);
+        }
+
+        /// <summary>
+        /// The endpoints' codecs are the setting's, not a line baked into the renderer (D73).
+        /// </summary>
+        [Fact]
+        public void Endpoint_codecs_come_from_the_settings()
+        {
+            var transport = new PjsipTransport { Codecs = new List<string> { "gsm" } };
+
+            var actual = PjsipConfRenderer.Render(transport, SampleExtensions());
+
+            Assert.Contains("disallow = all\nallow = gsm\n", actual);
+            Assert.DoesNotContain("allow = ulaw,alaw\n", actual);
+        }
+
+        /// <summary>
+        /// A codec with no module on the allowlist would render config Asterisk cannot honour, so
+        /// the renderer refuses it even if it somehow got into the settings table (D73).
+        /// </summary>
+        [Fact]
+        public void Pjsip_refuses_a_codec_that_has_no_module()
+        {
+            var transport = new PjsipTransport { Codecs = new List<string> { "opus" } };
+
+            Assert.Throws<InvalidOperationException>(() => PjsipConfRenderer.Render(transport, SampleExtensions()));
         }
 
         [Fact]

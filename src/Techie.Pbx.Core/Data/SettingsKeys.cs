@@ -26,6 +26,32 @@ namespace Techie.Pbx.Core.Data
         public const string SipBindAddress = "Sip.BindAddress";
         public const string SipPort = "Sip.Port";
 
+        /// <summary>
+        /// The TCP SIP port. Unset means no TCP transport is rendered at all: UDP is what phones
+        /// and providers use here, and a listener nobody asked for is attack surface (D70).
+        /// </summary>
+        public const string SipTcpPort = "Sip.TcpPort";
+
+        /// <summary>
+        /// The TLS SIP port. Stored only: nothing renders a TLS transport yet, because there is no
+        /// certificate management, and a pjsip TLS transport without a cert_file fails to load
+        /// (D71).
+        /// </summary>
+        public const string SipTlsPort = "Sip.TlsPort";
+
+        /// <summary>
+        /// The STUN server media asks "what does my public address look like?", as host or
+        /// host:port. Unset means no STUN, which is the right answer on a server with a public
+        /// address of its own (D72).
+        /// </summary>
+        public const string SipStunServer = "Sip.StunServer";
+
+        /// <summary>
+        /// The codecs extensions are offered, comma separated in preference order. Only codecs
+        /// whose modules are on the modules.conf allowlist may be named (D73).
+        /// </summary>
+        public const string SipCodecs = "Sip.Codecs";
+
         /// <summary>Comma separated CIDRs, e.g. "10.8.20.0/24".</summary>
         public const string SipLocalNets = "Sip.LocalNets";
 
@@ -50,6 +76,10 @@ namespace Techie.Pbx.Core.Data
             AmiTimeoutSeconds,
             SipBindAddress,
             SipPort,
+            SipTcpPort,
+            SipTlsPort,
+            SipStunServer,
+            SipCodecs,
             SipLocalNets,
             SipExternalAddress,
             SystemTimezone,

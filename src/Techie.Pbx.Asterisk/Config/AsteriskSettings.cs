@@ -1,5 +1,6 @@
 using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Config
 {
@@ -42,6 +43,16 @@ namespace Techie.Pbx.Asterisk.Config
             transport.BindAddress = Text(settings, SettingsKeys.SipBindAddress) ?? transport.BindAddress;
             transport.Port = Number(settings, SettingsKeys.SipPort, transport.Port);
             transport.ExternalAddress = Text(settings, SettingsKeys.SipExternalAddress);
+            transport.StunServer = Text(settings, SettingsKeys.SipStunServer);
+
+            // Unset means off, not a default: no port, no TCP transport in the file at all (D70).
+            // Sip.TlsPort is deliberately not read — nothing renders a TLS transport yet (D71).
+            var tcpPort = Text(settings, SettingsKeys.SipTcpPort);
+            transport.TcpPort = int.TryParse(tcpPort, out var tcp) ? tcp : null;
+
+            var codecs = Text(settings, SettingsKeys.SipCodecs);
+            if (codecs != null)
+                transport.Codecs = SipCodecs.Parse(codecs);
 
             var localNets = Text(settings, SettingsKeys.SipLocalNets);
             if (localNets != null)
@@ -68,13 +79,12 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
-        /// Letters, digits and the few punctuation marks a zone name is made of. Public because the
-        /// UI that edits the setting checks it the same way this does, rather than keeping a second
-        /// copy of the rule that could drift from the one that decides what gets written.
+        /// Letters, digits and the few punctuation marks a zone name is made of. The rule itself
+        /// lives with the other settings rules in <see cref="SettingsValidation"/>, so the check
+        /// that decides what gets written into a conf file and the check the settings page makes
+        /// cannot drift apart.
         /// </summary>
-        public static bool IsZoneName(string value) =>
-            value.Length <= 64 &&
-            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '/' or '_' or '-' or '+');
+        public static bool IsZoneName(string value) => SettingsValidation.IsZoneName(value);
 
         /// <summary>A blank value counts as not set, so clearing a field in the UI works.</summary>
         private static string? Text(IReadOnlyDictionary<string, string> settings, string key) =>

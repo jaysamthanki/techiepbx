@@ -1,0 +1,51 @@
+@model List<SettingRow>
+@*
+    Clicking anywhere on a row opens its edit form (D48). A secret's value is already a row of
+    dots by the time it gets here (D68) — the real one is never in this HTML.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="key"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="key" data-sortable="true">Setting</th>
+            <th data-field="description">What it does</th>
+            <th data-field="value" data-sortable="true">Value</th>
+            <th data-field="default">Default</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { key = row.Key });
+
+            <tr data-edit-url="@editUrl">
+                <td class="font-monospace">@row.Key</td>
+                <td class="text-secondary">@row.Description</td>
+                <td class="font-monospace">
+                    @if (row.IsSet)
+                    {
+                        @row.Value
+                    }
+                    else
+                    {
+                        <span class="text-secondary fst-italic">using the default</span>
+                    }
+                </td>
+                <td class="font-monospace text-secondary">
+                    @if (row.Default.Length > 0)
+                    {
+                        @row.Default
+                    }
+                    else
+                    {
+                        <span class="fst-italic">none</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

@@ -23,8 +23,9 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
     ///
     /// The timezone box in the header is here for the same reason the feature needs it: the hours
     /// are matched against Asterisk's own clock, and this setting records which zone that is meant
-    /// to be (D65). There is no settings page to put it on, and this is the only screen where the
-    /// value means anything to the reader.
+    /// to be (D65). The settings page can edit it too, as it can any setting (D67); it is repeated
+    /// here because this is the screen where the value means something, next to the clock it
+    /// describes.
     /// </summary>
     public class IndexModel : PageModel
     {
@@ -39,7 +40,6 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         private readonly AnnouncementRepository announcements;
         private readonly ExtensionRepository extensions;
         private readonly IvrRepository ivrs;
-        private readonly ConfigPendingMarker pending;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
         private readonly TimeConditionRepository timeConditions;
@@ -49,7 +49,6 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
-            this.pending = new ConfigPendingMarker(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
             this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
@@ -191,20 +190,22 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         }
 
         /// <summary>
-        /// The one setting this page edits (D65). It changes nothing Asterisk does — the zone is
-        /// written into the generated dialplan as a comment — but it does change a generated file,
-        /// so it raises the "apply is due" marker like any other change.
+        /// The one setting this page edits (D65), which the settings page can also edit (D67). It
+        /// changes nothing Asterisk does — the zone is written into the generated dialplan as a
+        /// comment — but it does change a generated file, so the repository raises the "apply is
+        /// due" marker like it does for any other setting.
+        ///
+        /// The value is checked with the same rules the repository applies, so a zone it would
+        /// reject is reported here in place rather than thrown out of the save.
         /// </summary>
         public IActionResult OnPostTimezone(string? timezone)
         {
             var value = Text(timezone);
             var form = new TimezoneForm { Timezone = value };
 
-            if (value.Length > 0 && !AsteriskSettings.IsZoneName(value))
-            {
-                form.Errors.Add($"'{value}' is not an IANA zone name. Write it as Region/City, e.g. Europe/London.");
+            form.Errors = SettingsValidation.Errors(SettingsKeys.SystemTimezone, value);
+            if (form.Errors.Count > 0)
                 return this.Partial("_Timezone", form);
-            }
 
             // Blank puts it back to the built-in default rather than storing an empty string, so
             // clearing the box and clearing the setting are the same thing.
@@ -212,8 +213,6 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
                 this.settings.Delete(SettingsKeys.SystemTimezone);
             else
                 this.settings.Set(SettingsKeys.SystemTimezone, value);
-
-            this.pending.Raise();
 
             Log.Info($"System timezone set to '{(value.Length == 0 ? AsteriskSettings.DefaultTimezone : value)}' by {this.User.Identity?.Name}");
             this.Announce($"Timezone recorded as {(value.Length == 0 ? AsteriskSettings.DefaultTimezone : value)}.");

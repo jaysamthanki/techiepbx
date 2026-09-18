@@ -181,7 +181,7 @@ namespace Techie.Pbx.Asterisk.Config
                 // Read once at startup: written here, applied by a restart (D33).
                 new("asterisk.conf", null, AsteriskConfRenderer.Render()),
                 new("modules.conf", null, ModulesConfRenderer.Render()),
-                new("rtp.conf", null, RtpConfRenderer.Render()),
+                new("rtp.conf", null, RtpConfRenderer.Render(this.transport)),
 
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),

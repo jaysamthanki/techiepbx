@@ -179,3 +179,4 @@ minimum.
 | **Audio file handling** | IVR, voicemail greetings | Storage, format conversion |
 | **Time conditions** | Inbound routes, IVRs, anything needing business-hours routing | **Requested 2026-09-19.** One form per condition: open hours → destination, closed → destination, holidays → destination, with per-holiday overrides. No time-group entity (D62). F8. |
 | **Music on hold** | Ring groups, transfers | Asterisk default may be enough. Ask. |
+| **Settings UI** | Everything | **Built 2026-09-20.** Settings dropdown: a general page listing every key (modal edit, masked secrets, reset to default, D67–D69) and a SIP Settings page — bind address (0.0.0.0 default), UDP/TCP/TLS ports, NAT external address, local networks, STUN (default stun.l.google.com:19302), and codecs (ulaw/alaw/gsm only, the allowlist's modules, D73). TCP transport conditional (D70), TLS stored-only until cert management (D71), STUN + icesupport into rtp.conf (D72). |

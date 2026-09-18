@@ -19,6 +19,13 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>The transport every endpoint and registration is bound to.</summary>
         public const string TransportName = "transport-udp";
 
+        /// <summary>
+        /// The TCP transport, which only exists in the file when a TCP port is set (D70). Nothing
+        /// is bound to it by name: a phone that connects over TCP is matched by the endpoint it
+        /// authenticates as, and trunks stay on UDP.
+        /// </summary>
+        public const string TcpTransportName = "transport-tcp";
+
         /// <summary>How long a registration lasts before it is renewed, in seconds.</summary>
         private const int RegistrationExpiration = 3600;
 
@@ -40,18 +47,13 @@ namespace Techie.Pbx.Asterisk.Config
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
 
-            sb.Append('\n');
-            sb.Append($"[{TransportName}]\n");
-            sb.Append("type = transport\n");
-            sb.Append("protocol = udp\n");
-            sb.Append($"bind = {transport.BindAddress}:{transport.Port}\n");
-            foreach (var net in transport.LocalNets)
-                sb.Append($"local_net = {ConfText.Safe(net, "local_net")}\n");
-            if (transport.ExternalAddress != null)
-            {
-                sb.Append($"external_media_address = {transport.ExternalAddress}\n");
-                sb.Append($"external_signaling_address = {transport.ExternalAddress}\n");
-            }
+            AppendTransport(sb, transport, TransportName, "udp", transport.Port);
+
+            // Only when a TCP port is set: an unset port means no TCP listener at all (D70).
+            if (transport.TcpPort != null)
+                AppendTransport(sb, transport, TcpTransportName, "tcp", transport.TcpPort.Value);
+
+            var codecs = string.Join(",", transport.Codecs.Select(c => ConfText.Safe(c, "codec")));
 
             foreach (var extension in ConfText.EnabledInOrder(extensions))
             {
@@ -64,7 +66,7 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("type = endpoint\n");
                 sb.Append($"context = {ExtensionsConfRenderer.InternalContext}\n");
                 sb.Append("disallow = all\n");
-                sb.Append("allow = ulaw,alaw\n");
+                sb.Append($"allow = {codecs}\n");
                 sb.Append($"auth = {number}-auth\n");
                 sb.Append($"aors = {number}\n");
                 sb.Append($"callerid = \"{name}\" <{number}>\n");
@@ -106,6 +108,29 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             return enabled.OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// One transport section. UDP and TCP differ only in the protocol and the port: the same
+        /// bind address, the same local networks and the same external addresses, because they
+        /// describe the machine rather than the protocol (D70).
+        /// </summary>
+        private static void AppendTransport(StringBuilder sb, PjsipTransport transport, string name, string protocol, int port)
+        {
+            sb.Append('\n');
+            sb.Append($"[{name}]\n");
+            sb.Append("type = transport\n");
+            sb.Append($"protocol = {protocol}\n");
+            sb.Append($"bind = {transport.BindAddress}:{port}\n");
+
+            foreach (var net in transport.LocalNets)
+                sb.Append($"local_net = {ConfText.Safe(net, "local_net")}\n");
+
+            if (transport.ExternalAddress != null)
+            {
+                sb.Append($"external_media_address = {transport.ExternalAddress}\n");
+                sb.Append($"external_signaling_address = {transport.ExternalAddress}\n");
+            }
         }
 
         /// <summary>
