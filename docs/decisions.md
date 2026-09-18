@@ -1027,3 +1027,12 @@ page and in the general settings modal, which now renders a dropdown for list-ba
 zone that cannot be evaluated can never reach the generated dialplan.
 
 
+
+### D76. Kestrel serves 80/443 directly; no reverse proxy in front (2026-09-20)
+The web app is the whole appliance: one app, one box, one purpose. Kestrel is
+Microsoft-supported as an internet-facing server, so nginx/Caddy would add a second daemon
+to patch and a second config to drift, for capabilities we do not have (vhosts, multiple
+backends, static offload). Port 80 binds redirect-only, 443 is the real listener once
+certificates are managed (a cert piece is needed anyway for SIP TLS, D71 — one piece solves
+both). Escape hatch: a customer needing to share 443 with another site on the same box can
+put Caddy in front, but that is not the default posture.
