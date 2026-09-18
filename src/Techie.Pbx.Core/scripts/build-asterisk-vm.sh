@@ -49,6 +49,20 @@ JOBS=$(nproc)
 (( MEM_GB < JOBS )) && JOBS=$(( MEM_GB > 0 ? MEM_GB : 1 ))
 (( MEM_GB < 2 )) && warn "only ${MEM_GB} GB RAM available; the build may fail without swap"
 
+# --- clock --------------------------------------------------------------------
+# D74: a TNPBX server's clock is UTC, full stop. The customer's local zone lives
+# in the System.Timezone setting and every generated GotoIfTime names it, so the
+# system clock never needs to be anything else. Set it before anything else so
+# logs, CDRs and the build all agree.
+if command -v timedatectl &>/dev/null; then
+  timedatectl set-timezone Etc/UTC
+  timedatectl set-ntp true
+else
+  ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
+  echo "Etc/UTC" > /etc/timezone
+fi
+log "system clock: UTC ($(date -u))"
+
 # --- build dependencies ------------------------------------------------------
 
 log "installing build dependencies"
