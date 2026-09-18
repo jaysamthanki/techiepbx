@@ -83,7 +83,13 @@ namespace Techie.Pbx.Web
                 app.UseHsts();
             }
 
-            app.UseHttpsRedirection();
+            // Everything an admin touches is HTTPS. Phone provisioning is the exception: DHCP
+            // option 160 points a phone at a URL with a scheme in it, and a phone that was pointed
+            // at http:// has to be answered rather than redirected somewhere it may have no
+            // certificate store for (D77). The credentials are the gate either way.
+            app.UseWhen(
+                context => !context.Request.Path.StartsWithSegments(Controllers.PolycomController.RoutePrefix),
+                branch => branch.UseHttpsRedirection());
 
             app.UseRouting();
 

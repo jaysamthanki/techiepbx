@@ -1,0 +1,102 @@
+@model PhoneForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
+    and footer together, so a validation failure comes back with the modal still open.
+
+    Only three fields post. The rest of what we know about a phone was written by the phone
+    itself (D78), so it is shown and not editable.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title">Edit phone @Model.Mac</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="phoneID" value="@Model.PhoneID" />
+
+    <div class="mb-3">
+        <label class="form-label" for="phone-name">Name</label>
+        <input class="form-control" id="phone-name" name="name" value="@Model.Name"
+               maxlength="64" autocomplete="off" placeholder="Reception" />
+        <div class="form-text">What to call this handset, so the table is readable. Yours, not the phone's.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="phone-extension">Extension</label>
+        <select class="form-select" id="phone-extension" name="extensionID">
+            <option value="" selected="@(Model.ExtensionID is null or 0 ? "selected" : null)">Unassigned</option>
+            @foreach (var extension in Model.Extensions)
+            {
+                <option value="@extension.ExtensionID" selected="@(Model.ExtensionID == extension.ExtensionID ? "selected" : null)">
+                    @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
+                </option>
+            }
+        </select>
+        <div class="form-text">
+            The extension this phone registers as, on line 1. Unassigned phones are still given the
+            time and a config poll, so one can be assigned later without touching the handset.
+        </div>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="phone-enabled" name="enabled" value="true"
+               checked="@(Model.Enabled ? "checked" : null)" />
+        <label class="form-check-label" for="phone-enabled">Enabled</label>
+        <div class="form-text">A disabled phone is refused its configuration the next time it asks.</div>
+    </div>
+
+    @* What the phone told us. Read-only, because editing a record of what happened is not editing anything. *@
+    <h6 class="text-secondary">What the phone reported</h6>
+    <dl class="row mb-0 small">
+        <dt class="col-sm-4">MAC address</dt>
+        <dd class="col-sm-8 font-monospace">@Model.Mac</dd>
+
+        <dt class="col-sm-4">Model</dt>
+        <dd class="col-sm-8">@(Model.Model.Length > 0 ? Model.Model : "—")</dd>
+
+        <dt class="col-sm-4">Firmware</dt>
+        <dd class="col-sm-8">@(Model.Firmware.Length > 0 ? Model.Firmware : "—")</dd>
+
+        <dt class="col-sm-4">Last IP</dt>
+        <dd class="col-sm-8 font-monospace">@(Model.LastIP.Length > 0 ? Model.LastIP : "—")</dd>
+
+        <dt class="col-sm-4">Last contact</dt>
+        <dd class="col-sm-8 font-monospace">@(Model.LastConfig.Length > 0 ? Model.LastConfig : "—")</dd>
+
+        <dt class="col-sm-4">Local SIP port</dt>
+        <dd class="col-sm-8 font-monospace">@Model.LocalSipPort</dd>
+    </dl>
+    </div>
+
+    @* Deleting lives here now that the table has no button column (D48). *@
+    <div class="modal-footer justify-content-between">
+        <div>
+            <button type="button" class="btn btn-outline-danger"
+                    hx-post="@deleteUrl"
+                    hx-vals='{"phoneID": @Model.PhoneID}'
+                    hx-swap="none"
+                    hx-confirm="Forget phone @Model.Mac? If it is still plugged in it will add itself again, with no extension.">Delete</button>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>

@@ -19,6 +19,13 @@ namespace Techie.Pbx.Core.Data
         public const int MaxValueLength = 1024;
 
         /// <summary>
+        /// The shortest provisioning password. It guards an endpoint a phone on any network can
+        /// reach and it is typed once, into a DHCP option, so there is no reason for a short one
+        /// (D77).
+        /// </summary>
+        public const int MinProvisioningPasswordLength = 8;
+
+        /// <summary>
         /// Every problem with this key and value; empty means it can be stored. Unknown keys are
         /// rejected here rather than only at the database, so the UI can say so too.
         /// </summary>
@@ -98,6 +105,16 @@ namespace Techie.Pbx.Core.Data
                 case SettingsKeys.AsteriskConfDirectory:
                     if (!text.StartsWith('/'))
                         errors.Add("The config directory must be an absolute path, e.g. /etc/asterisk.");
+                    break;
+
+                case SettingsKeys.ProvisioningUsername:
+                    if (!ProvisioningUsernamePattern().IsMatch(text))
+                        errors.Add("Provisioning username must be 1 to 64 letters, digits, dots, dashes or underscores — it goes into the DHCP option 160 URL, where anything else would have to be escaped.");
+                    break;
+
+                case SettingsKeys.ProvisioningPassword:
+                    if (!ProvisioningPasswordPattern().IsMatch(text))
+                        errors.Add($"Provisioning password must be {MinProvisioningPasswordLength} to 64 letters, digits, dots, dashes, underscores or tildes — it goes into the DHCP option 160 URL, where a colon or an @ would split it.");
                     break;
 
                 case SettingsKeys.SystemTimezone:
@@ -218,5 +235,16 @@ namespace Techie.Pbx.Core.Data
         /// <summary>A hostname or IP address, the same shape a trunk's server host has to be.</summary>
         [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
         private static partial Regex HostPattern();
+
+        /// <summary>
+        /// URL-safe characters only, because this ends up inside a URL (D77). The lower bound is
+        /// <see cref="MinProvisioningPasswordLength"/>, written out here because an attribute needs
+        /// a literal.
+        /// </summary>
+        [GeneratedRegex(@"^[A-Za-z0-9._~\-]{8,64}$")]
+        private static partial Regex ProvisioningPasswordPattern();
+
+        [GeneratedRegex(@"^[A-Za-z0-9._\-]{1,64}$")]
+        private static partial Regex ProvisioningUsernamePattern();
     }
 }

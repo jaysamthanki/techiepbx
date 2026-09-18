@@ -1,0 +1,65 @@
+@model List<PhoneRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+@if (Model.Count == 0)
+{
+    <p class="text-secondary">
+        No phone has asked for its configuration yet. A phone appears here the first time it does.
+    </p>
+}
+else
+{
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="mac"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="mac" data-sortable="true">MAC</th>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="extension" data-sortable="true">Extension</th>
+            <th data-field="model" data-sortable="true">Model</th>
+            <th data-field="firmware">Firmware</th>
+            <th data-field="lastip">Last IP</th>
+            <th data-field="lastconfig" data-sortable="true">Last contact</th>
+            <th data-field="enabled" data-sortable="true">Enabled</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { phoneID = row.PhoneID });
+
+            <tr data-edit-url="@editUrl">
+                <td class="font-monospace">@row.Mac</td>
+                <td>
+                    @if (row.Name.Length > 0)
+                    {
+                        @row.Name
+                    }
+                    else
+                    {
+                        <span class="text-secondary">Not named</span>
+                    }
+                </td>
+                <td>
+                    @if (row.Extension.Length > 0)
+                    {
+                        <span class="font-monospace">@row.Extension</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary" title="This phone has no extension, so it is given the time and nothing else until one is assigned.">Unassigned</span>
+                    }
+                </td>
+                <td>@row.Model</td>
+                <td>@row.Firmware</td>
+                <td class="font-monospace">@row.LastIP</td>
+                <td class="font-monospace">@row.LastConfig</td>
+                <td>@(row.Enabled ? "Yes" : "No")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+}

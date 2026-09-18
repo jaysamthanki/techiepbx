@@ -214,6 +214,61 @@ namespace Techie.Pbx.Tests.Core
             Assert.Contains(SettingsValidation.Errors(SettingsKeys.SystemTimezone, value), e => e.Contains("IANA zone name"));
         }
 
+        [Theory]
+        [InlineData("phones")]
+        [InlineData("tnpbx-phones")]
+        [InlineData("prov.user_1")]
+        public void A_provisioning_username_of_url_safe_characters_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ProvisioningUsername, value));
+        }
+
+        /// <summary>
+        /// The username is the user half of the DHCP option 160 URL, so a character that would have
+        /// to be escaped in one is refused rather than quietly stored (D77).
+        /// </summary>
+        [Theory]
+        [InlineData("phones:extra")]
+        [InlineData("phones@example")]
+        [InlineData("phones/admin")]
+        [InlineData("two words")]
+        public void A_provisioning_username_that_would_break_the_url_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.ProvisioningUsername, value), e => e.Contains("option 160"));
+        }
+
+        [Theory]
+        [InlineData("s3cret-pass")]
+        [InlineData("aaaabbbb")]
+        [InlineData("A.long_one~with-everything.0123456789")]
+        public void A_provisioning_password_of_url_safe_characters_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ProvisioningPassword, value));
+        }
+
+        [Theory]
+        [InlineData("short12")]
+        [InlineData("has:colon1")]
+        [InlineData("has@at123")]
+        [InlineData("has space1")]
+        public void A_provisioning_password_that_is_too_short_or_would_break_the_url_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.ProvisioningPassword, value), e => e.Contains("option 160"));
+        }
+
+        /// <summary>
+        /// The provisioning password is the second secret in this table, so nothing may log or
+        /// render it (D77).
+        /// </summary>
+        [Fact]
+        public void The_provisioning_password_is_a_secret_and_the_username_is_not()
+        {
+            Assert.True(SettingsKeys.IsSecret(SettingsKeys.ProvisioningPassword));
+            Assert.False(SettingsKeys.IsSecret(SettingsKeys.ProvisioningUsername));
+            Assert.True(SettingsKeys.IsKnown(SettingsKeys.ProvisioningUsername));
+            Assert.True(SettingsKeys.IsKnown(SettingsKeys.ProvisioningPassword));
+        }
+
         /// <summary>
         /// The system's own zone database is the list of zones. On a machine with no tzdata there
         /// is no list to check against, and the name is accepted on its shape alone.

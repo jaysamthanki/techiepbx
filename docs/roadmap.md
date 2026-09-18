@@ -28,7 +28,7 @@ this file is the **order**.
 | 17a | Time conditions | F8 | **Built 2026-09-19, pending lab verification** (D62–D66). Model + schema `010_time_conditions.sql` + repository with validation, `tc-<TimeConditionID>` contexts (holidays first, then weekly GotoIfTime, then closed), `TimeCondition` destination type, Timezone setting, and the Time Conditions page (open-hours rows with weekday pickers, holiday date rows with per-date override, three destination selects). No module additions. **2026-09-20 amendment**: timezone became a dropdown and every `GotoIfTime` names the zone as its fifth argument, so open hours are entered in the customer's local time and evaluated there (DST included) while the server clock is meant to be UTC — the installer (piece 21) will set that. D74, D75. |
 | 17b | Settings UI: general key/value page + SIP Settings page (transports, NAT, STUN, codecs) | supporting | **Done 2026-09-20** (D67–D73). Lab-verified end-to-end: values saved through the UI's form endpoint, Apply reloaded pjsip and reported the rtp.conf restart honestly; after restart `pjsip show transports` shows transport-tcp 0.0.0.0:5062, `rtp show settings` shows ICE Yes + STUN stun.l.google.com:19302, ext 1001 re-registered by real SIP digest, endpoints show settings-driven `allow = ulaw,alaw`. TLS port stored only (D71) until certificate management is a piece. |
 | 18 | Call reports | F5 | |
-| 22 | Phone provisioning: Polycom (DHCP option 160 -> http://user:pass@host/polycom, MAC capture on first contact, generated per-device config) | F-new | Planned — user's own FreePBX module repo as reference |
+| 22 | Phone provisioning: Polycom (DHCP option 160 -> http://user:pass@host/polycom, MAC capture on first contact, generated per-device config) | supporting | **Built 2026-09-21, pending lab verification** (D77–D83). Schema `011_phones.sql`, `Phone` model + `PhoneRepository`, `PolycomUserAgent`, `BasicAuth`, the `/polycom` controller outside the Entra cookie, master + per-phone renderers with golden files, `Provisioning.Username`/`Provisioning.Password` settings keys, and the Phones page. See [piece 22 detail](#piece-22-detail-built-2026-09-21-not-yet-lab-verified). |
 | 19 | Helper: Unix socket, peer credential check, first commands (firewall) | | |
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |
 | 21 | Installer script for fresh Debian (users, permissions, hardened systemd units, polkit rule, Asterisk build) | | |
@@ -227,3 +227,45 @@ Still to do:
   IVR from the UI**, which is the main way a menu is meant to be reached.
 - The loop check follows IVR → IVR only, so ring group → IVR → ring group is still possible to
   build (D59).
+
+## Piece 22 detail (built 2026-09-21, not yet lab-verified)
+
+Polycom phones configure themselves from the database. Nothing is written to disk and nothing is
+applied: both files a phone fetches are generated per request (D79), so this piece adds no
+renderer to `ConfigApplier`, no module to the allowlist, and no reason for the apply button to
+appear.
+
+| Piece | Where |
+|---|---|
+| `Phones` table, MAC unique, nullable `ExtensionID` (`ON DELETE SET NULL`, D80) | `Data/Schema/011_phones.sql` |
+| `Phone` model (MAC rules, `MatchesModel`, derived local SIP port) | `Core/Models` |
+| `PolycomUserAgent` (the header regex, D78) | `Core/Models` |
+| `BasicAuth` (parse + fixed-time compare, D77) | `Core/Security` |
+| `PhoneRepository`, including `Register` — the write a phone causes | `Core/Data` |
+| `PolycomFiles`, `PolycomXml`, `PolycomMasterRenderer`, `PolycomConfigRenderer` | `Asterisk/Provisioning` |
+| `GET /polycom/{file}`, `[AllowAnonymous]`, outside the Entra cookie (D77) | `Web/Controllers/PolycomController.cs` |
+| `Provisioning.Username` / `Provisioning.Password` (the second is a secret) | `SettingsKeys`, `SettingsValidation`, `SettingsCatalog` |
+| Phones page: table, edit modal, no Add button and no apply (D78, D79) | `Web/Pages/Phones` |
+
+Still to do:
+
+- **Verify against a real handset on the lab VM.** In order: set the two provisioning settings,
+  point a phone at `http://user:pass@<vm>/polycom` with DHCP option 160, watch the log for the
+  auto-add, check the row appears on the Phones page, assign an extension, reboot the phone and
+  confirm it registers and can call. Then confirm the 403s: a `curl` with the right credentials
+  and no Polycom User-Agent, and a second phone claiming the first one's MAC.
+- **`voIpProt.SIP.local.port` is the spelling the approved design specifies; Polycom's own docs
+  say `voIpProt.local.port`** (D81). If the phone ignores it — two phones behind one NAT still
+  both sourcing from 5060 — it is one constant.
+- **The digit map is fixed at four-digit extensions** (`xxxx|*xx.T|[2-9]11|0T`). Extensions here
+  may be 2 to 6 digits, so a site numbered 101–199 gets a phone that waits 3 seconds before
+  dialling rather than dialling at once. Making the map follow the real extension lengths is a
+  question for the user, not something to guess.
+- **Daylight saving reaches a phone at its next poll, up to a day late** (D82). Open question:
+  accept it, or derive Polycom's `tcpIpApp.sntp.daylightSavings.*` parameters from the zone.
+- **Kestrel has to be listening on the port the DHCP option names.** D76 has the app on 80/443
+  directly; until the installer (piece 21) sets that up, the lab VM's port goes in the option 160
+  URL. Provisioning is exempt from the HTTPS redirect for exactly this reason (D77).
+- **No upload endpoints** for the `logs`, `overrides` and `contacts` directories the master file
+  names (D79), **no firmware serving** (D83), no BLF, no attendant console, no softkey layout, no
+  second line, and no non-Polycom phones. Each is its own piece.
