@@ -3,6 +3,7 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// <summary>One line of the phones table. Most of it was written by the phone itself.</summary>
     public class PhoneRow
     {
+        public string Brand { get; set; } = "";
         public bool Enabled { get; set; }
 
         /// <summary>The extension it registers as, as "1001 Front Desk". Empty means unassigned.</summary>

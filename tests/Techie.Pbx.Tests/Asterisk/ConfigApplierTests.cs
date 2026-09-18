@@ -74,7 +74,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new[]
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
-                    "manager.conf", "pjsip.conf", "extensions.conf", "voicemail.conf",
+                    "manager.conf", "pjsip.conf", "notify.conf", "extensions.conf", "voicemail.conf",
                 },
                 files.Select(f => f.FileName));
 
@@ -82,7 +82,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new string?[]
                 {
                     null, null, null, ConfigApplier.LoggerModule,
-                    ConfigApplier.ManagerModule, ConfigApplier.PjsipModule,
+                    ConfigApplier.ManagerModule, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                 },
                 files.Select(f => f.Module));
@@ -109,7 +109,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var written = this.applier.Write().Select(f => f.FileName).ToList();
 
-            Assert.Equal(8, written.Count);
+            Assert.Equal(9, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
@@ -216,7 +216,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new[]
                 {
-                    ConfigApplier.LoggerModule, ConfigApplier.PjsipModule,
+                    ConfigApplier.LoggerModule, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.ManagerModule,
                 },

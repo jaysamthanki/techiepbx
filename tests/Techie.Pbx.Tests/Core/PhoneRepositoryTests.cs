@@ -234,5 +234,51 @@ namespace Techie.Pbx.Tests.Core
             // Not a MAC at all is left alone, so validation reports it rather than this hiding it.
             Assert.Equal("nonsense", Phone.NormalizeMac(" nonsense "));
         }
+
+        /// <summary>A plain 4-arg Register call, as every existing caller writes it, is a Polycom phone.</summary>
+        [Fact]
+        public void Registering_with_no_brand_given_defaults_to_polycom()
+        {
+            var phone = this.phones.Register(Mac, "VVX_410", "5.9.5.0614", "10.8.20.31");
+
+            Assert.Equal(PhoneBrand.Polycom, phone.Brand);
+            Assert.Equal(PhoneBrand.Polycom, this.phones.GetByMac(Mac)!.Brand);
+        }
+
+        [Fact]
+        public void Registering_a_new_mac_with_a_brand_stores_it()
+        {
+            var phone = this.phones.Register(Mac, "T33G", "124.86.0.118", "10.8.20.31", PhoneBrand.Yealink);
+
+            Assert.Equal(PhoneBrand.Yealink, phone.Brand);
+            Assert.Equal(PhoneBrand.Yealink, this.phones.GetByMac(Mac)!.Brand);
+        }
+
+        /// <summary>
+        /// The brand is only ever set at insert time (D88): a MAC already known as one brand
+        /// cannot have its brand silently changed by a later request claiming to be the other.
+        /// </summary>
+        [Fact]
+        public void Registering_again_with_a_different_brand_does_not_change_the_stored_brand()
+        {
+            this.phones.Register(Mac, "VVX_410", "5.9.5.0614", "10.8.20.31", PhoneBrand.Polycom);
+            this.phones.Register(Mac, "T33G", "124.86.0.118", "10.8.20.44", PhoneBrand.Yealink);
+
+            Assert.Equal(PhoneBrand.Polycom, this.phones.GetByMac(Mac)!.Brand);
+        }
+
+        /// <summary>
+        /// A MAC already known as one brand must not be servable by another brand's controller
+        /// (D88), which is what the provisioning endpoints check before serving anything.
+        /// </summary>
+        [Fact]
+        public void Matches_brand_is_an_exact_case_sensitive_comparison()
+        {
+            var phone = this.phones.Register(Mac, "T33G", "124.86.0.118", "10.8.20.31", PhoneBrand.Yealink);
+
+            Assert.True(phone.MatchesBrand(PhoneBrand.Yealink));
+            Assert.False(phone.MatchesBrand(PhoneBrand.Polycom));
+            Assert.False(phone.MatchesBrand("yealink"));
+        }
     }
 }

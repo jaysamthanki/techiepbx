@@ -2,18 +2,21 @@ using System.Text.Json;
 using log4net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Asterisk.Provisioning;
 using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Web.Pages.Settings;
 
 namespace Techie.Pbx.Web.Pages.Phones
 {
     /// <summary>
     /// The phones page: the desk phones that have provisioned themselves from us, and which
-    /// extension each one registers as (D77, D78). Built like the other list pages — a shell htmx
-    /// fills, the form in the shared Bootstrap modal (D42), rows that open their own edit form
-    /// (D48).
+    /// extension each one registers as (D77, D78, D88). Built like the other list pages — a shell
+    /// htmx fills, the form in the shared Bootstrap modal (D42), rows that open their own edit
+    /// form (D48). Two brands share this one page: Polycom and Yealink provision themselves
+    /// differently, but an admin manages both the same way — name it, assign an extension.
     ///
     /// Two things it deliberately does not have. There is **no Add button**: a phone appears here
     /// by asking for its config, not by an admin typing a MAC address, because the MAC has to be
@@ -61,6 +64,7 @@ namespace Techie.Pbx.Web.Pages.Phones
 
             return this.Partial("_Form", this.Fill(new PhoneForm
             {
+                Brand = phone.Brand,
                 Enabled = phone.Enabled,
                 ExtensionID = phone.ExtensionID,
                 Firmware = phone.Firmware,
@@ -72,6 +76,21 @@ namespace Techie.Pbx.Web.Pages.Phones
                 Name = phone.Name,
                 PhoneID = phone.PhoneID,
             }));
+        }
+
+        /// <summary>
+        /// The Polycom device passwords, shown here too so they are discoverable from the page
+        /// that actually uses them, on top of the general Settings page they already live on.
+        /// </summary>
+        public IActionResult OnGetPolycomSettings()
+        {
+            var stored = this.settings.GetAll();
+
+            var rows = new[] { SettingsKeys.ProvisioningAdminPassword, SettingsKeys.ProvisioningUserPassword }
+                .Select(key => SettingRow.For(SettingsCatalog.For(key), stored))
+                .ToList();
+
+            return this.Partial("_PolycomSettingsTab", rows);
         }
 
         /// <summary>The whole table, by MAC address.</summary>
@@ -86,6 +105,7 @@ namespace Techie.Pbx.Web.Pages.Phones
 
                     return new PhoneRow
                     {
+                        Brand = phone.Brand,
                         Enabled = phone.Enabled,
                         Extension = extension == null ? "" : $"{extension.Number} {extension.Name}",
                         Firmware = phone.Firmware,
@@ -120,16 +140,29 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// Pushes a reboot to the phone over its own web UI, for when the daily poll (D79) is too
-        /// slow to wait for. Confirmed with sweetalert2 before htmx ever calls this (D84).
-        /// Best-effort like the push on save: a phone that cannot be reached is named in the toast,
-        /// but nothing here is a config change, so there is no undo and no apply.
+        /// Pushes a reboot to the phone, for when the daily poll (D79) is too slow to wait for.
+        /// Confirmed with sweetalert2 before htmx ever calls this (D84). A Polycom phone is
+        /// pushed over its own web UI; a Yealink phone has none, so it gets a SIP NOTIFY through
+        /// Asterisk instead, addressed to the extension it is linked to (D91). Best-effort either
+        /// way: a phone that cannot be reached is named in the toast, but nothing here is a config
+        /// change, so there is no undo and no apply.
         /// </summary>
         public async Task<IActionResult> OnPostReboot(long phoneID)
         {
             var phone = this.phones.GetByID(phoneID);
             if (phone == null)
                 return this.NotFound();
+
+            if (phone.MatchesBrand(PhoneBrand.Yealink))
+            {
+                var sentTo = this.NotifyYealink(phone, reboot: true);
+
+                Log.Info($"Reboot NOTIFY sent for phone {phone.Mac} by {this.User.Identity?.Name}: {(sentTo != null ? "sent" : "skipped, no usable extension")}");
+
+                return this.Changed(sentTo != null
+                    ? $"Reboot sent to {phone.Mac} via extension {sentTo}."
+                    : $"Phone {phone.Mac} has no extension able to receive a reboot notify.");
+            }
 
             if (phone.LastIP.Length == 0)
                 return this.Changed($"Phone {phone.Mac} has never provisioned, so there is no address to reboot it at.");
@@ -171,6 +204,7 @@ namespace Techie.Pbx.Web.Pages.Phones
                 // The read-only half of the form is not posted back, so it is refilled from the
                 // row rather than coming back blank under the error message.
                 form.Errors = ex.Errors.ToList();
+                form.Brand = phone.Brand;
                 form.Firmware = phone.Firmware;
                 form.LastConfig = phone.LastConfig;
                 form.LastIP = phone.LastIP;
@@ -220,13 +254,44 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// Tells the phone to fetch its new config right away, over its own web UI, the mechanism
-        /// the user's earlier FreePBX module used (D84). Fire-and-forget: not awaited, and a phone
-        /// that cannot be reached still gets there at its next poll (D79), so nothing here can
-        /// turn a successful save into a failed one.
+        /// The Yealink half of a push: a SIP NOTIFY sent through Asterisk over AMI, because a
+        /// Yealink phone has no web endpoint to push to the way a Polycom one does (D91). Needs
+        /// the extension the phone is linked to — the NOTIFY is addressed to its registered
+        /// contacts, so a phone with nobody assigned has nowhere to send it.
+        /// </summary>
+        private string? NotifyYealink(Phone phone, bool reboot)
+        {
+            var extension = phone.ExtensionID is > 0 ? this.extensions.GetByID(phone.ExtensionID.Value) : null;
+            if (extension is not { Enabled: true })
+            {
+                Log.Info($"Phone {phone.Mac} has no usable extension, so no notify was sent");
+                return null;
+            }
+
+            var ami = AsteriskSettings.Ami(this.settings.GetAll());
+            var sent = reboot
+                ? YealinkNotifier.NotifyReboot(ami, extension.Number)
+                : YealinkNotifier.NotifyCheckConfig(ami, extension.Number);
+
+            return sent ? extension.Number : null;
+        }
+
+        /// <summary>
+        /// Tells the phone to fetch its new config right away rather than waiting for the daily
+        /// poll (D79). A Polycom phone is pushed over its own web UI (D84); a Yealink phone gets
+        /// the same SIP NOTIFY <see cref="NotifyYealink"/> sends for a reboot, with a different
+        /// category (D91). Fire-and-forget either way: not awaited for Polycom and the return
+        /// value ignored for Yealink, because a phone that cannot be reached still gets there at
+        /// its next poll, so nothing here can turn a successful save into a failed one.
         /// </summary>
         private void PushConfigReload(Phone phone)
         {
+            if (phone.MatchesBrand(PhoneBrand.Yealink))
+            {
+                this.NotifyYealink(phone, reboot: false);
+                return;
+            }
+
             if (phone.LastIP.Length == 0)
                 return;
 

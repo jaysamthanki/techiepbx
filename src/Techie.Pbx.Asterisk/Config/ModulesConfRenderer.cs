@@ -50,6 +50,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_caller_id.so",                // the callerid we set per endpoint
                 "res_pjsip_nat.so",                      // rewrite_contact, force_rport, 1:1 NAT
                 "res_pjsip_dtmf_info.so",                // DTMF from phones that send SIP INFO
+                "res_pjsip_notify.so",                   // loads notify.conf, the Yealink NOTIFY push (D91)
             }),
 
             ("Bridging two people together", new[]

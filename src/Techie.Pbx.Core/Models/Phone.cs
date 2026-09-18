@@ -27,6 +27,9 @@ namespace Techie.Pbx.Core.Models
         /// </summary>
         public const int LocalPortRange = 64512;
 
+        /// <summary>The vendor this phone is, e.g. <see cref="PhoneBrand.Polycom"/> (D88).</summary>
+        public string Brand { get; set; } = PhoneBrand.Polycom;
+
         public bool Enabled { get; set; } = true;
 
         /// <summary>The extension this phone registers as, or null when nobody has assigned one.</summary>
@@ -82,6 +85,13 @@ namespace Techie.Pbx.Core.Models
         }
 
         /// <summary>
+        /// Whether a request claiming this MAC is the same brand this row was created as. A MAC
+        /// already known as one brand must not be silently served by the other brand's controller
+        /// (D88) — this is the same "somebody is claiming this MAC" concern MatchesModel covers.
+        /// </summary>
+        public bool MatchesBrand(string brand) => string.Equals(this.Brand, brand, StringComparison.Ordinal);
+
+        /// <summary>
         /// Whether the model a User-Agent is now claiming is the model this MAC was recorded with.
         /// A mismatch means either somebody is claiming another phone's MAC address or the handset
         /// on that desk has been swapped, and both want an admin rather than a config file (D78).
@@ -99,6 +109,9 @@ namespace Techie.Pbx.Core.Models
 
             if (!IsValidMac(this.Mac))
                 errors.Add("MAC address must be 12 hex digits, lower case, with no separators.");
+
+            if (!PhoneBrand.IsKnown(this.Brand))
+                errors.Add("Brand must be Polycom or Yealink.");
 
             if (this.Name.Length > 64)
                 errors.Add("Name must be 64 characters or fewer.");

@@ -1239,3 +1239,32 @@ push as D86 with `Action:Reboot` in place of `Action:UpdateConfig`, confirmed wi
 (D42) because it drops any call the phone is on immediately. Best-effort the same way: a phone that
 cannot be reached is named in the toast rather than failing the request, because nothing here is a
 config change — there is no apply and no config-pending marker either way.
+
+### D88. Yealink is a second brand on the same trust path (2026-09-21)
+The /yealink endpoint shares the Polycom provisioning gate: the same Provisioning.Username /
+Provisioning.Password Basic auth, the same auto-registration rules, and the same Phones table
+with a new Brand column (schema 012; existing rows are Polycom). A phone's brand comes from
+which endpoint added it; the model-mismatch refusal only compares within a brand. Yealink
+phones are pointed here with DHCP option 66 — option 160 is the Polycom mechanism.
+
+### D89. Yealink config is plain text, generated per request, nothing on disk (2026-09-21)
+Yealink wants `key = value` lines with a `#!version:1.0.0.1` header, not XML: the boot file
+(y000000000000.boot, include lines only — we ship no model-common cfg) and the per-phone
+`<MAC>.cfg` are both rendered on the fly like the Polycom files, from the same row and the same
+settings (Sip.BindAddress/Port, System.NtpServer, System.Timezone offset in minutes with the
+sign tested, Sip.Codecs mapped ulaw→pcmu / alaw→pcma). Unlinked phones get time + auto-provision
+lines but no account lines. The config embeds auto_provision.server.url/username/password so
+the phone keeps finding this server.
+
+### D90. Yealink has no HTTP push: its signal goes by SIP NOTIFY (2026-09-21)
+Polycom phones get Action:UpdateConfig/Action:Reboot pushed over their web UI (D86–D87).
+Yealink has no such endpoint, so the same save flow and the same modal button instead send a
+SIP NOTIFY through AMI PJSIPSendNotify to the linked extension's endpoint; an unlinked phone
+cannot be notified and the push is skipped with a warning. Polling (D79) remains the safety
+net for both brands.
+
+### D91. notify.conf is a generated conf, and res_pjsip_notify joins the allowlist (2026-09-21)
+The NOTIFY categories (tnpbx-check-cfg = Event: check-sync, tnpbx-reboot = check-sync;reboot=true)
+are generated into notify.conf like any other conf file, and res_pjsip_notify.so joins the
+modules.conf allowlist to load it. Per D33, notify.conf is written but never live-reloaded:
+an apply that changes it reports a restart, which is rare since the categories are fixed.
