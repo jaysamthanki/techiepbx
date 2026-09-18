@@ -1,6 +1,7 @@
 @model PhoneForm
 @{
     var deleteUrl = Url.Page("Index", "Delete");
+    var rebootUrl = Url.Page("Index", "Reboot");
     var saveUrl = Url.Page("Index", "Save");
 }
 @*
@@ -85,7 +86,7 @@
     </dl>
     </div>
 
-    @* Deleting lives here now that the table has no button column (D48). *@
+    @* Deleting and rebooting live here now that the table has no button column (D48). *@
     <div class="modal-footer justify-content-between">
         <div>
             <button type="button" class="btn btn-outline-danger"
@@ -93,6 +94,14 @@
                     hx-vals='{"phoneID": @Model.PhoneID}'
                     hx-swap="none"
                     hx-confirm="Forget phone @Model.Mac? If it is still plugged in it will add itself again, with no extension.">Delete</button>
+            @if (Model.LastIP.Length > 0)
+            {
+                <button type="button" class="btn btn-outline-secondary ms-2"
+                        hx-post="@rebootUrl"
+                        hx-vals='{"phoneID": @Model.PhoneID}'
+                        hx-swap="none"
+                        hx-confirm="Reboot phone @Model.Mac? Any call on it ends immediately.">Reboot phone</button>
+            }
         </div>
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>

@@ -44,6 +44,9 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.SipLocalNets)]
         [InlineData(SettingsKeys.SipExternalAddress)]
         [InlineData(SettingsKeys.SystemTimezone)]
+        [InlineData(SettingsKeys.SystemNtpServer)]
+        [InlineData(SettingsKeys.ProvisioningAdminPassword)]
+        [InlineData(SettingsKeys.ProvisioningUserPassword)]
         public void A_blank_value_is_always_allowed(string key)
         {
             Assert.Empty(SettingsValidation.Errors(key, ""));
@@ -282,6 +285,54 @@ namespace Techie.Pbx.Tests.Core
                 Assert.Contains(errors, e => e.Contains("no timezone called"));
             else
                 Assert.Empty(errors);
+        }
+
+        [Theory]
+        [InlineData("pool.ntp.org")]
+        [InlineData("ntp.example.com")]
+        [InlineData("10.8.20.1")]
+        public void An_ntp_server_that_is_a_hostname_or_ip_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.SystemNtpServer, value));
+        }
+
+        [Theory]
+        [InlineData("pool ntp org")]
+        [InlineData("-bad.example.com")]
+        [InlineData(";evil")]
+        public void An_ntp_server_that_is_not_a_host_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.SystemNtpServer, value));
+        }
+
+        /// <summary>
+        /// The two Polycom device account passwords are the same shape as the provisioning
+        /// password (D84) even though they never end up in a URL, because that shape is also safe
+        /// to write straight into an XML attribute.
+        /// </summary>
+        [Theory]
+        [InlineData(SettingsKeys.ProvisioningAdminPassword)]
+        [InlineData(SettingsKeys.ProvisioningUserPassword)]
+        public void A_device_password_of_url_safe_characters_is_accepted(string key)
+        {
+            Assert.Empty(SettingsValidation.Errors(key, "AAAAbbbb1111"));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.ProvisioningAdminPassword)]
+        [InlineData(SettingsKeys.ProvisioningUserPassword)]
+        public void A_device_password_that_is_too_short_or_has_an_odd_character_is_rejected(string key)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(key, "short1"));
+            Assert.NotEmpty(SettingsValidation.Errors(key, "has a space in it"));
+        }
+
+        /// <summary>Both device passwords are secrets: they authenticate against the phone's own web UI.</summary>
+        [Fact]
+        public void Both_device_passwords_are_secrets()
+        {
+            Assert.True(SettingsKeys.IsSecret(SettingsKeys.ProvisioningAdminPassword));
+            Assert.True(SettingsKeys.IsSecret(SettingsKeys.ProvisioningUserPassword));
         }
     }
 }

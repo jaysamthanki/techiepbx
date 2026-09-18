@@ -125,6 +125,23 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "The password for the Polycom web UI's built-in \"Polycom\" (admin) account, written into every phone's config. This app also uses it to push a config reload or reboot to a phone over that same web UI when you save or ask for one. Stored here and shown only when you ask for it.",
+                Key = SettingsKeys.ProvisioningAdminPassword,
+            },
+            new SettingDescriptor
+            {
+                Description = "The password for the Polycom web UI's built-in \"User\" account, written into every phone's config. Stored here and shown only when you ask for it.",
+                Key = SettingsKeys.ProvisioningUserPassword,
+            },
+            new SettingDescriptor
+            {
+                Default = AsteriskSettings.DefaultNtpServer,
+                Description = "The NTP server phones set their clock from, written into every phone's config. Point this at an internal time source if this site has one; otherwise leave it at the public default.",
+                Key = SettingsKeys.SystemNtpServer,
+                Sample = AsteriskSettings.DefaultNtpServer,
+            },
+            new SettingDescriptor
+            {
                 Choices = SystemTimezones.All,
                 Default = AsteriskSettings.DefaultTimezone,
                 Description = "The zone a time condition's open hours and holidays are written in. Every check in the generated dialplan names it, so Asterisk evaluates the hours in that zone with daylight saving included, whatever the server's clock says — the clock itself is meant to be UTC (D74).",

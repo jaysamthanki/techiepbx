@@ -138,5 +138,21 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.Equal(2, ami.Validate().Count);
         }
+
+        /// <summary>
+        /// Nobody has to choose an NTP server: an unset one falls back to a public pool, the same
+        /// way an unset timezone falls back to UTC (D84).
+        /// </summary>
+        [Fact]
+        public void An_unset_ntp_server_falls_back_to_the_public_pool()
+        {
+            Assert.Equal(AsteriskSettings.DefaultNtpServer, AsteriskSettings.NtpServer(Values()));
+        }
+
+        [Fact]
+        public void The_ntp_server_comes_out_of_the_database()
+        {
+            Assert.Equal("10.8.20.1", AsteriskSettings.NtpServer(Values((SettingsKeys.SystemNtpServer, "10.8.20.1"))));
+        }
     }
 }

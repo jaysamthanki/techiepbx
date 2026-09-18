@@ -116,14 +116,19 @@ namespace Techie.Pbx.Web.Controllers
             if (extension is { Enabled: false })
                 extension = null;
 
+            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
+            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
+
             var config = new PolycomConfig
             {
+                AdminPassword = (adminPassword ?? "").Trim(),
                 Extension = extension,
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
                 Phone = phone,
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
-                SntpAddress = this.RequestHost(),
+                SntpAddress = AsteriskSettings.NtpServer(stored),
+                UserPassword = (userPassword ?? "").Trim(),
             };
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}");

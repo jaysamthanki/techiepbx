@@ -15,6 +15,13 @@ namespace Techie.Pbx.Asterisk.Provisioning
     public class PolycomConfig
     {
         /// <summary>
+        /// The Polycom web UI's local admin ("Polycom") account password, from
+        /// <c>Provisioning.AdminPassword</c>, or empty when nobody has set one. Empty means the
+        /// attribute is left out of the file rather than written as blank (D84).
+        /// </summary>
+        public string AdminPassword { get; set; } = "";
+
+        /// <summary>
         /// The extension this phone registers as, or null when there is none to register — either
         /// nobody has assigned one yet, or the one assigned has since been switched off and so has
         /// no PJSIP endpoint to register against.
@@ -31,8 +38,18 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
         public int SipPort { get; set; } = PjsipTransport.DefaultPort;
 
-        /// <summary>The address the phone should ask for the time, normally this server.</summary>
+        /// <summary>
+        /// The address the phone should ask for the time: the <c>System.NtpServer</c> setting,
+        /// or its default, a public pool (D84). Not this server itself — unlike the SIP server
+        /// address, there is no reason TNPBX has to be the one answering.
+        /// </summary>
         public string SntpAddress { get; set; } = "";
+
+        /// <summary>
+        /// The Polycom web UI's local user ("User") account password, from
+        /// <c>Provisioning.UserPassword</c>, or empty when nobody has set one (D84).
+        /// </summary>
+        public string UserPassword { get; set; } = "";
 
         /// <summary>
         /// The offset the phone should apply to UTC, as Polycom wants it: a number of seconds,

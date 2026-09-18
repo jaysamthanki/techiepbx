@@ -1195,3 +1195,47 @@ So TNPBX does **not** do firmware management. Upgrading a fleet stays a manual j
 would mean hosting hundreds of megabytes of vendor binaries, tracking which model takes which image,
 and owning the failure mode where a bad image bricks a desk phone. That is a feature, not a field —
 ask before building it.
+
+### D84. The NTP server phones ask is a setting, not this server's own address (2026-09-21)
+Until now `tcpIpApp.sntp.address` was whatever host the phone happened to ask us on — this server's
+own address, filled in from the request rather than chosen. `System.NtpServer` replaces that with an
+explicit setting, defaulting to `pool.ntp.org`: most sites need nothing else, but a site with its own
+time source, or one that blocks outbound NTP to the public pool, can point every phone there instead.
+
+### D85. The Polycom web UI's device passwords are settings, and the admin one doubles as the push credential (2026-09-21)
+Polycom's firmware fixes the username on both of a phone's built-in web accounts — "Polycom" for
+admin, "User" for the other — so only the password is ours to set. `Provisioning.AdminPassword` and
+`Provisioning.UserPassword` are written into every generated config as
+`device.auth.localAdminPassword` and `device.auth.localUserPassword`. Either one left unset is left
+out of the file rather than written blank: a phone with a blank web password is worse off than one
+with no opinion from us at all, and the two are independent so setting one does not blank the other.
+
+The admin password is reused as the digest credential this app authenticates with when it pushes a
+config reload or reboot to a phone (D86): the phone's own web UI is the only thing that account
+exists for, and it is already the credential an admin has to know to manage the phone directly.
+
+### D86. Saving a phone pushes it to reload its config immediately; the daily poll (D79) stays the fallback (2026-09-21)
+The mechanism is the one from the user's own FreePBX module (`polycomphones_push`), because the
+reasoning still holds: an admin who just assigned an extension should not have to wait up to a day,
+or walk to the desk and reboot it, to see it take effect. Saving a phone in the UI now sends
+`https://<phone>/push` with body `Action:UpdateConfig`, HTTP digest auth as `Polycom` against
+`Provisioning.AdminPassword`, a 2 second timeout, and the phone's certificate accepted unchecked —
+its web UI is always self-signed, so there is nothing to check it against.
+
+The push is fire-and-forget and its failure is not fatal: a phone that is off, on another network, or
+slow to answer still gets the same config at its next poll regardless (D79), so a failed push is
+logged as a warning and the save still reports success. It is skipped silently, with no attempt and
+no warning, when the phone has never provisioned (no `LastIP`) or when `Provisioning.AdminPassword`
+is unset — in either case there is nothing to push with.
+
+Not built: the SIP NOTIFY check-sync fallback FreePBX also has, which needs `notify.conf` and a
+dialplan hook of its own (out of scope for this piece). Worth revisiting if a site's phones are
+reachable for SIP but not for their web UI — behind a firewall that only forwards port 5060, say.
+
+### D87. A "Reboot phone" button, same push mechanism with a different action (2026-09-21)
+The phone edit modal gets a `Reboot phone` button next to Delete, shown only once a phone has an
+address to push to (a phone that has never provisioned has nowhere to send it). It calls the same
+push as D86 with `Action:Reboot` in place of `Action:UpdateConfig`, confirmed with sweetalert2 first
+(D42) because it drops any call the phone is on immediately. Best-effort the same way: a phone that
+cannot be reached is named in the toast rather than failing the request, because nothing here is a
+config change — there is no apply and no config-pending marker either way.
