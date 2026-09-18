@@ -1,0 +1,40 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Phones";
+
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Phones</h1>
+</div>
+
+@*
+    No "Add phone" button on purpose: a phone appears here by asking us for its configuration,
+    not by somebody typing a MAC address (D78).
+*@
+<p class="text-secondary">
+    Desk phones that have fetched their configuration from this server. Point them here with
+    DHCP option 160 — <code>http://user:pass@@this-server/polycom</code> — and a phone we have
+    never seen adds itself the first time it asks. Click a row to name it and give it an
+    extension; the phone picks that up at its next config poll, or straight away if you reboot it.
+</p>
+
+@if (!Model.ProvisioningConfigured)
+{
+    <div class="alert alert-warning">
+        <strong>Provisioning is off.</strong>
+        No phone can fetch its configuration until <code>Provisioning.Username</code> and
+        <code>Provisioning.Password</code> are set on the
+        <a asp-page="/Settings/Index">Settings</a> page. Those two are the user and password in the
+        DHCP option 160 URL.
+    </div>
+}
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="phones-table" hx-get="@tableUrl" hx-trigger="load, phonesChanged from:body">
+    <p class="text-secondary">Loading phones…</p>
+</div>
+
+<partial name="_FormModal" />

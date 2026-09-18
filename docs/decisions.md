@@ -1036,3 +1036,162 @@ backends, static offload). Port 80 binds redirect-only, 443 is the real listener
 certificates are managed (a cert piece is needed anyway for SIP TLS, D71 — one piece solves
 both). Escape hatch: a customer needing to share 443 with another site on the same box can
 put Caddy in front, but that is not the default posture.
+
+### D77. Phone provisioning is a trust path of its own: Basic auth, plain routes, either scheme (2026-09-21)
+A desk phone cannot sign in to Entra ID. It has no browser, no cookie jar and no way to complete an
+interactive flow, so the admin UI's authentication is simply not available to it. Provisioning
+therefore gets its own gate, and the design keeps it visibly separate from the rest of the app:
+
+- **The routes are plain `/polycom/...`, not `/api/...`.** Everything under `/api` shares the Entra
+  cookie (D5) and carries an antiforgery token (D23). Putting an unauthenticated endpoint in there
+  would make "is this behind the cookie?" a question you have to read the controller to answer. A
+  different path prefix means the exception is visible in the URL.
+- **HTTP Basic against two settings keys**, `Provisioning.Username` and `Provisioning.Password`.
+  They are the user:pass half of the DHCP option 160 URL the phones are given
+  (`http://user:pass@this-server/polycom`), which is the only credential a phone can carry.
+  `Provisioning.Password` is the second secret key in the Settings table, handled exactly like
+  `Ami.Secret` (D68): masked in the table, never rendered into the form, read back only through the
+  API, never logged. Both are restricted to URL-safe characters, because a colon or an `@` in
+  either would split the option 160 URL.
+- **Unset credentials mean provisioning is off, not open.** `BasicAuth.Matches` refuses a blank
+  expected username or password before it looks at the header at all, so a system nobody has
+  configured serves nobody. The phones page says so in a banner rather than leaving an admin
+  wondering why no phone ever appears.
+- **Both schemes are answered.** DHCP option 160 carries a scheme, and a phone pointed at `http://`
+  has to be answered rather than redirected to a URL whose certificate it may have no root for.
+  `/polycom` is therefore the one path exempted from `UseHttpsRedirection`, via `UseWhen` in
+  `Program.cs`. The credentials are the gate either way; what a plain-HTTP fetch costs is
+  confidentiality of the SIP password in transit on the LAN — the same exposure every phone
+  provisioning system has, and why HTTPS is the better answer once certificates are managed (D71,
+  D76).
+- **Three answers and nothing else.** 401 with a `WWW-Authenticate` challenge for credentials that
+  are missing, wrong or not configured; 403 for a User-Agent that is not a phone, a phone that is
+  disabled, or a MAC whose model has changed (D78); 404 for any file name that is not one of the
+  two we generate. Every refusal is logged with the remote address, so the blocker in piece 20 has
+  something to read.
+
+Credentials are compared with `CryptographicOperations.FixedTimeEquals` rather than `==`. Known and
+accepted: a length difference is still distinguishable by timing, because that comparison returns
+early. That leaks the length of a credential, not its content.
+
+### D78. Auto-registration: a phone we have never seen adds itself (2026-09-21)
+Approved by the user, and the behaviour of the FreePBX module they have been running for years
+(`jaysamthanki/polycomphones`) — that module is the reference for *what happens*, not a source of
+code. The alternative is typing twelve hex digits off the underside of every handset, which is the
+part of deploying phones that actually goes wrong.
+
+A request for `exten<mac>.cfg` that gets past the credential gate, carries a User-Agent that parses
+as a Polycom phone, and names a MAC we have never seen **inserts a row**: MAC, model, firmware,
+source address and timestamp, with no name, no extension, enabled. A known MAC has those same four
+fields brought up to date; the name, the extension and the enabled flag are the admin's and are
+never touched by a phone.
+
+What the endpoint refuses, and why each one:
+
+- **A User-Agent that does not parse** gets 403. `PolycomUserAgent` matches the real shapes —
+  `FileTransport PolycomVVX-VVX_410-UA/5.9.5.0614`, the older SoundStation/SoundPoint names, and
+  `PolyEdge` — anchored at the start, with the model and firmware pulled out of it. This is a
+  filter, not a security boundary: a header is trivially forged, which is why the credentials are
+  the gate. It is worth having because credentials that leak are worth much less to a scanner that
+  also has to sound like a desk phone.
+- **A known MAC whose stored model no longer matches** gets 403. That is either somebody claiming
+  another phone's MAC address or a handset that has been swapped, and both want an admin to look
+  rather than a config file with somebody's SIP password in it. A row with no model recorded
+  matches anything, because the first request is what fills it in.
+- **A disabled phone** gets 403 at its next poll, which is what the enabled flag is for.
+
+Two things follow from the flow. The **master file is served for an unknown MAC**: it holds no
+credentials, only the name of the file to fetch next, and it is that next fetch which adds the
+phone. And an **unassigned phone still gets a valid config** — the time and a provisioning poll, no
+registration — so a phone can be racked, powered on, and assigned an extension later without anyone
+touching the handset. It picks the extension up at its next poll (a day, D79) or at a reboot.
+
+The phones page has **no "Add phone" button** for the same reason: a MAC address is something the
+phone knows and a human mistypes. If manual entry turns out to be wanted — staging phones before
+they arrive — it is a small addition, but ask first.
+
+### D79. The config is generated per request and never stored on disk (2026-09-21)
+There is no `/tftpboot`, no generated-files directory for phones, and nothing to apply. A request
+comes in, the row and its extension are read, and the XML is built into the response.
+
+What this buys:
+
+- **No apply step and no pending marker.** Every other repository raises the config-pending marker
+  (D26) because it changes a file Asterisk reads. `PhoneRepository` raises nothing and the phones
+  page fires no `configChanged` event, because saving a phone changes no file — it changes what the
+  *next* request returns. A test asserts the marker stays down.
+- **No file on disk holding every SIP password.** The one place those live is the database, which is
+  0600 (D14). A provisioning directory would be a second one, readable by whatever serves it.
+- **Nothing to go stale.** A file written at assign time and a database row can disagree; a file
+  generated from the row cannot.
+
+The cost is that a phone only sees a change when it asks. `prov.polling` is set to 24 hours, which
+is the trade: short enough that assigning an extension takes effect without walking to the desk,
+long enough not to be a load. Rebooting the phone is the impatient version.
+
+The renderers are pure static functions with golden files in `tests/Techie.Pbx.Tests/Expected/`,
+exactly like the Asterisk conf renderers, and for a sharper reason: these files are read by the
+handsets themselves, so a change to one is a change every phone on a site picks up. An expected
+file that has to be updated is the point at which somebody has to say why.
+
+**Deliberately not built, and worth naming as future work:** the PUT endpoints Polycom phones use to
+upload logs, per-phone overrides and contact directories. The master file names those directories
+(`logs`, `overrides`, `contacts`) because the phone expects the parameters to exist; with no
+endpoint behind them the phone's uploads fail and it carries on. Adding them means adding a write
+path that barely-authenticated hardware can reach, which is its own decision.
+
+### D80. Deleting an extension unassigns its phone rather than being refused (2026-09-21)
+`Phones.ExtensionID` is `ON DELETE SET NULL`, not the usual "you cannot delete this while something
+points at it" (D44, D49). The difference is that a route pointing at a deleted trunk is broken
+config, whereas a phone whose extension has gone is a piece of hardware still sitting on a desk: the
+right outcome is that it stays known, loses its registration, and waits to be assigned again. It
+shows as **Unassigned** in the table, and its next config fetch gives it the time and nothing else.
+
+An extension that is merely **disabled** is treated the same way at render time — no PJSIP endpoint
+exists for it, so handing the phone credentials that cannot register would only produce a handset
+showing an error. The assignment itself is kept, so re-enabling the extension puts the phone back to
+work.
+
+### D81. Each phone is told a local SIP port of its own, derived from its ID (2026-09-21)
+`voIpProt.SIP.local.port` is `1024 + (PhoneID mod 64512)` rather than the 5060 every phone would
+otherwise use. Several phones behind one NAT all sourcing from 5060 is the classic symptom set — one
+phone's calls arriving at another, registrations displacing each other — because the NAT has to
+rewrite ports it was not told to, and does it differently on different routers.
+
+Derived from the ID rather than allocated from a pool: no allocation table, no reuse problem when a
+phone is deleted, and the port for a given phone never changes, so it is a stable thing to write
+into a firewall rule. The port is shown in the edit modal, because it is the first thing to check
+when phones behind one NAT misbehave.
+
+**Note the parameter name.** Polycom's own documentation calls this `voIpProt.local.port`; the
+approved design for this piece specifies `voIpProt.SIP.local.port`, which is what is written.
+**To confirm on a real handset** — if the SIP-scoped name is ignored by the firmware in the lab, the
+fix is one constant in `PolycomConfigRenderer`.
+
+### D82. The phone's clock is a number of seconds, worked out when the file is generated (2026-09-21)
+`tcpIpApp.sntp.gmtOffset` is an offset in seconds with no notion of a zone in it, so there is
+nowhere to put "America/Los_Angeles" the way there is in a `GotoIfTime` (D74). The offset is
+computed from the `System.Timezone` setting with `TimeZoneInfo` **at the moment the config is
+generated**, and the SNTP server the phone is given is this machine — the phones ask the PBX for the
+time, and the PBX's own clock is UTC and disciplined by NTP (D74).
+
+The consequence, worth knowing before somebody reports it as a bug: **a phone crosses a daylight
+saving boundary when it next polls for its config, not when the clocks change.** With a 24-hour poll
+(D79) that is up to a day of phones showing the wrong hour, twice a year. Rebooting fixes it
+immediately.
+
+This is the honest small version. The full version is Polycom's own DST parameters
+(`tcpIpApp.sntp.daylightSavings.*` — start and stop month, day of week, occurrence), half a dozen
+more values that all have to be derived correctly from the zone. That is a real piece of work and it
+is not on the feature list, so it is flagged here rather than guessed at. **Open question for the
+user:** is a twice-yearly one-day drift acceptable, or should the DST parameters be derived?
+
+### D83. We point phones at a firmware image but do not serve one (2026-09-21)
+The master file says `APP_FILE_PATH="sip.ld"`, the name Polycom's combined image uses, which the
+phone resolves against its provisioning server. We do not serve it: a phone that cannot fetch an
+image keeps the firmware it is running, which is the safe outcome.
+
+So TNPBX does **not** do firmware management. Upgrading a fleet stays a manual job. Serving firmware
+would mean hosting hundreds of megabytes of vendor binaries, tracking which model takes which image,
+and owning the failure mode where a bad image bricks a desk phone. That is a feature, not a field —
+ask before building it.

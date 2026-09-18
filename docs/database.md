@@ -133,6 +133,25 @@ D63). `ON DELETE CASCADE`: a rule has no life without its condition.
 | `DestinationType` / `DestinationValue` | TEXT | Holiday-only override destination; empty = the condition's holiday destination (D63) |
 | `SortOrder` | INTEGER | The order the rules are written in |
 
+### Phones (011)
+
+Desk phones that provision themselves from us (D77, D78). Most rows are created by the phone
+rather than by an admin: a valid credential plus a Polycom User-Agent plus an unknown MAC inserts
+one. Nothing here is rendered into `/etc/asterisk` — a phone's config is generated per request
+(D79) — so a write to this table raises no config-pending marker.
+
+| Column | Type | Notes |
+|---|---|---|
+| `PhoneID` | INTEGER PK | Also decides the phone's local SIP port, `1024 + (PhoneID mod 64512)` (D81) |
+| `Mac` | TEXT, unique | Exactly 12 lower-case hex digits, no separators. The key a provisioning request looks up |
+| `Name` | TEXT | What an admin calls it. Empty until somebody names it |
+| `Model` | TEXT | From the User-Agent, e.g. `VVX_410`. A request whose model stops matching gets 403 (D78) |
+| `Firmware` | TEXT | From the User-Agent, e.g. `5.9.5.0614` |
+| `LastIP` | TEXT | Where it last asked from |
+| `LastConfig` | TEXT | When it last fetched its config, `2026-09-17 09:31:02Z`. Empty = never |
+| `ExtensionID` | INTEGER FK → `Extensions`, nullable | `ON DELETE SET NULL`: deleting an extension unassigns the phone rather than being refused (D80) |
+| `Enabled` | INTEGER | 0/1, default 1. A disabled phone is refused its config at the next poll |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).
@@ -147,6 +166,10 @@ Current keys: `Asterisk.ConfDirectory`, `Ami.Host`, `Ami.Port`, `Ami.Username`, 
 `Ami.TimeoutSeconds`, `Sip.BindAddress`, `Sip.Port`, `Sip.LocalNets` (comma separated CIDRs),
 `Sip.ExternalAddress`.
 
-`Ami.Secret` is a credential (D14): `SettingsKeys.IsSecret` marks it, it is never logged and
-never shown. Defaults are not seeded as rows — they live on `AmiSettings` and `PjsipTransport`,
+Also `Sip.TcpPort`, `Sip.TlsPort`, `Sip.StunServer`, `Sip.Codecs`, `System.Timezone`,
+`Provisioning.Username` and `Provisioning.Password` — the last two being the user:pass a phone
+sends to fetch its configuration, i.e. the credentials embedded in the DHCP option 160 URL (D77).
+
+`Ami.Secret` and `Provisioning.Password` are credentials (D14, D77): `SettingsKeys.IsSecret` marks
+them, they are never logged and never shown. Defaults are not seeded as rows — they live on `AmiSettings` and `PjsipTransport`,
 and `AsteriskSettings` applies a row on top only when there is one.

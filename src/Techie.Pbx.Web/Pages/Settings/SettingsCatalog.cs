@@ -114,6 +114,17 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "The username a desk phone presents to fetch its configuration. It is the user half of the user:pass in the DHCP option 160 URL you give the phones — http://user:pass@this-server/polycom — so keep it to letters, digits, dots, dashes and underscores. Blank turns provisioning off: with no username and password stored, every provisioning request is refused.",
+                Key = SettingsKeys.ProvisioningUsername,
+                Sample = "phones",
+            },
+            new SettingDescriptor
+            {
+                Description = "The password half of that same DHCP option 160 URL. Stored here and shown only when you ask for it. At least 8 characters, and only ones that need no escaping in a URL: letters, digits and . - _ ~",
+                Key = SettingsKeys.ProvisioningPassword,
+            },
+            new SettingDescriptor
+            {
                 Choices = SystemTimezones.All,
                 Default = AsteriskSettings.DefaultTimezone,
                 Description = "The zone a time condition's open hours and holidays are written in. Every check in the generated dialplan names it, so Asterisk evaluates the hours in that zone with daylight saving included, whatever the server's clock says — the clock itself is meant to be UTC (D74).",

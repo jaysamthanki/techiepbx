@@ -59,6 +59,20 @@ namespace Techie.Pbx.Core.Data
         public const string SipExternalAddress = "Sip.ExternalAddress";
 
         /// <summary>
+        /// The username a phone has to present to fetch its provisioning files. It is the user half
+        /// of the user:pass in the DHCP option 160 URL, so it is deliberately restricted to
+        /// characters that need no escaping in a URL (D77).
+        /// </summary>
+        public const string ProvisioningUsername = "Provisioning.Username";
+
+        /// <summary>
+        /// The matching password, and the second secret in this table. Treat it like
+        /// <see cref="AmiSecret"/>: never logged, never rendered into a page, and only ever
+        /// compared against what a provisioning request carried (D77).
+        /// </summary>
+        public const string ProvisioningPassword = "Provisioning.Password";
+
+        /// <summary>
         /// The IANA zone this server's clock is meant to be in, e.g. "Europe/London". A record,
         /// not a lever: Asterisk matches a time condition against its own local time, so what
         /// actually decides open from closed is the machine's timezone. This is written into the
@@ -82,12 +96,15 @@ namespace Techie.Pbx.Core.Data
             SipCodecs,
             SipLocalNets,
             SipExternalAddress,
+            ProvisioningUsername,
+            ProvisioningPassword,
             SystemTimezone,
         };
 
         private static readonly HashSet<string> SecretKeys = new(StringComparer.Ordinal)
         {
             AmiSecret,
+            ProvisioningPassword,
         };
 
         public static IReadOnlyCollection<string> All => KnownKeys;
