@@ -63,6 +63,31 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains("No such module", ex.Message);
         }
 
+        /// <summary>
+        /// The Yealink push mechanism (D91): a typed action, the same reasoning as Reload's own
+        /// test above. Not yet verified against a real Asterisk 22 — see D91's caveat.
+        /// </summary>
+        [Fact]
+        public void Send_notify_sends_a_typed_action_rather_than_a_cli_command()
+        {
+            var session = LoggedIn("Response: Success\r\nActionID: 2\r\nMessage: NOTIFY sent\r\n\r\n");
+
+            session.SendNotify("1001", "tnpbx-check-cfg");
+
+            Assert.EndsWith(
+                "Action: PJSIPSendNotify\r\nActionID: 2\r\nEndpoint: 1001\r\nNotificationName: tnpbx-check-cfg\r\n\r\n",
+                _sent.ToString());
+        }
+
+        [Fact]
+        public void A_failed_send_notify_throws()
+        {
+            var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: Unable to find endpoint\r\n\r\n");
+
+            var ex = Assert.Throws<AmiException>(() => session.SendNotify("9999", "tnpbx-check-cfg"));
+            Assert.Contains("Unable to find endpoint", ex.Message);
+        }
+
         [Fact]
         public void Events_arriving_before_a_response_do_not_confuse_it()
         {

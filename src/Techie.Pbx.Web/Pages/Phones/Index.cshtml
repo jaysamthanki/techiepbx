@@ -4,22 +4,12 @@
     ViewData["Title"] = "Phones";
 
     var tableUrl = Url.Page("Index", "Table");
+    var polycomSettingsUrl = Url.Page("Index", "PolycomSettings");
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Phones</h1>
 </div>
-
-@*
-    No "Add phone" button on purpose: a phone appears here by asking us for its configuration,
-    not by somebody typing a MAC address (D78).
-*@
-<p class="text-secondary">
-    Desk phones that have fetched their configuration from this server. Point them here with
-    DHCP option 160 — <code>http://user:pass@@this-server/polycom</code> — and a phone we have
-    never seen adds itself the first time it asks. Click a row to name it and give it an
-    extension; the phone picks that up at its next config poll, or straight away if you reboot it.
-</p>
 
 @if (!Model.ProvisioningConfigured)
 {
@@ -27,14 +17,88 @@
         <strong>Provisioning is off.</strong>
         No phone can fetch its configuration until <code>Provisioning.Username</code> and
         <code>Provisioning.Password</code> are set on the
-        <a asp-page="/Settings/Index">Settings</a> page. Those two are the user and password in the
-        DHCP option 160 URL.
+        <a asp-page="/Settings/Index">Settings</a> page. Those two are the credentials both brands
+        below use.
     </div>
 }
 
-@* The table arrives from the Table handler, and comes back whenever something changed. *@
-<div id="phones-table" hx-get="@tableUrl" hx-trigger="load, phonesChanged from:body">
-    <p class="text-secondary">Loading phones…</p>
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="phones-tab-phones" data-bs-toggle="tab" data-bs-target="#phones-pane-phones"
+                type="button" role="tab" aria-controls="phones-pane-phones" aria-selected="true">Phones</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="phones-tab-settings" data-bs-toggle="tab" data-bs-target="#phones-pane-settings"
+                type="button" role="tab" aria-controls="phones-pane-settings" aria-selected="false">Settings</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="phones-pane-phones" role="tabpanel" aria-labelledby="phones-tab-phones">
+        @*
+            No "Add phone" button on purpose: a phone appears here by asking us for its
+            configuration, not by somebody typing a MAC address (D78).
+        *@
+        <p class="text-secondary">
+            Desk phones that have fetched their configuration from this server — Polycom and
+            Yealink alike. A phone we have never seen adds itself the first time it asks. Click a
+            row to name it and give it an extension; the phone picks that up at its next config
+            poll, or straight away if you reboot it. See the Settings tab for how to point each
+            brand here.
+        </p>
+
+        @* The table arrives from the Table handler, and comes back whenever something changed. *@
+        <div id="phones-table" hx-get="@tableUrl" hx-trigger="load, phonesChanged from:body">
+            <p class="text-secondary">Loading phones…</p>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="phones-pane-settings" role="tabpanel" aria-labelledby="phones-tab-settings">
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="phones-tab-polycom" data-bs-toggle="tab" data-bs-target="#phones-pane-polycom"
+                        type="button" role="tab" aria-controls="phones-pane-polycom" aria-selected="true">Polycom</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="phones-tab-yealink" data-bs-toggle="tab" data-bs-target="#phones-pane-yealink"
+                        type="button" role="tab" aria-controls="phones-pane-yealink" aria-selected="false">Yealink</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="phones-pane-polycom" role="tabpanel" aria-labelledby="phones-tab-polycom">
+                <p class="text-secondary">
+                    Point Polycom phones here with <strong>DHCP option 160</strong> —
+                    <code>http://user:pass@@this-server/polycom</code> — using the
+                    <code>Provisioning.Username</code>/<code>Provisioning.Password</code>
+                    credentials on the <a asp-page="/Settings/Index">Settings</a> page. The two
+                    device passwords below are Polycom-specific; edit either one the same way as
+                    any other setting.
+                </p>
+
+                <div id="phones-polycom-settings" hx-get="@polycomSettingsUrl" hx-trigger="load, settingsChanged from:body">
+                    <p class="text-secondary">Loading…</p>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="phones-pane-yealink" role="tabpanel" aria-labelledby="phones-tab-yealink">
+                <p class="text-secondary">
+                    No Yealink-specific settings exist yet. Point Yealink phones at this server
+                    with <strong>DHCP option 66</strong>, not option 160 (that is Polycom) —
+                    <code>http://user:pass@@this-server:8080/yealink</code> — using the same
+                    <code>Provisioning.Username</code>/<code>Provisioning.Password</code>
+                    credentials as Polycom, on the <a asp-page="/Settings/Index">Settings</a> page.
+                    A phone we have never seen adds itself the first time it asks, exactly like a
+                    Polycom phone does.
+                </p>
+            </div>
+        </div>
+    </div>
 </div>
 
 <partial name="_FormModal" />
+
+@section Scripts {
+    @* The Settings edit form reused inside this page's modal needs its own show/hide glue (D88). *@
+    <script src="~/js/settings.js" asp-append-version="true"></script>
+}

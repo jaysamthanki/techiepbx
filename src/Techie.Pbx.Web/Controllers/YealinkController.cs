@@ -10,47 +10,51 @@ using Techie.Pbx.Core.Security;
 namespace Techie.Pbx.Web.Controllers
 {
     /// <summary>
-    /// Where desk phones fetch their configuration. DHCP option 160 points a phone at
-    /// <c>http://user:pass@host/polycom</c>, it asks for <c>&lt;mac&gt;.cfg</c> and then
-    /// <c>exten&lt;mac&gt;.cfg</c>, and both are generated from the database on the spot (D77, D79).
+    /// Where Yealink desk phones fetch their configuration — the second brand on the same trust
+    /// path as <see cref="PolycomController"/> (D88). DHCP option 66 points a phone at
+    /// <c>http://user:pass@host:port/yealink</c>; it asks for the fixed boot file first, then its
+    /// own <c>&lt;mac&gt;.cfg</c>, and both are generated from the database on the spot.
     ///
-    /// This is the one part of the app that is <b>not</b> behind the Entra ID cookie, and the route
-    /// is deliberately plain rather than under /api so that is obvious from the URL. A phone cannot
-    /// sign in to Entra, so provisioning is a trust path of its own: HTTP Basic against two settings
-    /// keys, a User-Agent that has to look like a Polycom phone, and a MAC address that has to be
-    /// twelve hex digits before anything is looked up (D77).
+    /// Unlike Polycom, the boot request carries no MAC in its URL — the file name is fixed — so
+    /// the MAC comes from the User-Agent header, and that is also where first contact
+    /// auto-registration happens (D89): it is the earliest point a MAC is known at all.
+    ///
+    /// This is the one part of the app that is <b>not</b> behind the Entra ID cookie, and the
+    /// route is deliberately plain rather than under /api so that is obvious from the URL. The
+    /// same two <c>Provisioning.*</c> credentials as Polycom gate it (D88); a phone cannot sign in
+    /// to Entra, so provisioning is a trust path of its own.
     ///
     /// Three answers and nothing else:
     /// <list type="bullet">
     /// <item>401 with a challenge, for credentials that are missing, wrong, or not configured.</item>
     /// <item>403, for a User-Agent that is not a phone, a phone that is switched off, a known MAC
-    /// registered to a different brand (D88), or one whose model has changed underneath us.</item>
+    /// registered to a different brand, or one whose model has changed underneath us.</item>
     /// <item>404, for any file name that is not one of the two we generate.</item>
     /// </list>
     /// </summary>
     [ApiController]
     [AllowAnonymous]
     [Route(RouteName)]
-    public class PolycomController : ControllerBase
+    public class YealinkController : ControllerBase
     {
         /// <summary>
         /// The path prefix, which Program.cs also needs: provisioning answers over plain HTTP as
-        /// well as HTTPS, so it is the one path exempt from the HTTPS redirect (D77).
+        /// well as HTTPS, so it is one of the paths exempt from the HTTPS redirect (D77, D88).
         /// </summary>
         public const string RoutePrefix = "/" + RouteName;
 
-        private const string RouteName = "polycom";
+        private const string RouteName = "yealink";
 
-        /// <summary>What a phone is told to use when it asks for the time or for SIP.</summary>
+        /// <summary>What a phone is told to use when Asterisk is listening on every interface.</summary>
         private const string AnyAddress = "0.0.0.0";
 
-        private static readonly ILog Log = LogManager.GetLogger(typeof(PolycomController));
+        private static readonly ILog Log = LogManager.GetLogger(typeof(YealinkController));
 
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
-        public PolycomController()
+        public YealinkController()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
@@ -59,8 +63,7 @@ namespace Techie.Pbx.Web.Controllers
 
         /// <summary>
         /// Both provisioning files, because both are one path segment and telling them apart is
-        /// this code's job rather than the router's: a MAC address is a strict pattern, and a
-        /// routing template that matched loosely would hand a lookup something it should not.
+        /// this code's job rather than the router's, exactly as Polycom's controller does.
         /// </summary>
         [HttpGet("{file}")]
         public IActionResult Get(string file)
@@ -68,17 +71,17 @@ namespace Techie.Pbx.Web.Controllers
             if (!this.IsAuthorized())
                 return this.Challenge401();
 
-            if (!PolycomUserAgent.TryParse(this.Request.Headers.UserAgent, out var agent))
+            if (!YealinkUserAgent.TryParse(this.Request.Headers.UserAgent, out var agent))
             {
-                Log.Warn($"Provisioning request for '{file}' from {this.Address()} refused: not a Polycom phone");
-                return this.Forbid403("This endpoint serves Polycom phones.");
+                Log.Warn($"Provisioning request for '{file}' from {this.Address()} refused: not a Yealink phone");
+                return this.Forbid403("This endpoint serves Yealink phones.");
             }
 
-            if (PolycomFiles.TryParseMaster(file, out var masterMac))
-                return this.Master(masterMac, agent);
+            if (YealinkFiles.IsBootFile(file))
+                return this.Boot(agent);
 
-            if (PolycomFiles.TryParseConfig(file, out var configMac))
-                return this.Config(configMac, agent);
+            if (YealinkFiles.TryParseConfig(file, out var mac))
+                return this.Config(mac, agent);
 
             Log.Warn($"Provisioning request for '{file}' from {this.Address()} refused: not a file we generate");
             return this.NotFound();
@@ -86,6 +89,20 @@ namespace Techie.Pbx.Web.Controllers
 
         /// <summary>The remote address, for the log and for the phone's own record.</summary>
         private string Address() => this.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
+
+        /// <summary>
+        /// The fixed boot file. No MAC is in the request URL, so this is also where an unknown
+        /// phone is first added (D89): the User-Agent is the earliest point a MAC is known at all.
+        /// </summary>
+        private IActionResult Boot(YealinkUserAgent agent)
+        {
+            if (this.Refuse(this.phones.GetByMac(agent.Mac), agent, agent.Mac) is { } refusal)
+                return refusal;
+
+            this.phones.Register(agent.Mac, agent.Model, agent.Firmware, this.Address(), PhoneBrand.Yealink);
+
+            return this.Text(YealinkMasterRenderer.Render(agent.Mac));
+        }
 
         private IActionResult Challenge401()
         {
@@ -95,18 +112,18 @@ namespace Techie.Pbx.Web.Controllers
         }
 
         /// <summary>
-        /// The real configuration, and the only place a phone can create or update its own row:
-        /// an unknown MAC is auto-added with what its User-Agent said, a known one is brought up
-        /// to date (D78).
+        /// The real configuration. The URL's own MAC is used for the lookup rather than the
+        /// User-Agent's — if the two disagree that is just an inconsistent phone, not worth
+        /// specially handling — and this request also brings the row up to date (D78, D88).
         /// </summary>
-        private IActionResult Config(string mac, PolycomUserAgent agent)
+        private IActionResult Config(string mac, YealinkUserAgent agent)
         {
             var known = this.phones.GetByMac(mac);
 
             if (this.Refuse(known, agent, mac) is { } refusal)
                 return refusal;
 
-            var phone = this.phones.Register(mac, agent.Model, agent.Firmware, this.Address());
+            var phone = this.phones.Register(mac, agent.Model, agent.Firmware, this.Address(), PhoneBrand.Yealink);
             var stored = this.settings.GetAll();
             var transport = AsteriskSettings.Transport(stored);
 
@@ -116,24 +133,26 @@ namespace Techie.Pbx.Web.Controllers
             if (extension is { Enabled: false })
                 extension = null;
 
-            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
-            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
+            stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var provisioningUsername);
+            stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var provisioningPassword);
 
-            var config = new PolycomConfig
+            var config = new YealinkConfig
             {
-                AdminPassword = (adminPassword ?? "").Trim(),
+                Codecs = transport.Codecs,
                 Extension = extension,
-                GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
+                NtpServer = AsteriskSettings.NtpServer(stored),
                 Phone = phone,
+                ProvisioningPassword = (provisioningPassword ?? "").Trim(),
+                ProvisioningUrl = this.Request.Scheme + "://" + this.Request.Host + RoutePrefix,
+                ProvisioningUsername = (provisioningUsername ?? "").Trim(),
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
-                SntpAddress = AsteriskSettings.NtpServer(stored),
-                UserPassword = (userPassword ?? "").Trim(),
+                TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
             };
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}");
 
-            return this.Xml(PolycomConfigRenderer.Render(config));
+            return this.Text(YealinkConfigRenderer.Render(config));
         }
 
         private IActionResult Forbid403(string message)
@@ -142,8 +161,9 @@ namespace Techie.Pbx.Web.Controllers
         }
 
         /// <summary>
-        /// Whether the request carries the provisioning credentials. Unset credentials match
-        /// nothing, so a system where nobody has filled them in serves nobody (D77).
+        /// Whether the request carries the provisioning credentials — the same two settings
+        /// Polycom uses (D88). Unset credentials match nothing, so a system where nobody has
+        /// filled them in serves nobody (D77).
         /// </summary>
         private bool IsAuthorized()
         {
@@ -160,25 +180,12 @@ namespace Techie.Pbx.Web.Controllers
         }
 
         /// <summary>
-        /// The master file, which names the config file and holds nothing else. An unknown MAC is
-        /// answered with one: it carries no credentials, and the phone is added when it comes back
-        /// for the file this points at (D78).
-        /// </summary>
-        private IActionResult Master(string mac, PolycomUserAgent agent)
-        {
-            if (this.Refuse(this.phones.GetByMac(mac), agent, mac) is { } refusal)
-                return refusal;
-
-            return this.Xml(PolycomMasterRenderer.Render(mac));
-        }
-
-        /// <summary>
         /// The three reasons a phone we already know about is turned away, or null to carry on. A
-        /// brand that no longer matches means this MAC is already claimed by the Yealink
-        /// controller (D88); a model that no longer matches means either the MAC was spoofed or
-        /// the hardware was swapped (D78) — both want an admin to look, not a config file.
+        /// brand that no longer matches means this MAC is already claimed by the other controller
+        /// (D88); a model that no longer matches means either the MAC was spoofed or the hardware
+        /// was swapped (D78) — both want an admin to look, not a config file.
         /// </summary>
-        private IActionResult? Refuse(Phone? known, PolycomUserAgent agent, string mac)
+        private IActionResult? Refuse(Phone? known, YealinkUserAgent agent, string mac)
         {
             if (known == null)
                 return null;
@@ -189,9 +196,9 @@ namespace Techie.Pbx.Web.Controllers
                 return this.Forbid403("This phone is disabled.");
             }
 
-            if (!known.MatchesBrand(PhoneBrand.Polycom))
+            if (!known.MatchesBrand(PhoneBrand.Yealink))
             {
-                Log.Warn($"Provisioning request for {mac} from {this.Address()} refused: registered as {known.Brand}, not Polycom");
+                Log.Warn($"Provisioning request for {mac} from {this.Address()} refused: registered as {known.Brand}, not Yealink");
                 return this.Forbid403("That MAC address is registered to a different brand of phone.");
             }
 
@@ -208,13 +215,14 @@ namespace Techie.Pbx.Web.Controllers
         private string RequestHost() => this.Request.Host.Host;
 
         /// <summary>
-        /// Where the phone should send SIP: the bind address, unless Asterisk is listening on every
-        /// interface, in which case the only address we can honestly name is the one the phone just
-        /// reached us on.
+        /// Where the phone should send SIP: the bind address, unless Asterisk is listening on
+        /// every interface, in which case the only address we can honestly name is the one the
+        /// phone just reached us on.
         /// </summary>
         private string ServerAddress(string bindAddress) =>
             bindAddress.Length == 0 || bindAddress == AnyAddress ? this.RequestHost() : bindAddress;
 
-        private IActionResult Xml(string content) => this.Content(content, "text/xml");
+        /// <summary>Yealink cfg files are plain text, not XML, unlike Polycom's.</summary>
+        private IActionResult Text(string content) => this.Content(content, "text/plain");
     }
 }

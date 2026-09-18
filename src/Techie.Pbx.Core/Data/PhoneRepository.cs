@@ -17,7 +17,7 @@ namespace Techie.Pbx.Core.Data
     /// </summary>
     public class PhoneRepository
     {
-        private const string Columns = "PhoneID, Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled";
+        private const string Columns = "PhoneID, Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled, Brand";
 
         private const int SqliteConstraintError = 19;
 
@@ -68,8 +68,8 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 phone.PhoneID = connection.ExecuteScalar<long>(
-                    "INSERT INTO Phones (Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled) " +
-                    "VALUES (@Mac, @Name, @Model, @Firmware, @LastIP, @LastConfig, @ExtensionID, @Enabled); " +
+                    "INSERT INTO Phones (Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled, Brand) " +
+                    "VALUES (@Mac, @Name, @Model, @Firmware, @LastIP, @LastConfig, @ExtensionID, @Enabled, @Brand); " +
                     "SELECT last_insert_rowid();",
                     phone);
 
@@ -85,16 +85,18 @@ namespace Techie.Pbx.Core.Data
         /// What a phone fetching its config does to this table: an unknown MAC is added with what
         /// its User-Agent said about it, and a known one has its model, firmware, address and last
         /// contact brought up to date (D78). Everything an admin owns — the name, the extension,
-        /// the enabled flag — is left exactly as it was.
+        /// the enabled flag — is left exactly as it was. So is the brand: it is only ever set at
+        /// insert time, never touched on an update, so a known phone's brand cannot silently
+        /// change because a later request came in looking like the other vendor (D88).
         ///
         /// The caller has already decided this request may be served at all; this only records it.
         /// </summary>
-        public Phone Register(string mac, string model, string firmware, string address)
+        public Phone Register(string mac, string model, string firmware, string address, string brand = PhoneBrand.Polycom)
         {
             var phone = this.GetByMac(mac);
             var isNew = phone == null;
 
-            phone ??= new Phone { Mac = mac };
+            phone ??= new Phone { Mac = mac, Brand = brand };
 
             phone.Firmware = firmware;
             phone.LastConfig = Timestamp();
@@ -104,7 +106,7 @@ namespace Techie.Pbx.Core.Data
             if (isNew)
             {
                 this.Insert(phone);
-                Log.Info($"Phone {mac} ({model}, firmware {firmware}) auto-added from {address}");
+                Log.Info($"Phone {mac} ({brand} {model}, firmware {firmware}) auto-added from {address}");
             }
             else
             {
@@ -123,8 +125,8 @@ namespace Techie.Pbx.Core.Data
             {
                 var rows = connection.Execute(
                     "UPDATE Phones SET Mac = @Mac, Name = @Name, Model = @Model, Firmware = @Firmware, " +
-                    "LastIP = @LastIP, LastConfig = @LastConfig, ExtensionID = @ExtensionID, Enabled = @Enabled " +
-                    "WHERE PhoneID = @PhoneID",
+                    "LastIP = @LastIP, LastConfig = @LastConfig, ExtensionID = @ExtensionID, Enabled = @Enabled, " +
+                    "Brand = @Brand WHERE PhoneID = @PhoneID",
                     phone);
                 if (rows == 0)
                     throw new ValidationFailedException($"PhoneID {phone.PhoneID} does not exist.");

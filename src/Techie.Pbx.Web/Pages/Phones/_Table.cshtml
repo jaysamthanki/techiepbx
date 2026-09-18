@@ -19,6 +19,7 @@ else
             <th data-field="mac" data-sortable="true">MAC</th>
             <th data-field="name" data-sortable="true">Name</th>
             <th data-field="extension" data-sortable="true">Extension</th>
+            <th data-field="brand" data-sortable="true">Brand</th>
             <th data-field="model" data-sortable="true">Model</th>
             <th data-field="firmware">Firmware</th>
             <th data-field="lastip">Last IP</th>
@@ -53,6 +54,7 @@ else
                         <span class="badge text-bg-secondary" title="This phone has no extension, so it is given the time and nothing else until one is assigned.">Unassigned</span>
                     }
                 </td>
+                <td>@row.Brand</td>
                 <td>@row.Model</td>
                 <td>@row.Firmware</td>
                 <td class="font-monospace">@row.LastIP</td>

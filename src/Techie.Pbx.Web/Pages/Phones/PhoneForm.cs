@@ -11,6 +11,7 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// </summary>
     public class PhoneForm
     {
+        public string Brand { get; set; } = "";
         public bool Enabled { get; set; } = true;
         public List<string> Errors { get; set; } = new();
 

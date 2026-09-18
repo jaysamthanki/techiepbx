@@ -112,6 +112,17 @@ namespace Techie.Pbx.Asterisk.Ami
         }
 
         /// <summary>
+        /// Sends a PJSIP NOTIFY of a named type to an endpoint's registered contacts — the
+        /// mechanism Yealink phones use in place of Polycom's HTTP push (D91), because a Yealink
+        /// phone has no web endpoint to push to. The type names a category in notify.conf.
+        /// </summary>
+        public void SendNotify(string endpoint, string notificationName)
+        {
+            Send(new AmiAction("PJSIPSendNotify").Add("Endpoint", endpoint).Add("NotificationName", notificationName));
+            Log.Info($"Sent NOTIFY '{notificationName}' to endpoint '{endpoint}'");
+        }
+
+        /// <summary>
         /// Which extensions are registered right now. A dedicated action, not "pjsip show
         /// contacts" through Action:Command, so the AMI user needs no "command" permission.
         /// The list items are "ContactList" events; with nothing registered Asterisk answers the

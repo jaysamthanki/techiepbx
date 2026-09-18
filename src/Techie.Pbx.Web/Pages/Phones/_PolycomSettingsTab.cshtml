@@ -1,0 +1,43 @@
+@using Techie.Pbx.Web.Pages.Settings
+@model List<SettingRow>
+@*
+    The two Polycom device passwords, shown here so they are discoverable from the page that
+    actually uses them, on top of the general Settings page they already live on (D88). Edit
+    links point at the real Settings page's own handlers, so opening one of these rows fetches
+    and posts against /Settings?handler=Form|Save|Reset — the same server-side validation and
+    storage as the Settings page itself, not a second copy of it. The absolute "/Settings/Index"
+    page path is required here: this partial is rendered from the Phones page, so the relative
+    form Settings/_Table.cshtml uses would resolve against the wrong page.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="key">Setting</th>
+            <th data-field="description">What it does</th>
+            <th data-field="value">Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("/Settings/Index", "Form", new { key = row.Key });
+
+            <tr data-edit-url="@editUrl">
+                <td class="font-monospace">@row.Key</td>
+                <td class="text-secondary">@row.Description</td>
+                <td class="font-monospace">
+                    @if (row.IsSet)
+                    {
+                        @row.Value
+                    }
+                    else
+                    {
+                        <span class="text-secondary fst-italic">using the default</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
