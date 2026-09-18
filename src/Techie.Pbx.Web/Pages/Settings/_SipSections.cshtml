@@ -1,0 +1,64 @@
+@model List<SettingSection>
+@*
+    The SIP settings, four small tables instead of one long one (D74). Clicking anywhere on a row
+    opens its edit form (D48) — the general settings page's form, in the shared modal, so a
+    setting is saved in exactly one place however an admin got to it.
+
+    These tables are deliberately not bootstrap-table: they are four or fewer rows each, already
+    in the order they are meant to be read, and a search box per section would be noise.
+*@
+@* "section" is a Razor directive, so the loop variable cannot be called that. *@
+@foreach (var group in Model)
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h5 card-title">@group.Title</h2>
+            @if (group.Help.Length > 0)
+            {
+                <p class="card-text text-secondary">@group.Help</p>
+            }
+
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Setting</th>
+                        <th>What it does</th>
+                        <th>Value</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in group.Rows)
+                    {
+                        var editUrl = Url.Page("Index", "Form", new { key = row.Key });
+
+                        <tr data-edit-url="@editUrl">
+                            <td class="font-monospace">@row.Key</td>
+                            <td class="text-secondary">@row.Description</td>
+                            <td class="font-monospace">
+                                @if (row.IsSet)
+                                {
+                                    @row.Value
+                                }
+                                else
+                                {
+                                    <span class="text-secondary fst-italic">using the default</span>
+                                }
+                            </td>
+                            <td class="font-monospace text-secondary">
+                                @if (row.Default.Length > 0)
+                                {
+                                    @row.Default
+                                }
+                                else
+                                {
+                                    <span class="fst-italic">none</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

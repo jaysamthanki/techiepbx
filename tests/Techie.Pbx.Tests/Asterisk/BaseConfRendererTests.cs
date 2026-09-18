@@ -49,6 +49,64 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// With a STUN server set, rtp.conf gains stunaddr and ICE. Asterisk 22's
+        /// res_rtp_asterisk takes stunaddr as host or host:port and re-resolves it periodically;
+        /// checked on the lab VM before this was written (D72).
+        /// </summary>
+        [Fact]
+        public void Rtp_with_stun_matches_expected_file()
+        {
+            var transport = new PjsipTransport { StunServer = "stun.l.google.com:19302" };
+
+            Assert.Equal(Expected("rtp-stun.conf"), RtpConfRenderer.Render(transport));
+        }
+
+        /// <summary>
+        /// Nothing about STUN or ICE is written unless something asked for it: the file a plain
+        /// server generates is the file it generated before these settings existed (D72).
+        /// </summary>
+        [Fact]
+        public void Rtp_says_nothing_about_stun_or_ice_by_default()
+        {
+            var actual = RtpConfRenderer.Render(new PjsipTransport());
+
+            Assert.DoesNotContain("stunaddr", actual);
+            Assert.DoesNotContain("icesupport", actual);
+        }
+
+        /// <summary>
+        /// An external address is the other way of knowing what the outside looks like, so it
+        /// turns ICE on by itself — but it is not a STUN server, so no stunaddr is written (D72).
+        /// </summary>
+        [Fact]
+        public void An_external_address_turns_ice_on_without_a_stun_server()
+        {
+            var transport = new PjsipTransport
+            {
+                ExternalAddress = "203.0.113.10",
+                LocalNets = { "10.8.20.0/24" },
+            };
+
+            var actual = RtpConfRenderer.Render(transport);
+
+            Assert.Contains("icesupport = yes\n", actual);
+            Assert.DoesNotContain("stunaddr", actual);
+        }
+
+        /// <summary>
+        /// rtp.conf is read at startup only, so the applier has to report it as needing a restart
+        /// rather than pretending a reload picked it up (D33).
+        /// </summary>
+        [Fact]
+        public void Rtp_conf_is_a_restart_not_a_reload()
+        {
+            var file = new GeneratedFile("rtp.conf", null, RtpConfRenderer.Render());
+
+            Assert.True(file.NeedsRestart);
+            Assert.Empty(ConfigApplier.ReloadOrder(new List<GeneratedFile> { file }));
+        }
+
+        /// <summary>
         /// The point of the file is that Asterisk loads what we listed and nothing else (D31).
         /// </summary>
         [Fact]

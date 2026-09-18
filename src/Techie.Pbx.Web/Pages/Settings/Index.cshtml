@@ -1,0 +1,28 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Settings";
+
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Settings</h1>
+</div>
+
+<p class="text-secondary">
+    Every setting this system has. There is no "add": the list is fixed, and a row with no value
+    of its own uses the default shown beside it. Click a row to change it. Settings are written
+    into the generated config, so a change needs an apply like any other.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="settings-table" hx-get="@tableUrl" hx-trigger="load, settingsChanged from:body">
+    <p class="text-secondary">Loading settings…</p>
+</div>
+
+<partial name="_FormModal" />
+
+@section Scripts {
+    <script src="~/js/settings.js" asp-append-version="true"></script>
+}

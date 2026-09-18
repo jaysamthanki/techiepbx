@@ -959,4 +959,52 @@ behaviour — the honest version of a setting that would otherwise silently not 
 but `Answer`, `NoOp`, `GotoIfTime`, `Goto`, `Set` and the destination helper, all already allowed.
 The allowlist is unchanged.
 
+### D67. The general Settings page lists every key in one table (2026-09-20)
+The Settings table got a UI: a "Settings" menu with a general page showing every key in
+`SettingsKeys`, each row clickable into the usual edit modal, with the built-in default shown
+next to the stored value. Descriptions live in one catalog (`SettingsCatalog`) so no row can
+claim a default the code does not use. Pages that edit a single setting (Timezone on the time
+conditions page) keep their shortcut; both routes write the same table. Editing a setting is a
+config change like any other — it marks config pending so the apply button lights up.
+
+### D68. Secret settings are written like extension passwords: never shown, blank means "leave alone" (2026-09-20)
+`Ami.Secret` is the only secret key. The table shows it masked, the modal never renders the
+stored value, and a reveal goes through the API the way an extension's password does. A blank
+field in the edit form means "keep the current value", not "clear it" — resetting to default
+still works through the footer button with a confirm.
+
+### D69. Setting edits mark config pending (2026-09-20)
+Every setting the Settings pages can write is read while config is generated, so editing one is
+a config change like editing an extension: the pending marker is set and the red apply button
+appears. Nothing is written to `/etc/asterisk` until Apply.
+
+### D70. A TCP transport is generated only when a TCP port is set (2026-09-20)
+pjsip.conf renders `transport-udp` always (bind address + UDP port) and `transport-tcp` only
+when `Sip.TcpPort` is set — an unset port means no listener at all, not a broken one. Both
+transports share the bind address, `local_net` list and external addresses, because those
+describe the machine rather than the protocol. Nothing binds endpoints to the TCP transport
+by name: a phone that connects over TCP is matched by the endpoint it authenticates as, and
+trunks stay on UDP.
+
+### D71. The TLS port is stored only: no TLS transport until certificate management exists (2026-09-20)
+`Sip.TlsPort` exists as a setting (and the SIP Settings page edits it, with help text saying
+so), but nothing renders a TLS transport: a pjsip TLS transport without `cert_file` stops
+Asterisk loading the file, so generating one would break every call. TLS becomes real when
+certificate management is its own piece.
+
+### D72. STUN renders into rtp.conf, verified on Asterisk 22 first (2026-09-20)
+`Sip.StunServer` (default `stun.l.google.com:19302`, empty = disabled) renders as
+`stunaddr = host[:port]` in rtp.conf, and `icesupport = yes` is written when either STUN or
+the NAT external address is set. Verified on the lab VM before writing the renderer: Asterisk
+22's `res_rtp_asterisk` supports `stunaddr` in rtp.conf (including `host:port` and periodic
+DNS re-resolution) and `icesupport`. rtp.conf is written but never reloaded (D33), so changing
+these settings reports RestartRequired honestly, like modules.conf changes.
+
+### D73. Codecs come from settings, limited to the modules the allowlist loads (2026-09-20)
+The hardcoded `allow = ulaw,alaw` in generated endpoints is replaced by the `Sip.Codecs`
+setting (default `ulaw,alaw`). The catalog of names a user may pick (`SipCodecs.Allowed`) is
+exactly ulaw, alaw and gsm — the codec modules the modules.conf allowlist loads (D31) —
+because naming anything else would generate a pjsip.conf Asterisk cannot honour. Adding a
+codec means adding its module to the allowlist first, and then to this list.
+
 

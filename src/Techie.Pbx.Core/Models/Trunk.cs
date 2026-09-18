@@ -11,9 +11,11 @@ namespace Techie.Pbx.Core.Models
     {
         /// <summary>
         /// The codecs a trunk may be configured with: exactly the ones modules.conf loads (D31).
-        /// Offering a codec Asterisk has no module for would render config that cannot work.
+        /// Offering a codec Asterisk has no module for would render config that cannot work. The
+        /// list itself is <see cref="SipCodecs.Allowed"/>, shared with the extensions' codec
+        /// setting so there is one answer to "which codecs exist here" (D73).
         /// </summary>
-        public static readonly IReadOnlyList<string> AllowedCodecs = new[] { "ulaw", "alaw", "gsm" };
+        public static readonly IReadOnlyList<string> AllowedCodecs = SipCodecs.Allowed;
 
         /// <summary>The username to authenticate with, when the provider's differs from Username.</summary>
         public string AuthUsername { get; set; } = "";
@@ -22,7 +24,7 @@ namespace Techie.Pbx.Core.Models
         public string CallerIDNumber { get; set; } = "";
 
         /// <summary>Comma separated, in preference order, e.g. "ulaw,alaw".</summary>
-        public string Codecs { get; set; } = "ulaw,alaw";
+        public string Codecs { get; set; } = SipCodecs.Default;
 
         public bool Enabled { get; set; } = true;
 

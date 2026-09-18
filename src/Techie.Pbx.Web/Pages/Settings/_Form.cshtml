@@ -1,0 +1,114 @@
+@using Techie.Pbx.Core.Data
+@model SettingForm
+@{
+    var resetUrl = Url.Page("Index", "Reset");
+    var saveUrl = Url.Page("Index", "Save");
+
+    var defaultText = Model.Descriptor.Default.Length > 0
+        ? $"Leave it blank to go back to the default, {Model.Descriptor.Default}."
+        : "Leave it blank to store nothing at all, which is this setting's default.";
+}
+@*
+    The whole contents of the shared Bootstrap modal: header, body and footer are inside the form
+    so that one htmx swap replaces the lot (D42). It posts itself and replaces itself with
+    whatever comes back, which is this form again when validation failed. A successful save
+    answers 204 with events, and site.js closes the modal and the table refreshes itself.
+
+    A secret's box starts empty and is a password field: the stored value is not in this HTML
+    (D68). Reading it back is the footer button, which asks the API for it on purpose.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title font-monospace">@Model.Key</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="key" value="@Model.Key" />
+
+    <p>@Model.Descriptor.Description</p>
+
+    <div class="mb-3">
+        <label class="form-label" for="setting-value">Value</label>
+
+        @if (Model.Descriptor.IsSecret)
+        {
+            <div class="input-group">
+                <input class="form-control font-monospace" id="setting-value" name="value" value="" type="password"
+                       maxlength="@SettingsValidation.MaxValueLength" autocomplete="new-password" spellcheck="false"
+                       placeholder="@(Model.IsSet ? "Leave blank to keep the stored value" : "")" />
+                @* Shows what is being typed, not what is stored: the stored one is not here. *@
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="pbxSettings.toggle('setting-value', this)">Show</button>
+            </div>
+            <div class="form-text">
+                @if (Model.IsSet)
+                {
+                    <text>A value is stored. Typing here replaces it; leaving the box blank keeps it.</text>
+                }
+                else
+                {
+                    <text>Nothing is stored yet.</text>
+                }
+            </div>
+        }
+        else
+        {
+            <input class="form-control font-monospace" id="setting-value" name="value" value="@Model.Value"
+                   maxlength="@SettingsValidation.MaxValueLength" autocomplete="off" spellcheck="false"
+                   placeholder="@Model.Descriptor.Placeholder" />
+            <div class="form-text">
+                @defaultText
+                @if (Model.Descriptor.Sample.Length > 0)
+                {
+                    <text>For example: <span class="font-monospace">@Model.Descriptor.Sample</span></text>
+                }
+            </div>
+        }
+    </div>
+
+    <p class="form-text mb-0">
+        Saved settings are written into the generated config, so the change reaches Asterisk at the
+        next apply.
+    </p>
+
+    </div>
+
+    @*
+        Everything this setting can have done to it, now that the table has no button column (D48).
+        Both left-hand actions only exist while there is something stored to act on.
+    *@
+    <div class="modal-footer justify-content-between">
+        <div class="d-flex gap-2">
+            @if (Model.IsSet && Model.Descriptor.IsSecret)
+            {
+                <button type="button" class="btn btn-outline-secondary"
+                        onclick="pbxSettings.showSecret('@Model.Key')">Show stored value</button>
+            }
+            @if (Model.IsSet)
+            {
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@resetUrl"
+                        hx-vals='{"key": "@Model.Key"}'
+                        hx-swap="none"
+                        hx-confirm="Reset @Model.Key to its default? Apply config afterwards to give the change to Asterisk.">Reset to default</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>

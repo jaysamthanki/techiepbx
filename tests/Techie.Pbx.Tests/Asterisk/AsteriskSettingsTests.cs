@@ -1,5 +1,6 @@
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Tests.Asterisk
 {
@@ -59,6 +60,55 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(new[] { "10.8.20.0/24", "192.168.0.0/16" }, transport.LocalNets);
             Assert.Equal("203.0.113.10", transport.ExternalAddress);
             Assert.Empty(transport.Validate());
+        }
+
+        [Fact]
+        public void The_tcp_port_stun_server_and_codecs_come_out_of_the_database()
+        {
+            var transport = AsteriskSettings.Transport(Values(
+                (SettingsKeys.SipTcpPort, "5060"),
+                (SettingsKeys.SipStunServer, "stun.l.google.com:19302"),
+                (SettingsKeys.SipCodecs, "gsm, ulaw")));
+
+            Assert.Equal(5060, transport.TcpPort);
+            Assert.Equal("stun.l.google.com:19302", transport.StunServer);
+            Assert.Equal(new[] { "gsm", "ulaw" }, transport.Codecs);
+            Assert.True(transport.UsesIce);
+            Assert.Empty(transport.Validate());
+        }
+
+        /// <summary>
+        /// Unset means off for these, not a default value: no TCP transport and no STUN at all
+        /// (D70, D72). Codecs are the one that does have a default.
+        /// </summary>
+        [Fact]
+        public void An_unset_tcp_port_or_stun_server_is_off_rather_than_defaulted()
+        {
+            var transport = AsteriskSettings.Transport(Values((SettingsKeys.SipPort, "5060")));
+
+            Assert.Null(transport.TcpPort);
+            Assert.Null(transport.StunServer);
+            Assert.False(transport.UsesIce);
+            Assert.Equal(new[] { "ulaw", "alaw" }, transport.Codecs);
+        }
+
+        /// <summary>
+        /// The TLS port is stored and never read: there is no certificate management, and a TLS
+        /// transport without a cert_file stops res_pjsip loading the file (D71).
+        /// </summary>
+        [Fact]
+        public void The_tls_port_is_stored_but_nothing_loads_it()
+        {
+            var settings = Values((SettingsKeys.SipTlsPort, "5061"));
+            var extensions = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111" },
+            };
+
+            var actual = PjsipConfRenderer.Render(AsteriskSettings.Transport(settings), extensions);
+
+            Assert.DoesNotContain("5061", actual);
+            Assert.DoesNotContain("tls", actual);
         }
 
         [Fact]

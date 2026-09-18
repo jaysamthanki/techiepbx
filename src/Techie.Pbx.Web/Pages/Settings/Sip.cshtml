@@ -1,0 +1,30 @@
+@page
+@model SipModel
+@{
+    ViewData["Title"] = "SIP settings";
+
+    var tableUrl = Url.Page("Sip", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">SIP settings</h1>
+</div>
+
+<p class="text-secondary">
+    The SIP and media settings, grouped (D74). They are the same settings the
+    <a asp-page="/Settings/Index">general settings page</a> lists, and they are edited the same way:
+    click a row. All of them are written into generated config, so a change needs an apply — and a
+    change to the media settings needs an Asterisk restart, because rtp.conf is only read at
+    startup (D33).
+</p>
+
+@* The sections arrive from the Table handler, and come back whenever a setting changed. *@
+<div id="sip-settings" hx-get="@tableUrl" hx-trigger="load, settingsChanged from:body">
+    <p class="text-secondary">Loading SIP settings…</p>
+</div>
+
+<partial name="_FormModal" />
+
+@section Scripts {
+    <script src="~/js/settings.js" asp-append-version="true"></script>
+}
