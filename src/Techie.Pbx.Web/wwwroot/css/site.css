@@ -34,3 +34,12 @@ tr[data-edit-url] {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* Placeholders should read as suggestions, not values someone already typed. Bootstrap's
+   default is gray-600, which next to black typed text looks like content; gray-400 keeps
+   the hint legible while making it obviously not typed (Jaysam, 2026-09-19). */
+.form-control::placeholder,
+.form-select::placeholder,
+textarea::placeholder {
+  color: var(--bs-gray-400);
+}
