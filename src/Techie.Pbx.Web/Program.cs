@@ -127,11 +127,14 @@ namespace Techie.Pbx.Web
             // was pointed at http:// has to be answered rather than redirected somewhere it may
             // have no certificate store for (D77). And the ACME challenge, which is fetched over
             // plain HTTP on port 80 by definition — redirecting it would break the renewal that
-            // keeps the certificate alive (D98).
+            // keeps the certificate alive (D98). Only port 80 redirects (D99): 8080 is the
+            // HTTP way back in — an IP address or a hostname the certificate does not cover must
+            // keep working over plain HTTP there, or the redirect locks an admin out.
             if (certificate != null)
             {
                 app.UseWhen(
-                    context => !context.Request.Path.StartsWithSegments(Controllers.PolycomController.RoutePrefix) &&
+                    context => context.Connection.LocalPort == WebBindings.HttpPort &&
+                               !context.Request.Path.StartsWithSegments(Controllers.PolycomController.RoutePrefix) &&
                                !context.Request.Path.StartsWithSegments(Controllers.YealinkController.RoutePrefix) &&
                                !context.Request.Path.StartsWithSegments(AcmeChallengePath),
                     branch => branch.UseHttpsRedirection());
