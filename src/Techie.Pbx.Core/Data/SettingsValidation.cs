@@ -148,6 +148,11 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("NTP server must be a hostname or IP address, e.g. pool.ntp.org.");
                     break;
 
+                case SettingsKeys.SystemHostname:
+                    if (text.Length != 0 && !HostPattern().IsMatch(text))
+                        errors.Add("The hostname must be a bare hostname or IP address, e.g. pbx.example.com — no http:// and no path. Leave it empty to keep using whatever host the phone asked on.");
+                    break;
+
                 case SettingsKeys.SystemTimezone:
                     Timezone(errors, text);
                     break;

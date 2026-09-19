@@ -1413,6 +1413,17 @@ inside the deploy target — the same protected live state as appsettings.json a
 and keys are created with a 365-day lifetime (user decision): the appliance rolls the key over
 in the background long before expiry, and a ring that survives re-deploys is the point.
 
+### D105. System.Hostname: the name phones are told to reach the PBX on (2026-09-22)
+Provisioning used to be purely request-derived: whatever host a phone asked on went into its
+config as the SIP server address and the provisioning URL — clean by default, but it means a
+phone that first contacts the box by IP keeps using the IP until it is re-provisioned by name.
+System.Hostname (Phones scope, empty by default) pins it: when set, every generated phone config
+names that host instead of the request's, so a phone lands on the site's real name however it
+first found the box. Empty keeps the request-derived behavior, which is also the only thing that
+works before the box has a name at all. A bare hostname or IP only — no scheme, no path — and
+because it is Phones-scoped, saving it lights no apply button (D103): phones pick it up at
+their next poll. The phones table also grew bootstrap-table's standard refresh button.
+
 ### D103. Settings have a scope, and only an Asterisk-scoped one lights the apply button (2026-09-23)
 Every settings write raised the config-pending marker, because when the Settings table held only
 AMI and SIP keys that was true (D69). It stopped being true when phone provisioning and ACME

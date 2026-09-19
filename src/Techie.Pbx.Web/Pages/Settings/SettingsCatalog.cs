@@ -162,6 +162,12 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "The hostname phones are told to reach the PBX on — the SIP server address and the provisioning URL in their configs. Leave it empty to keep using whatever host the phone asked on; set it when the site has a real name, so a phone that first contacts this box by IP still ends up on the name.",
+                Key = SettingsKeys.SystemHostname,
+                Sample = "pbx.example.com",
+            },
+            new SettingDescriptor
+            {
                 Choices = SystemTimezones.All,
                 Default = AsteriskSettings.DefaultTimezone,
                 Description = "The zone a time condition's open hours and holidays are written in. Every check in the generated dialplan names it, so Asterisk evaluates the hours in that zone with daylight saving included, whatever the server's clock says — the clock itself is meant to be UTC (D74).",
