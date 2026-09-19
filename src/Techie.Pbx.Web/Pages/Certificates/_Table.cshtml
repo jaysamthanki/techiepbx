@@ -1,0 +1,44 @@
+@model List<CertificateRow>
+@*
+    Clicking anywhere on a row opens its form (D48); Renew and Delete live in that form's footer.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="name"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="hostnames" data-sortable="true">Hostnames</th>
+            <th data-field="expires" data-sortable="true">Expires</th>
+            <th data-field="days" data-sortable="true">Days left</th>
+            <th data-field="status">Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { certificateID = row.CertificateID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.Hostnames</td>
+                <td>@row.Expires</td>
+                <td>@row.DaysLeft</td>
+                <td>
+                    <span class="badge @row.BadgeClass">@row.Status</span>
+                    @if (row.Note.Length > 0)
+                    {
+                        <div class="small text-secondary">@row.Note</div>
+                    }
+                    @if (row.LastError.Length > 0)
+                    {
+                        <div class="small text-danger">@row.LastError</div>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

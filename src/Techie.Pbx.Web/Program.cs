@@ -1,14 +1,26 @@
+using System.Security.Cryptography.X509Certificates;
 using log4net;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Security;
+using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
 
 namespace Techie.Pbx.Web
 {
     public class Program
     {
+        /// <summary>
+        /// Where an ACME server fetches the answer to an HTTP-01 challenge. Plain HTTP, no
+        /// authentication and no redirect: the path is fixed by the ACME standard and the token in
+        /// it is the only thing that makes an answer available at all (D98).
+        /// </summary>
+        public const string AcmeChallengePath = "/.well-known/acme-challenge";
+
         /// <summary>
         /// The header htmx and our own fetch calls send the antiforgery token in. The layout puts
         /// the token on the body element (hx-headers) and in a meta tag.
@@ -30,6 +42,24 @@ namespace Techie.Pbx.Web
             // Route framework logging into log4net; our own code logs via LogManager directly.
             builder.Logging.ClearProviders();
             builder.Logging.AddLog4Net("log4net.config");
+
+            // Before anything else now: which ports this app listens on is a question only the
+            // database can answer, because the certificate lives there (D97, D99).
+            PbxDatabase.Open(DatabasePath(builder.Environment, builder.Configuration));
+
+            var (certificate, chain) = ServerCertificate();
+            var bindings = WebBindings.For(certificate != null);
+
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                foreach (var binding in bindings)
+                {
+                    if (binding.UsesCertificate && certificate != null)
+                        options.ListenAnyIP(binding.Port, listen => listen.UseHttps(https => Present(https, certificate, chain)));
+                    else
+                        options.ListenAnyIP(binding.Port);
+                }
+            });
 
             // Cookie-based Entra ID sign-in. API controllers use the same cookie (only our Razor pages call them).
             builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
@@ -75,6 +105,12 @@ namespace Techie.Pbx.Web
             builder.Services.AddAntiforgery(options => options.HeaderName = AntiforgeryHeaderName);
             builder.Services.AddControllers(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
+            // Renews certificates before they expire, whether or not anybody is signed in (D100).
+            builder.Services.AddHostedService<CertificateRenewalService>();
+
+            if (certificate != null)
+                builder.Services.AddHttpsRedirection(options => options.HttpsPort = WebBindings.HttpsPort);
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())
@@ -83,15 +119,23 @@ namespace Techie.Pbx.Web
                 app.UseHsts();
             }
 
-            // Everything an admin touches is HTTPS. Phone provisioning is the exception: DHCP
-            // option 160 (Polycom) and option 66 (Yealink, D88) each point a phone at a URL with a
-            // scheme in it, and a phone that was pointed at http:// has to be answered rather than
-            // redirected somewhere it may have no certificate store for (D77). The credentials are
-            // the gate either way.
-            app.UseWhen(
-                context => !context.Request.Path.StartsWithSegments(Controllers.PolycomController.RoutePrefix) &&
-                           !context.Request.Path.StartsWithSegments(Controllers.YealinkController.RoutePrefix),
-                branch => branch.UseHttpsRedirection());
+            // Everything an admin touches is HTTPS, once there is a certificate to serve it with;
+            // before that there is nothing to redirect to and the branch is not added at all (D99).
+            //
+            // Two exceptions either way. Phone provisioning: DHCP option 160 (Polycom) and option
+            // 66 (Yealink, D88) each point a phone at a URL with a scheme in it, and a phone that
+            // was pointed at http:// has to be answered rather than redirected somewhere it may
+            // have no certificate store for (D77). And the ACME challenge, which is fetched over
+            // plain HTTP on port 80 by definition — redirecting it would break the renewal that
+            // keeps the certificate alive (D98).
+            if (certificate != null)
+            {
+                app.UseWhen(
+                    context => !context.Request.Path.StartsWithSegments(Controllers.PolycomController.RoutePrefix) &&
+                               !context.Request.Path.StartsWithSegments(Controllers.YealinkController.RoutePrefix) &&
+                               !context.Request.Path.StartsWithSegments(AcmeChallengePath),
+                    branch => branch.UseHttpsRedirection());
+            }
 
             app.UseRouting();
 
@@ -115,11 +159,11 @@ namespace Techie.Pbx.Web
             app.MapRazorPages()
                .WithStaticAssets();
             app.MapControllers();
+            MapAcmeChallenge(app);
 
-            PbxDatabase.Open(DatabasePath(app));
             PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
 
-            Log.Info("TNPBX web starting");
+            Log.Info($"TNPBX web starting on {string.Join(", ", bindings)}");
             app.Run();
         }
 
@@ -127,12 +171,78 @@ namespace Techie.Pbx.Web
         /// Database:Path, or the default, and a relative path is relative to the install rather
         /// than to whatever directory the service happened to start in.
         /// </summary>
-        private static string DatabasePath(WebApplication app)
+        private static string DatabasePath(IWebHostEnvironment environment, IConfiguration configuration)
         {
-            var configured = app.Configuration["Database:Path"];
+            var configured = configuration["Database:Path"];
             var path = string.IsNullOrWhiteSpace(configured) ? DefaultDatabasePath : configured.Trim();
 
-            return Path.IsPathRooted(path) ? path : Path.Combine(app.Environment.ContentRootPath, path);
+            return Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path);
+        }
+
+        /// <summary>
+        /// The one endpoint outside the Entra cookie that is not phone provisioning: the ACME
+        /// server fetching the answer to a challenge this app published while ordering (D98).
+        /// Anonymous because the ACME server has no credentials to offer and the token is the
+        /// secret; a token nobody is waiting for gets a 404, so there is nothing here to walk.
+        /// </summary>
+        private static void MapAcmeChallenge(WebApplication app)
+        {
+            app.MapGet(AcmeChallengePath + "/{token}", (string token) =>
+            {
+                var answer = AcmeChallengeStore.Answer(token);
+
+                if (answer == null)
+                {
+                    Log.Warn($"ACME challenge for an unknown token refused");
+                    return Results.NotFound();
+                }
+
+                Log.Info("ACME challenge answered");
+                return Results.Text(answer, "text/plain");
+            }).AllowAnonymous();
+        }
+
+        /// <summary>
+        /// What the HTTPS listener presents: the leaf with its private key, plus any issuers, so a
+        /// client that does not already hold the intermediate can still build a chain.
+        /// </summary>
+        private static void Present(HttpsConnectionAdapterOptions https, X509Certificate2 certificate, X509Certificate2Collection chain)
+        {
+            https.ServerCertificate = certificate;
+
+            if (chain.Count > 0)
+                https.ServerCertificateChain = chain;
+        }
+
+        /// <summary>
+        /// The certificate Kestrel should serve, from the database (D99), or nulls to start in
+        /// bootstrap mode. A row that cannot be loaded is logged and treated as no certificate at
+        /// all: an appliance that will not start is worse than one that starts without HTTPS and
+        /// says so.
+        /// </summary>
+        private static (X509Certificate2? Certificate, X509Certificate2Collection Chain) ServerCertificate()
+        {
+            var empty = new X509Certificate2Collection();
+            var row = new CertificateRepository(PbxDatabase.Current).Current(DateTimeOffset.UtcNow);
+
+            if (row == null)
+            {
+                Log.Info("No usable certificate: starting in bootstrap mode, HTTP only");
+                return (null, empty);
+            }
+
+            var loaded = CertificatePem.Load(row.CertificatePem, row.KeyPem);
+
+            if (loaded == null)
+            {
+                Log.Error($"Certificate '{row.Name}' could not be loaded; starting without HTTPS");
+                return (null, empty);
+            }
+
+            KestrelCertificate.Loaded(row.CertificateID, row.ExpiresUtc);
+            Log.Info($"Serving certificate '{row.Name}' for {row.Hostnames}, expires {row.ExpiresUtc}");
+
+            return (loaded, CertificatePem.LoadChain(row.ChainPem));
         }
     }
 }

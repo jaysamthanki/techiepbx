@@ -17,6 +17,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly string confDirectory;
         private readonly Database database;
         private readonly AnnouncementRepository announcements;
+        private readonly CertificateRepository certificates;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
@@ -48,9 +49,10 @@ namespace Techie.Pbx.Tests.Asterisk
 
             // Port 1 has nothing listening: any attempt to reload would fail loudly.
             var ami = new AmiSettings { Port = 1, Username = "tnpbx", Secret = "not-a-real-secret", TimeoutSeconds = 1 };
+            this.certificates = new CertificateRepository(this.database);
             this.applier = new ConfigApplier(
-                this.confDirectory, new PjsipTransport(), this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements, this.ivrs, this.timeConditions, ami, this.pending);
+                this.confDirectory, new PjsipTransport(), this.certificates, this.extensions, this.trunks, this.routes,
+                this.inbound, this.ringGroups, this.announcements, this.ivrs, this.timeConditions, ami, this.pending);
         }
 
         public void Dispose()
@@ -74,7 +76,8 @@ namespace Techie.Pbx.Tests.Asterisk
                 new[]
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
-                    "manager.conf", "pjsip.conf", "pjsip_notify.conf", "extensions.conf", "voicemail.conf",
+                    "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf", "pjsip_notify.conf",
+                    "extensions.conf", "voicemail.conf",
                 },
                 files.Select(f => f.FileName));
 
@@ -82,7 +85,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new string?[]
                 {
                     null, null, null, ConfigApplier.LoggerModule,
-                    ConfigApplier.ManagerModule, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
+                    ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                 },
                 files.Select(f => f.Module));
@@ -99,7 +102,11 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var restart = this.applier.Render().Where(f => f.NeedsRestart).Select(f => f.FileName);
 
-            Assert.Equal(new[] { "asterisk.conf", "modules.conf", "rtp.conf" }, restart);
+            // tnpbx-cert.pem joins the restart set (D101): a transport reads its certificate
+            // when it is built, so a renewed one reaches SIP only at the next Asterisk start.
+            Assert.Equal(
+                new[] { "asterisk.conf", "modules.conf", "rtp.conf", PjsipConfRenderer.TlsCertificateFileName },
+                restart);
         }
 
         [Fact]
@@ -109,7 +116,9 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var written = this.applier.Write().Select(f => f.FileName).ToList();
 
-            Assert.Equal(9, written.Count);
+            // Ten files since piece 23: tnpbx-cert.pem is always written (empty when no
+            // certificate exists, so a stale key never lingers — D101).
+            Assert.Equal(10, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 

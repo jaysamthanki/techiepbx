@@ -56,9 +56,13 @@ namespace Techie.Pbx.Asterisk.Config
             transport.StunServer = Text(settings, SettingsKeys.SipStunServer);
 
             // Unset means off, not a default: no port, no TCP transport in the file at all (D70).
-            // Sip.TlsPort is deliberately not read — nothing renders a TLS transport yet (D71).
             var tcpPort = Text(settings, SettingsKeys.SipTcpPort);
             transport.TcpPort = int.TryParse(tcpPort, out var tcp) ? tcp : null;
+
+            // TLS is different: what gates it is having a certificate, not having a port, so an
+            // unset port falls back to 5061 rather than switching the transport off (D101).
+            var tlsPort = Text(settings, SettingsKeys.SipTlsPort);
+            transport.TlsPort = int.TryParse(tlsPort, out var tls) ? tls : null;
 
             var codecs = Text(settings, SettingsKeys.SipCodecs);
             if (codecs != null)

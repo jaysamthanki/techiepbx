@@ -3,6 +3,7 @@ using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Core.Security;
 
 namespace Techie.Pbx.Web.Pages.Settings
 {
@@ -132,6 +133,25 @@ namespace Techie.Pbx.Web.Pages.Settings
             {
                 Description = "The password for the Polycom web UI's built-in \"User\" account, written into every phone's config. Stored here and shown only when you ask for it.",
                 Key = SettingsKeys.ProvisioningUserPassword,
+            },
+            new SettingDescriptor
+            {
+                Choices = AcmeServers.All,
+                Default = AcmeServers.Default,
+                Description = "Where certificates are ordered from. Leave it on production unless you are testing the ordering itself: staging issues certificates nothing trusts, which is what makes it safe to order from repeatedly.",
+                Key = SettingsKeys.CertAcmeServer,
+                Sample = AcmeServers.LetsEncrypt,
+            },
+            new SettingDescriptor
+            {
+                Description = "The ACME account key, generated the first time a certificate is ordered and reused for every renewal after it. There is normally no reason to touch this; it is shown only when you ask for it. Clearing it makes the next order register a new account.",
+                Key = SettingsKeys.CertAcmeAccountKeyPem,
+            },
+            new SettingDescriptor
+            {
+                Description = "The contact address the Let's Encrypt account is registered with. Required before a certificate can be ordered: it is where expiry warnings go if renewal ever stops working.",
+                Key = SettingsKeys.CertEmail,
+                Sample = "admin@example.com",
             },
             new SettingDescriptor
             {
