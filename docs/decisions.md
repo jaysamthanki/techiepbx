@@ -1270,3 +1270,75 @@ are generated into **pjsip_notify.conf** — the file Asterisk 22's res_pjsip_no
 declined to load) — and res_pjsip_notify.so joins the modules.conf allowlist to load it.
 Per D33, pjsip_notify.conf is written but never live-reloaded: an apply that changes it reports
 a restart, which is rare since the categories are fixed.
+
+### D92. The installer ships everything except the application; deploying the app is a separate step (2026-09-22)
+User decision. `install.sh` prepares a fresh Debian server completely — clock, packages, users,
+permissions, Asterisk built from source, systemd unit — and then stops. It does not publish
+`Techie.Pbx.Web`, does not write `tnpbx-web.service`, and does not install the polkit rule that
+lets the web user restart Asterisk.
+
+The reason is sequencing rather than design: the application is still changing, and an installer
+that bakes in a deploy would have to be revised every time the publish layout, the configuration
+file or the unit's `ReadWritePaths` moved. What the server needs underneath the app is settled
+and proven on the lab VM; what the app's own deploy looks like is not. So part 1 is the part that
+can be finished, and the deploy lands on top of it as part 2 once the app is finalised.
+
+What this costs, and it is worth being plain about it: **a server this script has finished is not
+a working PBX.** It is a machine with Asterisk on it and an empty `/opt/tnpbx`. The script's
+closing summary says so in as many words, lists what it deliberately did not do (app, polkit,
+Helper, firewall, fail2ban) and names the piece each of those belongs to, because an installer
+that finishes quietly is an installer an operator will assume is done.
+
+`/opt/tnpbx` is created anyway — `tnpbx:asterisk`, 0750, empty — so that the deploy step is a
+copy into a directory that already has the right owner rather than a second place that has to
+know about permissions.
+
+### D93. The installer leaves Asterisk enabled but stopped (2026-09-22)
+`systemctl enable asterisk`, no `systemctl start`. The database is the source of truth and the
+application generates every file in `/etc/asterisk` on its first apply (D4), so at the end of the
+install that directory is **empty** and there is nothing for Asterisk to read.
+
+This is not merely "it would not do anything useful". An Asterisk with no `modules.conf` falls
+back to `autoload = yes` and loads every module it was built with — including
+`res_pjsip_endpoint_identifier_anonymous`, the one D31 names as how a PBX ends up taking calls
+from strangers. Starting it before the generated allowlist exists would open exactly the surface
+that allowlist is there to close, on a box that by definition has no firewall yet (piece 19).
+
+For the same reason `make samples` is **not** run. The spike script wiped `/etc/asterisk` after
+`make install` for its own reasons; here the sample config is simply never installed, so there is
+no window in which a startable-but-unconfigured Asterisk exists. `make install` alone still brings
+the core sound files the generated dialplan plays (`ss-noservice` per D45, `demo-echotest`,
+`invalid` per D59).
+
+Enabled-but-stopped rather than disabled, because the intended end state is that Asterisk starts
+at boot; the only thing missing is the first apply. After it, `systemctl start asterisk` is the
+operator's one manual step, and every boot after that is automatic.
+
+### D94. The lab VM's layout is the canonical layout, and the installer reproduces it exactly (2026-09-22)
+The users, groups and permissions in `install.sh` are not a fresh design. They are what has been
+running on the lab VM through every piece from extensions to phone provisioning, which means the
+web process writing `pjsip.conf`, Asterisk reading it, announcement audio being written by one
+user and played by the other, and the whole of `/etc/asterisk` being replaced on every apply have
+all been exercised against this layout rather than reasoned about.
+
+| Path / principal | Owner | Mode | Why |
+|---|---|---|---|
+| `asterisk` | system user, `/var/lib/asterisk`, nologin | | Runs the PBX |
+| `tnpbx` | system user, `/opt/tnpbx`, nologin | | Runs the web app; never root, never sudo (D3) |
+| `tnpbx` in group `asterisk` | | | The whole of how the app writes config (D18) |
+| `/etc/asterisk` | `root:asterisk` | **2770** | Group write lets the app create files; setgid makes them group-owned by `asterisk` so the PBX can read them (D18) |
+| `/var/lib`, `/var/spool`, `/var/log/asterisk` | `asterisk:asterisk` | 0755 | Asterisk's own working directories |
+| `/var/lib/asterisk/sounds/tnpbx/announcements` | `asterisk:asterisk` | 2770 | Same setgid model for uploaded audio (D56) |
+| `/opt/tnpbx` | `tnpbx:asterisk` | 0750 | The app and its `Data` folder (D25) |
+
+Two consequences of writing it down. First, the permissions block in the installer is a function
+(`apply_layout`) that is called again after `make install`, because Asterisk's own install creates
+several of these directories and would otherwise undo the modes set before it. Second, this table
+is now the thing to change when the layout changes — the installer, the lab VM and this decision
+are meant to say the same thing, and the way that stays true is that there is one description of
+it rather than three.
+
+Open, and noted in [roadmap.md](roadmap.md): D56 describes the announcements directory as
+`root:asterisk` while the lab VM and the installer make it `asterisk:asterisk`. Group write via
+`asterisk` is what matters and both forms give it, so this is a tidying-up question rather than a
+functional one.
