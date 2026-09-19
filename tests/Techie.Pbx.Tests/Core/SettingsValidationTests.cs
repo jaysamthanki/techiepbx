@@ -306,6 +306,29 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
+        /// The hostname phones are told to reach the PBX on (D105): a bare hostname or IP, or
+        /// empty — empty is the default and means "whatever host the phone asked on".
+        /// </summary>
+        [Theory]
+        [InlineData("pbx.techie.gd")]
+        [InlineData("10.8.20.8")]
+        [InlineData("")]
+        public void A_hostname_that_is_bare_or_empty_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.SystemHostname, value));
+        }
+
+        [Theory]
+        [InlineData("http://pbx.techie.gd")]
+        [InlineData("pbx.techie.gd/polycom")]
+        [InlineData("pbx techie")]
+        [InlineData(";evil")]
+        public void A_hostname_that_is_not_bare_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.SystemHostname, value));
+        }
+
+        /// <summary>
         /// The two Polycom device account passwords are the same shape as the provisioning
         /// password (D84) even though they never end up in a URL, because that shape is also safe
         /// to write straight into an XML attribute.

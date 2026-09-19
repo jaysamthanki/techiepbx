@@ -143,7 +143,7 @@ namespace Techie.Pbx.Web.Controllers
                 NtpServer = AsteriskSettings.NtpServer(stored),
                 Phone = phone,
                 ProvisioningPassword = (provisioningPassword ?? "").Trim(),
-                ProvisioningUrl = this.Request.Scheme + "://" + this.Request.Host + RoutePrefix,
+                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + RoutePrefix,
                 ProvisioningUsername = (provisioningUsername ?? "").Trim(),
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
@@ -211,8 +211,15 @@ namespace Techie.Pbx.Web.Controllers
             return null;
         }
 
-        /// <summary>The host the phone asked us on, without the port it asked on.</summary>
-        private string RequestHost() => this.Request.Host.Host;
+        /// <summary>
+        /// The host the phone should know the PBX by: the System.Hostname setting when the site
+        /// has one (D105), otherwise the host the phone just asked us on, without the port.
+        /// </summary>
+        private string RequestHost()
+        {
+            var hostname = (this.settings.Get(SettingsKeys.SystemHostname) ?? "").Trim();
+            return hostname.Length > 0 ? hostname : this.Request.Host.Host;
+        }
 
         /// <summary>
         /// Where the phone should send SIP: the bind address, unless Asterisk is listening on

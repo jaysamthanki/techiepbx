@@ -100,6 +100,15 @@ namespace Techie.Pbx.Core.Data
         public const string SystemNtpServer = "System.NtpServer";
 
         /// <summary>
+        /// The hostname phones are told to reach the PBX on — the SIP server address and the
+        /// provisioning URL in every generated phone config (D105). Empty means "use whatever
+        /// host the phone just asked us on", which keeps working when the box is reachable by
+        /// address only; set it when the site has a real name, so a phone that first contacts
+        /// the box by IP still ends up on the name.
+        /// </summary>
+        public const string SystemHostname = "System.Hostname";
+
+        /// <summary>
         /// The ACME directory the certificate service orders from (D97). Defaults to Let's
         /// Encrypt's production endpoint; the staging one is the other value it accepts, for
         /// testing an order without spending a rate limit on a real certificate.
@@ -153,6 +162,7 @@ namespace Techie.Pbx.Core.Data
             CertAcmeAccountKeyPem,
             CertEmail,
             SystemNtpServer,
+            SystemHostname,
             SystemTimezone,
         };
 
@@ -218,6 +228,9 @@ namespace Techie.Pbx.Core.Data
 
             // Phones are told where to get the time from; nothing else reads it.
             [SystemNtpServer] = SettingScope.Phones,
+
+            // Phones are told which host to reach the PBX on; nothing in a conf file reads it.
+            [SystemHostname] = SettingScope.Phones,
 
             // Read by both: every GotoIfTime in the generated dialplan names the zone (D74), and a
             // Polycom phone is given its offset. Asterisk wins, because that half needs an apply.

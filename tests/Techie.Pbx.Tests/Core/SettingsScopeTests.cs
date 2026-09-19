@@ -77,6 +77,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.ProvisioningPassword,
                     SettingsKeys.ProvisioningUserPassword,
                     SettingsKeys.ProvisioningUsername,
+                    SettingsKeys.SystemHostname,
                     SettingsKeys.SystemNtpServer,
                 },
                 KeysIn(SettingScope.Phones));
@@ -110,6 +111,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.ProvisioningAdminPassword, SettingScope.Phones)]
         [InlineData(SettingsKeys.ProvisioningUserPassword, SettingScope.Phones)]
         [InlineData(SettingsKeys.SystemNtpServer, SettingScope.Phones)]
+        [InlineData(SettingsKeys.SystemHostname, SettingScope.Phones)]
         [InlineData(SettingsKeys.SystemTimezone, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.SipCodecs, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.SipTlsPort, SettingScope.Asterisk)]
