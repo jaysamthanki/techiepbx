@@ -115,6 +115,12 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("force_rport = yes\n");
                 sb.Append("rewrite_contact = yes\n");
 
+                // The mailbox this endpoint's MWI light reports: with it, res_pjsip_mwi answers the
+                // phone's SUBSCRIBE and Asterisk sends a NOTIFY the moment a message arrives or is
+                // heard (D108). Only an endpoint with voicemail on has a mailbox to name.
+                if (extension.VoicemailEnabled)
+                    sb.Append($"mailboxes = {number}@{VoicemailConfRenderer.MailboxContext}\n");
+
                 sb.Append('\n');
                 sb.Append($"[{number}-auth]\n");
                 sb.Append("type = auth\n");

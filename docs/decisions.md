@@ -1525,3 +1525,32 @@ log4net `FileAppender`, so it cannot drift from `log4net.config`. "Follow" is ht
 Asterisk creates its log files 0644 (checked on the lab VM), so `tnpbx` reads them as a group
 member with no change to either unit; if a site's Asterisk ever creates them tighter, the fix is
 a `UMask=` line in the Asterisk unit, not a privilege.
+
+### D108. MWI: mailboxes on the endpoint, and the two modules that make SUBSCRIBE work (2026-09-19)
+Found live by Claude on the lab VM: the phones (Polycom `msg.mwi.1.subscribe`, Yealink
+`subscribe_mwi_to_vm`, both written by the piece-22 provisioning config) SUBSCRIBE to
+message-summary and the generated `modules.conf` allowlist had no `res_pjsip_mwi` — every
+subscribe failed into the log. The module set the installer builds is stock, so this is a
+config change, not a build change: **no installer edit was needed**.
+
+Two things were added:
+
+- **`res_pjsip_mwi.so` and `res_pjsip_mwi_body_generator.so` to the allowlist** (D31). The
+  first answers the SUBSCRIBE, the second writes the message-summary body. Deliberately not
+  added: `res_mwi_devstate.so`, which is for exposing MWI as device state (BLF hints); no
+  feature here uses hints.
+- **`mailboxes = <number>@default` on every PJSIP endpoint whose extension has voicemail on**,
+  in `VoicemailConfRenderer.MailboxContext` (D29's `default`). With the mailbox named on the
+  endpoint, Asterisk sends MWI NOTIFYs to subscribed phones when a message arrives or is heard
+  (`*97` clears the light too). Endpoints without voicemail get no line, so the file for a
+  voicemail-less system is unchanged.
+
+Subscription question from the roadmap (piece 13) resolved implicitly: phones subscribe on
+their own — the provisioning config already tells them to — and Asterisk accepting the
+SUBSCRIBE is the whole of the server-side decision. No per-endpoint `mwi_subscribe_replaces`,
+no polling.
+
+Consequences worth naming: an apply that toggles voicemail now rewrites `pjsip.conf` as well
+(`ConfigApplierTests` updated), and `modules.conf` changes mean an **Asterisk restart** is
+required (D33) — piece 24's restart offer handles it. Lab VM verified: the two modules load
+clean, `voicemail show users` unchanged.

@@ -156,11 +156,12 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// Switching voicemail on rewrites the mailbox list and the dialplan that falls back to
-        /// it, but leaves the endpoint alone: two modules to reload, not three.
+        /// Switching voicemail on rewrites the mailbox list, the dialplan that falls back to it
+        /// and the endpoint, which now carries a mailboxes = line for MWI (D108): three files,
+        /// three modules.
         /// </summary>
         [Fact]
-        public void Switching_voicemail_on_touches_the_dialplan_and_the_mailboxes()
+        public void Switching_voicemail_on_touches_the_dialplan_the_mailboxes_and_pjsip()
         {
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
             this.applier.Write();
@@ -172,9 +173,11 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var changed = this.applier.Write();
 
-            Assert.Equal(new[] { "extensions.conf", "voicemail.conf" }, changed.Select(f => f.FileName));
             Assert.Equal(
-                new[] { ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule },
+                new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" },
+                changed.Select(f => f.FileName));
+            Assert.Equal(
+                new[] { ConfigApplier.PjsipModule, ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule },
                 changed.Select(f => f.Module));
         }
 

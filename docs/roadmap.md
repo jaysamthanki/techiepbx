@@ -99,8 +99,11 @@ Still to do:
   sends or the app does — is still open.
 - Voicemail as a **destination** for inbound routes, IVRs and ring group failover waits for
   piece 8 (destinations).
-- **MWI** (the message-waiting light on the phone) is not configured: it needs `mailboxes =` on
-  the PJSIP endpoint and a decision about subscriptions.
+- ~~**MWI** (the message-waiting light on the phone) is not configured: it needs `mailboxes =` on
+  the PJSIP endpoint and a decision about subscriptions.~~ Done 2026-09-19 (D108), after Claude
+  saw the phones' subscribe failures in the lab VM logs: `res_pjsip_mwi` +
+  `res_pjsip_mwi_body_generator` on the allowlist and `mailboxes = <ext>@default` on endpoints
+  with voicemail. Needs an Asterisk restart (modules.conf, D33) to take effect.
 - Run it on the lab VM: leave a message, listen to it with `*97`, check the busy greeting.
 
 ## Piece 7 detail (in progress, started 2026-09-16)
