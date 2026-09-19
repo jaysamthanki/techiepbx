@@ -1,0 +1,92 @@
+@model CertificateForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var renewUrl = Url.Page("Index", "Renew");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42). Saving a new certificate orders it,
+    which can take a minute, so the submit button says what is actually happening and htmx's
+    indicator class shows it is still going.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML" hx-indicator="#certificate-busy">
+    <div class="modal-header">
+        <h5 class="modal-title">@(Model.IsNew ? "Order certificate" : $"Certificate {Model.Name}")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="certificateID" value="@Model.CertificateID" />
+
+    <div class="mb-3">
+        <label class="form-label" for="certificate-name">Name</label>
+        <input class="form-control" id="certificate-name" name="name" value="@Model.Name"
+               maxlength="64" autocomplete="off" required />
+        <div class="form-text">What you call this certificate. Only a label.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="certificate-hostnames">Hostnames</label>
+        <textarea class="form-control font-monospace" id="certificate-hostnames" name="hostnames"
+                  rows="3" autocomplete="off" required
+                  placeholder="pbx.example.com">@Model.Hostnames</textarea>
+        <div class="form-text">
+            One per line, or comma separated. Every name has to resolve to this server in public
+            DNS and reach it on <strong>port 80</strong>: that is where Let's Encrypt fetches the
+            challenge this app answers. Wildcards are not possible here — name each host.
+        </div>
+    </div>
+
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="certificate-enabled" name="enabled" value="true"
+               checked="@(Model.Enabled ? "checked" : null)" />
+        <label class="form-check-label" for="certificate-enabled">Enabled</label>
+        <div class="form-text">
+            A disabled certificate is not served and no TLS transport is generated for it.
+        </div>
+    </div>
+
+    <p class="text-secondary small mb-0">
+        Ordering talks to Let's Encrypt and can take up to a minute. Once it succeeds,
+        <strong>Apply config</strong> puts SIP TLS on Asterisk, and the web server serves the new
+        certificate the next time the app restarts.
+    </p>
+
+    </div>
+
+    <div class="modal-footer justify-content-between">
+        <div class="d-flex gap-2">
+            @if (!Model.IsNew)
+            {
+                <button type="button" class="btn btn-outline-secondary"
+                        hx-post="@renewUrl"
+                        hx-vals='{"certificateID": @Model.CertificateID}'
+                        hx-swap="none"
+                        hx-indicator="#certificate-busy"
+                        hx-confirm="Order this certificate again now?">@(Model.IsIssued ? "Renew now" : "Order now")</button>
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@deleteUrl"
+                        hx-vals='{"certificateID": @Model.CertificateID}'
+                        hx-swap="none"
+                        hx-confirm="Delete this certificate? The private key is removed from the database and from Asterisk at the next apply.">Delete</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <span id="certificate-busy" class="htmx-indicator align-self-center text-secondary">Talking to Let's Encrypt…</span>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">@(Model.IsNew ? "Order" : "Save")</button>
+        </div>
+    </div>
+</form>

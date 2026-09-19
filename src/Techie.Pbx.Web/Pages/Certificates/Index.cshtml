@@ -1,0 +1,55 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Certificates";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Certificates</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Order certificate</button>
+    </div>
+</div>
+
+@if (!Model.ContactConfigured)
+{
+    <div class="alert alert-warning">
+        <strong>No contact address.</strong>
+        Let's Encrypt requires one. Set <code>Cert.Email</code> on the
+        <a asp-page="/Settings/Index">Settings</a> page before ordering; that address is where
+        expiry warnings go if renewal ever stops working.
+    </div>
+}
+
+@if (Model.ServingNow.Length == 0)
+{
+    <div class="alert alert-info">
+        <strong>This server has no certificate yet.</strong>
+        The admin UI is HTTP only until one is ordered. Order one for a hostname that resolves to
+        this server in public DNS — the challenge is fetched on port 80, which this app answers
+        itself — then restart the app to serve it on 443. SIP TLS follows at the next
+        <strong>Apply config</strong>.
+    </div>
+}
+else
+{
+    <p class="text-secondary">
+        The web server is currently serving <strong>@Model.ServingNow</strong>. A certificate
+        ordered or renewed since the app started is stored and will be used at the next restart.
+    </p>
+}
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="certificates-table" hx-get="@tableUrl" hx-trigger="load, certificatesChanged from:body">
+    <p class="text-secondary">Loading certificates…</p>
+</div>
+
+<partial name="_FormModal" />

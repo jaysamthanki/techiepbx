@@ -13,8 +13,10 @@
 #     re-deploys: config and the SQLite database live in the target, not the
 #     tarball (D95)
 #   - writes /etc/systemd/system/tnpbx-web.service (User=tnpbx, never root,
-#     ASPNETCORE_URLS=http://0.0.0.0:8080 — port 80/443 arrive with the
-#     certificate piece, D71/D76)
+#     bindings the app chooses itself: 8080 always, plus 80 always and 443 once
+#     a certificate exists (D99). The unit grants CAP_NET_BIND_SERVICE and
+#     nothing else, which is how an unprivileged user binds ports 80 and 443
+#     (D95, D99).
 #   - writes the polkit rule that lets tnpbx restart exactly asterisk.service
 #     and nothing else (architecture.md; the app asks the operator, the Helper
 #     or the admin to do the restart, never sudo)
@@ -83,7 +85,6 @@ Type=simple
 User=tnpbx
 Group=asterisk
 WorkingDirectory=/opt/tnpbx
-Environment=ASPNETCORE_URLS=http://0.0.0.0:8080
 ExecStart=/opt/tnpbx/Techie.Pbx.Web
 Restart=on-failure
 RestartSec=5
@@ -95,6 +96,10 @@ ProtectSystem=strict
 ReadWritePaths=/opt/tnpbx /etc/asterisk /var/lib/asterisk/sounds/tnpbx /var/spool/asterisk
 ProtectHome=true
 LimitNOFILE=8192
+# Ports 80 and 443 are privileged; the app runs as tnpbx, so it gets exactly
+# the one capability that lets it bind them (D99).
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 
 [Install]
 WantedBy=multi-user.target

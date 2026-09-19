@@ -10,14 +10,20 @@ namespace Techie.Pbx.Asterisk.Config
     /// to the private subnet(s).
     ///
     /// Everything optional here is genuinely off when it is unset: no TCP port means no TCP
-    /// transport is rendered at all (D70), and no STUN server means rtp.conf says nothing about
-    /// STUN or ICE (D72). There is no TlsPort: the setting exists, but nothing reads it until
-    /// there is certificate management to render a TLS transport with (D71).
+    /// transport is rendered at all (D70), no TLS port means no TLS transport (D101), and no STUN
+    /// server means rtp.conf says nothing about STUN or ICE (D72).
     /// </summary>
     public class PjsipTransport
     {
         /// <summary>The SIP port, which a trunk's server URI only mentions when it differs.</summary>
         public const int DefaultPort = 5060;
+
+        /// <summary>
+        /// Where SIP over TLS listens when nobody has chosen a port. 5061 is the registered one, and
+        /// unlike the TCP port an unset TLS port is not "off": the certificate is what decides
+        /// whether the transport exists at all (D101).
+        /// </summary>
+        public const int DefaultTlsPort = 5061;
 
         public string BindAddress { get; set; } = "0.0.0.0";
 
@@ -34,6 +40,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>The TCP SIP port, or null for no TCP transport at all (D70).</summary>
         public int? TcpPort { get; set; }
 
+        /// <summary>
+        /// The TLS SIP port, or null for no TLS transport at all. A port on its own is not enough:
+        /// a TLS transport needs a certificate to name, and without one none is rendered (D101).
+        /// </summary>
+        public int? TlsPort { get; set; }
+
         /// <summary>Whether media should be offered ICE, which is what a STUN address is for.</summary>
         public bool UsesIce => this.StunServer != null || this.ExternalAddress != null;
 
@@ -49,6 +61,9 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (TcpPort is < 1 or > 65535)
                 errors.Add("TCP port must be between 1 and 65535.");
+
+            if (TlsPort is < 1 or > 65535)
+                errors.Add("TLS port must be between 1 and 65535.");
 
             foreach (var net in LocalNets)
             {

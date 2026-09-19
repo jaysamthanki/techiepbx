@@ -1363,3 +1363,41 @@ harmlessly because Asterisk is still stopped — the message says exactly that) 
 From then on apply-and-reload is live. This is why part 1 leaves the unit enabled but stopped
 (D93): an Asterisk started on an empty /etc/asterisk would autoload every module, and Asterisk
 cannot read config that does not exist yet.
+
+### D97. Certificate management is Certes in-process, not certbot (2026-09-22)
+User decision. The ACME client is the Certes library inside the web app: no second runtime on the
+customer's Debian box, no /etc/letsencrypt state to parse, and ordering is just HTTPS calls the app
+makes. HTTP-01 only — wildcards would need DNS-01 (Cloudflare API), noted as future and not built.
+The only ACME directories the Cert.AcmeServer setting accepts are Let's Encrypt production and
+staging; the account key (Cert.AcmeAccountKeyPem, secret) is generated on first use and the account
+registered on first order with the Cert.Email contact.
+
+### D98. The app answers its own HTTP-01 challenges on port 80 (2026-09-22)
+/.well-known/acme-challenge/<token> is served by the app from an in-memory store of the answers of
+the order in flight, anonymous for that path only — outside the Entra cookie and outside the local
+bypass logic. Port 80 therefore binds in every mode (D99): a server not listening on 80 can never
+obtain its first certificate.
+
+### D99. Kestrel's bindings follow the certificate, and the unit grants one capability (2026-09-22)
+A pure rule (WebBindings), decided at startup from the certificate rows: 8080 always (the port
+every existing install, lab note and DHCP option URL already names, and the way back in), 80 always
+(redirect to HTTPS except the ACME path), 443 only when a usable certificate exists. A certificate
+row counts as usable only when it is enabled, issued and not expired — the same test the SIP TLS
+transport makes (D101), so the UI and SIP agree. Kestrel is given the certificate at startup, so a
+new or renewed one serves after the app restarts (the renewal service's report says so). Ports 80
+and 443 are privileged, so the tnpbx-web unit carries AmbientCapabilities=CAP_NET_BIND_SERVICE and
+a CapabilityBoundingSet of exactly that — the only capability the app gets.
+
+### D100. Renewal runs daily, thirty days before expiry (2026-09-22)
+A hosted service checks every certificate row once a day. A row that is enabled and either never
+issued (a first order that failed, retried) or inside 30 days of expiry is ordered again; Let's
+Encrypt's 90-day lifetime leaves a month of failed attempts before anything stops working. Failures
+land in the row's LastError and the Certificates page shows them — renewal never raises.
+
+### D101. One combined PEM feeds both HTTPS and SIP TLS, and an unusable certificate is no certificate (2026-09-22)
+The apply writes certificate, issuers and private key into one file, /etc/asterisk/tnpbx-cert.pem,
+and the generated pjsip transport-tls points both cert_file and priv_key_file at it — one file to
+write, one mode to get right, no way for a cert and its key to be applied apart. The file is
+written even when there is no certificate (empty), so a stale key never lingers, and it joins the
+restart set (D33): a transport reads its certificate when it is built, so a renewed one reaches
+SIP at the next Asterisk restart. This makes the parked Sip.TlsPort setting real (D71).

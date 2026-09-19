@@ -150,6 +150,18 @@ window.pbx = (function () {
         pbx.toast('success', event.detail.message);
     });
 
+    // The other half of the same idea: something that did not work, said as an alert rather than
+    // a toast because it needs reading. Used by the certificate order, which can fail for reasons
+    // that take a sentence to explain.
+    document.body.addEventListener('pbxAlert', function (event) {
+        const modal = formModal();
+        if (modal) {
+            bootstrap.Modal.getInstance(modal)?.hide();
+        }
+
+        pbx.failed(new Error(event.detail.message));
+    });
+
     // Put the placeholder back, so opening the modal again never shows the last form for an
     // instant before the new one arrives.
     document.addEventListener('hidden.bs.modal', function (event) {

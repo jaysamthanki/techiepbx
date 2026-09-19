@@ -47,6 +47,7 @@ namespace Techie.Pbx.Asterisk.Config
 
         private readonly string confDirectory;
         private readonly PjsipTransport transport;
+        private readonly CertificateRepository certificates;
         private readonly ExtensionRepository extensions;
         private readonly TrunkRepository trunks;
         private readonly OutboundRouteRepository routes;
@@ -61,6 +62,7 @@ namespace Techie.Pbx.Asterisk.Config
         public ConfigApplier(
             string confDirectory,
             PjsipTransport transport,
+            CertificateRepository certificates,
             ExtensionRepository extensions,
             TrunkRepository trunks,
             OutboundRouteRepository routes,
@@ -74,6 +76,7 @@ namespace Techie.Pbx.Asterisk.Config
         {
             this.confDirectory = confDirectory;
             this.transport = transport;
+            this.certificates = certificates;
             this.extensions = extensions;
             this.trunks = trunks;
             this.routes = routes;
@@ -109,6 +112,7 @@ namespace Techie.Pbx.Asterisk.Config
             return new ConfigApplier(
                 AsteriskSettings.ConfDirectory(values),
                 AsteriskSettings.Transport(values),
+                new CertificateRepository(database),
                 extensions,
                 trunks,
                 routes,
@@ -179,7 +183,12 @@ namespace Techie.Pbx.Asterisk.Config
             var allIvrs = this.ivrs.GetAll();
             var allTimeConditions = this.timeConditions.GetAll();
 
-            return new List<GeneratedFile>
+            // One certificate feeds both the TLS transport and the file it points at, so it is read
+            // once here. Anything unusable — switched off, never issued, expired — counts as none
+            // at all, and the file is then written empty so a stale key does not linger (D101).
+            var certificate = this.certificates.Current(DateTimeOffset.UtcNow);
+
+            var files = new List<GeneratedFile>
             {
                 // Read once at startup: written here, applied by a restart (D33).
                 new("asterisk.conf", null, AsteriskConfRenderer.Render()),
@@ -188,12 +197,21 @@ namespace Techie.Pbx.Asterisk.Config
 
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
-                new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(this.transport, all, allTrunks)),
+                // The certificate and the key Asterisk reads at startup, in one file (D101). No
+                // module owns it: a transport's certificate is read when the transport is built, so
+                // a renewed certificate reaches SIP at the next Asterisk restart, like rtp.conf and
+                // modules.conf (D33).
+                new(PjsipConfRenderer.TlsCertificateFileName, null, certificate?.CombinedPem ?? ""),
+
+                new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(
+                    this.transport, all, allTrunks, certificate, this.confDirectory)),
                 new("pjsip_notify.conf", NotifyModule, NotifyConfRenderer.Render()),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions, this.Timezone)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
             };
+
+            return files;
         }
 
         /// <summary>

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Core.Security;
 
 namespace Techie.Pbx.Core.Data
 {
@@ -127,6 +128,21 @@ namespace Techie.Pbx.Core.Data
                         errors.Add($"The Polycom web user password must be {MinProvisioningPasswordLength} to 64 letters, digits, dots, dashes, underscores or tildes.");
                     break;
 
+                case SettingsKeys.CertAcmeServer:
+                    if (!AcmeServers.IsKnown(text))
+                        errors.Add($"The ACME server must be one of: {string.Join(", ", AcmeServers.All)}");
+                    break;
+
+                case SettingsKeys.CertAcmeAccountKeyPem:
+                    if (!IsPrivateKeyPem(text))
+                        errors.Add("The ACME account key must be a PEM private key. It is generated for you on the first order — there is normally no reason to type one in.");
+                    break;
+
+                case SettingsKeys.CertEmail:
+                    if (!EmailPattern().IsMatch(text))
+                        errors.Add("The certificate contact must be an email address, e.g. admin@example.com.");
+                    break;
+
                 case SettingsKeys.SystemNtpServer:
                     if (!HostPattern().IsMatch(text))
                         errors.Add("NTP server must be a hostname or IP address, e.g. pool.ntp.org.");
@@ -160,6 +176,20 @@ namespace Techie.Pbx.Core.Data
             return HostPattern().IsMatch(text[..separator]) &&
                 int.TryParse(port, out var number) &&
                 number is >= 1 and <= 65535;
+        }
+
+        /// <summary>
+        /// Whether a value looks like a PEM private key, which is all that can honestly be checked
+        /// without trying to use it: the ACME library is what decides whether the key is good, and
+        /// it says so on the first order rather than here.
+        /// </summary>
+        public static bool IsPrivateKeyPem(string value)
+        {
+            var text = value.Trim();
+
+            return text.StartsWith("-----BEGIN", StringComparison.Ordinal) &&
+                text.Contains("PRIVATE KEY-----", StringComparison.Ordinal) &&
+                text.EndsWith("-----", StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -246,6 +276,14 @@ namespace Techie.Pbx.Core.Data
             if (!SystemTimezones.IsKnown(text) && SystemTimezones.IsListed)
                 errors.Add($"This server has no timezone called '{text}'. Choose one from the list, e.g. Europe/London.");
         }
+
+        /// <summary>
+        /// An email address, checked loosely on purpose: the only thing this address is used for is
+        /// the ACME account's expiry warnings, and a rule strict enough to be interesting would
+        /// reject somebody's real address.
+        /// </summary>
+        [GeneratedRegex(@"^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
+        private static partial Regex EmailPattern();
 
         /// <summary>A hostname or IP address, the same shape a trunk's server host has to be.</summary>
         [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]

@@ -95,6 +95,28 @@ namespace Techie.Pbx.Core.Data
         public const string SystemNtpServer = "System.NtpServer";
 
         /// <summary>
+        /// The ACME directory the certificate service orders from (D97). Defaults to Let's
+        /// Encrypt's production endpoint; the staging one is the other value it accepts, for
+        /// testing an order without spending a rate limit on a real certificate.
+        /// </summary>
+        public const string CertAcmeServer = "Cert.AcmeServer";
+
+        /// <summary>
+        /// The ACME account key, PEM encoded, generated the first time a certificate is ordered and
+        /// then reused for every order and renewal after it (D98). A secret: it is the credential
+        /// that proves this server is the account holder, so it is treated exactly like
+        /// <see cref="AmiSecret"/> — never logged, never rendered into a page.
+        /// </summary>
+        public const string CertAcmeAccountKeyPem = "Cert.AcmeAccountKeyPem";
+
+        /// <summary>
+        /// The contact address the ACME account is registered with. Let's Encrypt emails it when a
+        /// certificate is about to expire and nothing has renewed it, which is the backstop behind
+        /// our own daily renewal (D100).
+        /// </summary>
+        public const string CertEmail = "Cert.Email";
+
+        /// <summary>
         /// The IANA zone this server's clock is meant to be in, e.g. "Europe/London". A record,
         /// not a lever: Asterisk matches a time condition against its own local time, so what
         /// actually decides open from closed is the machine's timezone. This is written into the
@@ -122,6 +144,9 @@ namespace Techie.Pbx.Core.Data
             ProvisioningPassword,
             ProvisioningAdminPassword,
             ProvisioningUserPassword,
+            CertAcmeServer,
+            CertAcmeAccountKeyPem,
+            CertEmail,
             SystemNtpServer,
             SystemTimezone,
         };
@@ -132,6 +157,7 @@ namespace Techie.Pbx.Core.Data
             ProvisioningPassword,
             ProvisioningAdminPassword,
             ProvisioningUserPassword,
+            CertAcmeAccountKeyPem,
         };
 
         public static IReadOnlyCollection<string> All => KnownKeys;

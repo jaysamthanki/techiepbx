@@ -26,6 +26,27 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string TcpTransportName = "transport-tcp";
 
+        /// <summary>
+        /// The TLS transport, which only exists in the file when there is a usable certificate to
+        /// point it at (D101). Like the TCP one, nothing is bound to it by name.
+        /// </summary>
+        public const string TlsTransportName = "transport-tls";
+
+        /// <summary>
+        /// The one file Asterisk is given for TLS: certificate, issuers and private key together
+        /// (D101). Written into the conf directory by <see cref="ConfigApplier"/> from the
+        /// certificate row, so there is nothing for an operator to copy into place.
+        /// </summary>
+        public const string TlsCertificateFileName = "tnpbx-cert.pem";
+
+        /// <summary>
+        /// The lowest TLS version the transport will speak. <b>To confirm on the lab VM</b>: pjsip
+        /// documents <c>method</c> as the SSL method, and whether <c>tlsv1_2</c> means "1.2 and
+        /// later" or "1.2 exactly" decides whether a TLS 1.3 handset can connect. If it turns out
+        /// to pin the version, this is one constant.
+        /// </summary>
+        private const string TlsMethod = "tlsv1_2";
+
         /// <summary>How long a registration lasts before it is renewed, in seconds.</summary>
         private const int RegistrationExpiration = 3600;
 
@@ -38,7 +59,21 @@ namespace Techie.Pbx.Asterisk.Config
         public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions) =>
             Render(transport, extensions, new List<Trunk>());
 
-        public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks)
+        public static string Render(PjsipTransport transport, IEnumerable<Extension> extensions, IEnumerable<Trunk> trunks) =>
+            Render(transport, extensions, trunks, null, AsteriskSettings.DefaultConfDirectory);
+
+        /// <summary>
+        /// The whole file. The certificate is an input like the extensions and the trunks are: when
+        /// there is a usable one, a TLS transport is rendered pointing at the combined PEM this
+        /// system writes beside the other generated files; when there is not, the file is exactly
+        /// what it was before certificates existed (D101).
+        /// </summary>
+        public static string Render(
+            PjsipTransport transport,
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            Certificate? certificate,
+            string confDirectory)
         {
             var transportErrors = transport.Validate();
             if (transportErrors.Count > 0)
@@ -52,6 +87,11 @@ namespace Techie.Pbx.Asterisk.Config
             // Only when a TCP port is set: an unset port means no TCP listener at all (D70).
             if (transport.TcpPort != null)
                 AppendTransport(sb, transport, TcpTransportName, "tcp", transport.TcpPort.Value);
+
+            // Only with a certificate to present. A TLS transport without cert_file stops
+            // res_pjsip loading the file at all, which is what kept this out until now (D71, D101).
+            if (certificate != null)
+                AppendTlsTransport(sb, transport, TlsCertificatePath(confDirectory));
 
             var codecs = string.Join(",", transport.Codecs.Select(c => ConfText.Safe(c, "codec")));
 
@@ -95,6 +135,13 @@ namespace Techie.Pbx.Asterisk.Config
             return sb.ToString();
         }
 
+        /// <summary>
+        /// Where the combined PEM lives: beside the generated conf files, so one directory holds
+        /// everything this system writes for Asterisk and one set of permissions covers it (D101).
+        /// </summary>
+        public static string TlsCertificatePath(string confDirectory) =>
+            Path.Combine(confDirectory, TlsCertificateFileName);
+
         /// <summary>Enabled trunks by name, re-validated so a bad row cannot reach a conf file.</summary>
         public static List<Trunk> TrunkRenderOrder(IEnumerable<Trunk> trunks)
         {
@@ -108,6 +155,22 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             return enabled.OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
+        }
+
+        /// <summary>
+        /// The TLS transport: an ordinary transport section plus the certificate. Both
+        /// <c>cert_file</c> and <c>priv_key_file</c> name the same file, because what is written
+        /// there is certificate, issuers and key in one (D101).
+        /// </summary>
+        private static void AppendTlsTransport(StringBuilder sb, PjsipTransport transport, string certificatePath)
+        {
+            AppendTransport(sb, transport, TlsTransportName, "tls", transport.TlsPort ?? PjsipTransport.DefaultTlsPort);
+
+            var path = ConfText.Safe(certificatePath, "certificate path");
+
+            sb.Append($"cert_file = {path}\n");
+            sb.Append($"priv_key_file = {path}\n");
+            sb.Append($"method = {TlsMethod}\n");
         }
 
         /// <summary>
