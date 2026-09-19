@@ -1,9 +1,14 @@
+using Techie.Pbx.Core.Models;
+
 namespace Techie.Pbx.Core.Data
 {
     /// <summary>
     /// Every key the Settings table is allowed to hold. One key/value table instead of typed
     /// columns keeps schema churn down; naming the keys here keeps the table from turning into
     /// a junk drawer, because the repository refuses to write anything not listed.
+    ///
+    /// Each key also carries a <see cref="SettingScope"/>: what reads it, and so whether changing
+    /// it is a config change at all (D103).
     /// </summary>
     public static class SettingsKeys
     {
@@ -160,11 +165,87 @@ namespace Techie.Pbx.Core.Data
             CertAcmeAccountKeyPem,
         };
 
+        /// <summary>
+        /// What reads each key, checked against the code that actually reads it rather than
+        /// against the name it happens to start with (D103). Every key in
+        /// <see cref="KnownKeys"/> is listed here, and a test says so.
+        ///
+        /// Asterisk: something in <c>ConfigApplier.Render</c> puts it in a conf file, or the
+        /// applier itself needs it to do its job. Phones: only a phone's generated config, which
+        /// is rendered per request by the provisioning controllers, so there is nothing on disk to
+        /// apply. App: nothing but this web application ever reads it.
+        /// </summary>
+        private static readonly Dictionary<string, SettingScope> Scopes = new(StringComparer.Ordinal)
+        {
+            // Where the applier writes, and the directory the pjsip TLS certificate is named from.
+            [AsteriskConfDirectory] = SettingScope.Asterisk,
+
+            // Host, port, username and secret are all in the generated manager.conf: the renderer
+            // writes the port and the account, and refuses to write a file whose host is not the
+            // loopback address AMI is bound to (D32).
+            [AmiHost] = SettingScope.Asterisk,
+            [AmiPort] = SettingScope.Asterisk,
+            [AmiUsername] = SettingScope.Asterisk,
+            [AmiSecret] = SettingScope.Asterisk,
+
+            // The one AMI key no file carries: how long our own client waits for an answer.
+            [AmiTimeoutSeconds] = SettingScope.App,
+
+            // Every Sip key is read by AsteriskSettings.Transport, and so lands in pjsip.conf or
+            // rtp.conf.
+            [SipBindAddress] = SettingScope.Asterisk,
+            [SipPort] = SettingScope.Asterisk,
+            [SipTcpPort] = SettingScope.Asterisk,
+            [SipTlsPort] = SettingScope.Asterisk,
+            [SipStunServer] = SettingScope.Asterisk,
+            [SipCodecs] = SettingScope.Asterisk,
+            [SipLocalNets] = SettingScope.Asterisk,
+            [SipExternalAddress] = SettingScope.Asterisk,
+
+            // The provisioning gate and the two device passwords are read by the Polycom and
+            // Yealink controllers only; no conf file has ever carried them (D79, D84).
+            [ProvisioningUsername] = SettingScope.Phones,
+            [ProvisioningPassword] = SettingScope.Phones,
+            [ProvisioningAdminPassword] = SettingScope.Phones,
+            [ProvisioningUserPassword] = SettingScope.Phones,
+
+            // Ordering details, read by the certificate service and nothing else. The certificate
+            // it orders is a row in Certificates, and that repository raises the marker (D101), so
+            // the file Asterisk reads is still applied like any other change.
+            [CertAcmeServer] = SettingScope.App,
+            [CertAcmeAccountKeyPem] = SettingScope.App,
+            [CertEmail] = SettingScope.App,
+
+            // Phones are told where to get the time from; nothing else reads it.
+            [SystemNtpServer] = SettingScope.Phones,
+
+            // Read by both: every GotoIfTime in the generated dialplan names the zone (D74), and a
+            // Polycom phone is given its offset. Asterisk wins, because that half needs an apply.
+            [SystemTimezone] = SettingScope.Asterisk,
+        };
+
         public static IReadOnlyCollection<string> All => KnownKeys;
+
+        /// <summary>
+        /// Every key with the scope it was classified with. The map itself rather than a question
+        /// per key, so that "is there a key nobody classified?" is a question that can be asked —
+        /// which is what stops <see cref="ScopeOf"/>'s fallback from quietly covering for a key
+        /// somebody added and forgot (D103).
+        /// </summary>
+        public static IReadOnlyDictionary<string, SettingScope> AllScopes => Scopes;
 
         public static bool IsKnown(string key) => KnownKeys.Contains(key);
 
         /// <summary>Whether a value is a credential, so callers know not to log or display it.</summary>
         public static bool IsSecret(string key) => SecretKeys.Contains(key);
+
+        /// <summary>
+        /// What reads this key (D103). An unlisted key counts as <see cref="SettingScope.Asterisk"/>:
+        /// a key added above and forgotten here then lights the apply button for nothing, which
+        /// costs an apply that writes no files, where the other way round would leave Asterisk
+        /// running config nobody was told had changed.
+        /// </summary>
+        public static SettingScope ScopeOf(string key) =>
+            Scopes.TryGetValue(key, out var scope) ? scope : SettingScope.Asterisk;
     }
 }

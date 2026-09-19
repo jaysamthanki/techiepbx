@@ -12,8 +12,10 @@
 
 <p class="text-secondary">
     Every setting this system has. There is no "add": the list is fixed, and a row with no value
-    of its own uses the default shown beside it. Click a row to change it. Settings are written
-    into the generated config, so a change needs an apply like any other.
+    of its own uses the default shown beside it. Click a row to change it. What a change needs
+    afterwards depends on the setting: most are written into the generated config and need an
+    apply, the provisioning and NTP ones reach each phone at its next poll, and a few are read by
+    this application alone and need nothing. The form says which before you save.
 </p>
 
 @* The table arrives from the Table handler, and comes back whenever something changed. *@

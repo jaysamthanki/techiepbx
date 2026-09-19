@@ -87,7 +87,7 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
-        /// Every one of these keys is read while config is generated, so storing one is a config
+        /// An Asterisk-scoped key is read while config is generated, so storing one is a config
         /// change and the apply banner has to say so, exactly as editing an extension does (D67).
         /// </summary>
         [Fact]
@@ -107,6 +107,64 @@ namespace Techie.Pbx.Tests.Core
             this.pending.Clear();
 
             this.repository.Delete(SettingsKeys.SipCodecs);
+
+            Assert.True(this.pending.IsPending);
+        }
+
+        /// <summary>
+        /// A phone setting reaches no conf file: those configs are generated per request, so the
+        /// change is live the moment it is stored and each phone picks it up at its next poll
+        /// (D79). An apply would write nothing, so the button must not light (D103).
+        /// </summary>
+        [Theory]
+        [InlineData(SettingsKeys.ProvisioningUsername, "phones")]
+        [InlineData(SettingsKeys.ProvisioningPassword, "not-a-real-one")]
+        [InlineData(SettingsKeys.ProvisioningAdminPassword, "not-a-real-one")]
+        [InlineData(SettingsKeys.ProvisioningUserPassword, "not-a-real-one")]
+        [InlineData(SettingsKeys.SystemNtpServer, "time.example.com")]
+        public void A_phone_setting_does_not_raise_the_marker(string key, string value)
+        {
+            this.repository.Set(key, value);
+
+            Assert.False(this.pending.IsPending);
+        }
+
+        /// <summary>Nor does one only this application reads (D103).</summary>
+        [Theory]
+        [InlineData(SettingsKeys.AmiTimeoutSeconds, "20")]
+        [InlineData(SettingsKeys.CertEmail, "admin@example.com")]
+        public void An_app_setting_does_not_raise_the_marker(string key, string value)
+        {
+            this.repository.Set(key, value);
+
+            Assert.False(this.pending.IsPending);
+        }
+
+        /// <summary>
+        /// Clearing follows the same rule as storing: putting a phone setting back to its default
+        /// is still nothing Asterisk has to be told about.
+        /// </summary>
+        [Fact]
+        public void Clearing_a_phone_setting_does_not_raise_the_marker_either()
+        {
+            this.repository.Set(SettingsKeys.SystemNtpServer, "time.example.com");
+
+            this.repository.Delete(SettingsKeys.SystemNtpServer);
+
+            Assert.False(this.pending.IsPending);
+        }
+
+        /// <summary>
+        /// The mix an admin actually makes: one Asterisk-scoped save among the phone ones still
+        /// leaves an apply due.
+        /// </summary>
+        [Fact]
+        public void One_asterisk_setting_among_phone_ones_still_raises_the_marker()
+        {
+            this.repository.Set(SettingsKeys.ProvisioningUsername, "phones");
+            Assert.False(this.pending.IsPending);
+
+            this.repository.Set(SettingsKeys.SipPort, "5060");
 
             Assert.True(this.pending.IsPending);
         }

@@ -7,7 +7,8 @@ using Techie.Pbx.Core.Data;
 namespace Techie.Pbx.Web.Controllers
 {
     /// <summary>
-    /// "Apply config": database to conf files to a reload of only the modules that changed.
+    /// "Apply config": database to conf files to a reload of only the modules that changed, and
+    /// the restart that the files Asterisk only reads at startup need afterwards (D33, D104).
     /// Called by our own pages with the session cookie, like every other API here.
     /// </summary>
     [ApiController]
@@ -20,6 +21,7 @@ namespace Techie.Pbx.Web.Controllers
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
+        private readonly AsteriskRestartMarker restart;
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
@@ -32,6 +34,7 @@ namespace Techie.Pbx.Web.Controllers
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
+            this.restart = new AsteriskRestartMarker(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.routes = new OutboundRouteRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -50,8 +53,19 @@ namespace Techie.Pbx.Web.Controllers
             {
                 var result = applier.Apply();
 
+                // Asterisk is now running config we have already replaced on disk. The marker
+                // keeps saying so until a restart actually happens, whether the admin says yes to
+                // the one the page offers or comes back to it later (D104).
+                if (result.RestartRequired)
+                    this.restart.Raise();
+
                 Log.Info($"Apply config requested by {this.User.Identity?.Name}");
-                return this.Ok(new ApplyConfigResponse { Summary = Summarise(result) });
+                return this.Ok(new ApplyConfigResponse
+                {
+                    RestartFiles = result.RestartRequiredFiles.ToList(),
+                    RestartRequired = result.RestartRequired,
+                    Summary = Summarise(result),
+                });
             }
             catch (AmiException ex)
             {
@@ -75,6 +89,31 @@ namespace Techie.Pbx.Web.Controllers
                 return this.StatusCode(StatusCodes.Status500InternalServerError, new MessageResponse(
                     "The config could not be generated: " + ex.Message));
             }
+        }
+
+        /// <summary>
+        /// Restarts Asterisk, which is what the files it only reads at startup need (D33). Offered
+        /// by the page after an apply that wrote one of them, and by the banner afterwards if that
+        /// offer was declined — the app does it itself, through the polkit rule scoped to
+        /// asterisk.service, never sudo and never a shell (D3, D18, D104).
+        ///
+        /// A failure is a 502 with our own sentence rather than an exception: the admin is the one
+        /// who has to do something about it.
+        /// </summary>
+        [HttpPost("restartAsterisk")]
+        public IActionResult RestartAsterisk()
+        {
+            Log.Info($"Asterisk restart requested by {this.User.Identity?.Name}");
+
+            var result = AsteriskRestart.Run();
+
+            if (!result.Success)
+                return this.StatusCode(StatusCodes.Status502BadGateway, new MessageResponse(result.Message));
+
+            // Only now: what is running and what is on disk are the same again.
+            this.restart.Clear();
+
+            return this.Ok(new MessageResponse(result.Message));
         }
 
         private static string Summarise(ApplyResult result)

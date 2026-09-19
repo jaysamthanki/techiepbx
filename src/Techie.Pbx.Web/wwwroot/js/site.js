@@ -13,6 +13,36 @@ window.pbx = (function () {
         return new Error('Your session ended.');
     }
 
+    // Restarting Asterisk drops calls in progress, so it is always asked before it happens, and
+    // asked with sweetalert2 because confirms are what sweetalert2 is still for (D42, D104).
+    async function confirmRestart(text) {
+        const answer = await Swal.fire({
+            icon: 'warning',
+            title: 'Restart Asterisk?',
+            text: text,
+            showCancelButton: true,
+            confirmButtonText: 'Restart now',
+            confirmButtonColor: '#dc3545',
+            heightAuto: false
+        });
+
+        return answer.isConfirmed;
+    }
+
+    // The restart itself. The app does it for itself, through the polkit rule scoped to
+    // asterisk.service (D104). The banner goes because the server is asked again, not because
+    // anything here hides it.
+    async function sendRestart() {
+        try {
+            const result = await pbx.send('POST', '/api/config/restartAsterisk');
+
+            htmx.trigger(document.body, 'configApplied');
+            pbx.toast('success', result.message);
+        } catch (error) {
+            pbx.failed(error);
+        }
+    }
+
     return {
         // Writes the config files and reloads only what changed. Every page with an apply button
         // calls this; the result is the summary the server wrote.
@@ -24,7 +54,23 @@ window.pbx = (function () {
 
                 // The banner asks the server again rather than being hidden from here.
                 htmx.trigger(document.body, 'configApplied');
-                pbx.toast('success', result.summary);
+
+                // Some files Asterisk only reads when it starts (D33), so the apply is not the
+                // whole job. The offer replaces the summary toast rather than following it: one
+                // sweetalert2 dialog closes another, and what matters now is the question.
+                if (result.restartRequired) {
+                    const confirmed = await confirmRestart(
+                        'Asterisk needs a restart to load: ' + result.restartFiles.join(', ') +
+                        '. Calls in progress will be dropped.');
+
+                    if (confirmed) {
+                        await sendRestart();
+                    } else {
+                        pbx.toast('info', 'Asterisk is still running its old config. Restart it from the toolbar whenever you are ready.');
+                    }
+                } else {
+                    pbx.toast('success', result.summary);
+                }
             } catch (error) {
                 pbx.failed(error);
             } finally {
@@ -42,6 +88,25 @@ window.pbx = (function () {
         openEdit: function (url) {
             htmx.ajax('GET', url, { target: '#form-modal-content', swap: 'innerHTML' });
             bootstrap.Modal.getOrCreateInstance(document.getElementById('form-modal')).show();
+        },
+
+        // The toolbar's restart button: the same restart the apply offers, for the admin who said
+        // "not now" then, and the same confirm first because it still drops calls (D104).
+        restartAsterisk: async function (button) {
+            const confirmed = await confirmRestart(
+                'Asterisk is running config that has already been replaced on disk. Calls in progress will be dropped.');
+
+            if (!confirmed) {
+                return;
+            }
+
+            button.disabled = true;
+
+            try {
+                await sendRestart();
+            } finally {
+                button.disabled = false;
+            }
         },
 
         // A call to one of our own JSON endpoints, with the antiforgery header (D23) and the

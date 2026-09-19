@@ -2,6 +2,7 @@
 @model ConfigStatusModel
 @*
     Not a page anyone visits: the layout's navbar polls it every few seconds for the apply button
-    (D43). The answer is the button, or nothing at all when the config is in sync.
+    (D43) and the restart banner (D104). The answer is those, or nothing at all when the config is
+    in sync and Asterisk is running what is on disk.
 *@
-<partial name="_ApplyButton" model="Model.ConfigPending" />
+<partial name="_ApplyButton" model="Model.Status" />

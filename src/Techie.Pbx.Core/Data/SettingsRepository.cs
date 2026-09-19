@@ -25,15 +25,15 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
-        /// Removes a setting, which puts it back to its built-in default. Every one of these keys
-        /// is read while config is generated, so this is a config change like any other (D69).
+        /// Removes a setting, which puts it back to its built-in default. An Asterisk-scoped key
+        /// is a config change like any other (D69); a key nothing generated reads is not (D103).
         /// </summary>
         public void Delete(string key)
         {
             using var connection = this.database.Open();
             connection.Execute("DELETE FROM Settings WHERE \"Key\" = @key", new { key });
 
-            this.pending.Raise();
+            this.RaiseIfAsterisk(key);
             Log.Info($"Setting {key} cleared");
         }
 
@@ -74,10 +74,22 @@ namespace Techie.Pbx.Core.Data
                 "ON CONFLICT(\"Key\") DO UPDATE SET Value = excluded.Value",
                 new { key, value });
 
-            this.pending.Raise();
+            this.RaiseIfAsterisk(key);
 
             // Never log a secret's value, and there is no reason to hide the others.
             Log.Info(SettingsKeys.IsSecret(key) ? $"Setting {key} updated" : $"Setting {key} = {value}");
+        }
+
+        /// <summary>
+        /// Raises the "apply is due" marker only for a key a generated conf file carries (D103). A
+        /// phone setting reaches its phones at their next poll and an app setting reaches nobody
+        /// at all, so lighting the apply button for either would be asking for an apply that
+        /// writes nothing.
+        /// </summary>
+        private void RaiseIfAsterisk(string key)
+        {
+            if (SettingsKeys.ScopeOf(key) == SettingScope.Asterisk)
+                this.pending.Raise();
         }
 
         private static void ThrowIfInvalid(string key, string value)
