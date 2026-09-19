@@ -23,7 +23,15 @@
             <tr data-edit-url="@editUrl">
                 <td>@row.Priority</td>
                 <td>@row.Name</td>
-                <td class="font-monospace">@row.DialPattern</td>
+                <td class="font-monospace">
+                    @row.DialPattern
+                    @if (row.SentNumber.Length > 0)
+                    {
+                        <span class="text-body-secondary" title="The number the trunk is given (prepend + dialled, minus stripped digits).">
+                            → @row.SentNumber
+                        </span>
+                    }
+                </td>
                 <td>
                     @if (row.TrunkUsable)
                     {

@@ -176,5 +176,73 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.Throws<InvalidOperationException>(() => Render(route));
         }
+
+        /// <summary>
+        /// Prepend and strip digits change what the trunk is given, not what the caller dials
+        /// (D109). The two classic uses: a home area code so seven dialled digits go out as
+        /// eleven, and dial-9.
+        /// </summary>
+        [Fact]
+        public void A_prepend_is_written_in_front_of_the_dialled_digits()
+        {
+            var local = new OutboundRoute
+            {
+                Name = "local",
+                DialPattern = "_NXXXXXX",
+                PrependDigits = "1714",
+                TrunkID = 1,
+                Priority = 10,
+            };
+
+            Assert.Contains(
+                "exten => _NXXXXXX,1,Dial(PJSIP/callcentric/sip:1714${EXTEN}@callcentric.com,60)\n",
+                Render(local));
+        }
+
+        [Fact]
+        public void A_strip_drops_leading_digits_before_the_number_is_sent()
+        {
+            var dialNine = new OutboundRoute
+            {
+                Name = "dial-nine",
+                DialPattern = "_9NXXXXXXXXX",
+                StripDigits = 1,
+                TrunkID = 1,
+                Priority = 10,
+            };
+
+            Assert.Contains(
+                "exten => _9NXXXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN:1}@callcentric.com,60)\n",
+                Render(dialNine));
+        }
+
+        [Fact]
+        public void Prepend_and_strip_together_match_the_expected_file()
+        {
+            var routes = new[]
+            {
+                new OutboundRoute
+                {
+                    Name = "local",
+                    DialPattern = "_NXXXXXX",
+                    PrependDigits = "1714",
+                    TrunkID = 1,
+                    Priority = 10,
+                },
+                new OutboundRoute
+                {
+                    Name = "nine-out",
+                    DialPattern = "_9NXXXXXXXXX",
+                    PrependDigits = "1",
+                    StripDigits = 1,
+                    TrunkID = 1,
+                    Priority = 20,
+                },
+            };
+
+            var actual = ExtensionsConfRenderer.Render(new List<Extension>(), SampleTrunks(), routes);
+
+            Assert.Equal(Expected("extensions-routes-digits.conf"), actual);
+        }
     }
 }

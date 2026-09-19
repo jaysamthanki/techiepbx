@@ -11,17 +11,44 @@ namespace Techie.Pbx.Core.Models
         /// <summary>Highest priority number allowed; 1 is tried first.</summary>
         public const int MaxPriority = 999;
 
-        /// <summary>The Asterisk pattern, including its leading underscore, e.g. "_1NXXXXXXXXX".</summary>
+        /// <summary>
+        /// The Asterisk pattern, including its leading underscore, e.g. "_1NXXXXXXXXX". The
+        /// underscore is what tells Asterisk this is a pattern rather than a literal number, so
+        /// <see cref="NormalizePattern"/> adds it to anything that arrives without one.
+        /// </summary>
         public string DialPattern { get; set; } = "";
 
         public bool Enabled { get; set; } = true;
         public string Name { get; set; } = "";
+
+        /// <summary>
+        /// Digits written in front of the number before it is sent to the trunk (D109). A site in
+        /// the 714 area code routes <c>_NXXXXXX</c> with a prepend of <c>1714</c>, so a caller
+        /// dials seven digits and the provider sees eleven. Empty means none.
+        /// </summary>
+        public string PrependDigits { get; set; } = "";
+
         public long OutboundRouteID { get; set; }
 
         /// <summary>Lower is tried first. Ties are broken by name, so the order is never random.</summary>
         public int Priority { get; set; } = 100;
 
+        /// <summary>
+        /// How many leading dialled digits to drop before the rest is sent to the trunk (D109).
+        /// Zero means none. "Dial 9 for an outside line" is a pattern like <c>_9NXXXXXXXXX</c>
+        /// with a strip of 1.
+        /// </summary>
+        public int StripDigits { get; set; }
+
         public long TrunkID { get; set; }
+
+        /// <summary>
+        /// What a caller dialled, as the number the trunk is given: the prepend in front of the
+        /// dialled digits minus the stripped ones. Rendered as <c>${EXTEN}</c>-style expressions
+        /// in the dialplan; this is the string a human reads in the table and tests.
+        /// </summary>
+        public string SentNumberExpression =>
+            this.PrependDigits + (this.StripDigits > 0 ? $"${{EXTEN:{this.StripDigits}}}" : "${EXTEN}");
 
         /// <summary>
         /// The dialplan context this route's pattern lives in. One per route, because Asterisk
@@ -30,6 +57,17 @@ namespace Techie.Pbx.Core.Models
         /// pattern (D46).
         /// </summary>
         public string Context => $"outbound-{this.Name}";
+
+        /// <summary>
+        /// Patterns start with an underscore, and a caller typing <c>NXXXXXX</c> into the form
+        /// means the pattern, not the literal number. Rather than fail them for it, the
+        /// repository stores what they meant. Returns the pattern with the underscore on it.
+        /// </summary>
+        public static string NormalizePattern(string pattern)
+        {
+            var trimmed = pattern.Trim();
+            return trimmed.StartsWith('_') || trimmed.Length == 0 ? trimmed : "_" + trimmed;
+        }
 
         /// <summary>
         /// Why this pattern may not be used, or null when it may. International dialling is the
@@ -127,6 +165,20 @@ namespace Techie.Pbx.Core.Models
                 if (international != null)
                     errors.Add(international);
             }
+
+            // A prepend is chosen digits, not a match, so it cannot smuggle in a wildcard — but
+            // 00 and 011 are still the international prefixes, and a prepend starting with 0 is
+            // the D47 guard walked around from the other side (D109).
+            if (PrependDigits.Length > 0)
+            {
+                if (PrependDigits.Length > 10 || !PrependDigits.All(char.IsAsciiDigit))
+                    errors.Add("Prepend digits must be 1 to 10 digits, or empty.");
+                else if (PrependDigits[0] == '0')
+                    errors.Add("Prepend digits may not start with 0: 00 and 011 are international dialling.");
+            }
+
+            if (StripDigits is < 0 or > 10)
+                errors.Add("Strip digits must be between 0 and 10.");
 
             if (TrunkID <= 0)
                 errors.Add("A route needs a trunk to send calls out over.");

@@ -179,5 +179,58 @@ namespace Techie.Pbx.Tests.Core
             this.routes.Delete(id);
             Assert.True(marker.IsPending);
         }
+
+        /// <summary>
+        /// A pattern typed without its underscore is stored with it (D109): the admin meant a
+        /// pattern, and the repository keeps the promise the form's hint makes.
+        /// </summary>
+        [Fact]
+        public void A_pattern_typed_without_the_underscore_is_stored_with_it()
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.DialPattern = "NXXXXXX";
+
+            this.routes.Insert(route);
+
+            Assert.Equal("_NXXXXXX", this.routes.GetByID(route.OutboundRouteID)!.DialPattern);
+        }
+
+        [Fact]
+        public void Prepend_and_strip_digits_round_trip()
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.PrependDigits = "1714";
+            route.StripDigits = 0;
+
+            this.routes.Insert(route);
+
+            var loaded = this.routes.GetByID(route.OutboundRouteID)!;
+            Assert.Equal("1714", loaded.PrependDigits);
+            Assert.Equal(0, loaded.StripDigits);
+
+            loaded.PrependDigits = "1";
+            loaded.StripDigits = 1;
+            this.routes.Update(loaded);
+
+            var updated = this.routes.GetByID(loaded.OutboundRouteID)!;
+            Assert.Equal("1", updated.PrependDigits);
+            Assert.Equal(1, updated.StripDigits);
+        }
+
+        /// <summary>The international guard closes the prepend door too (D47, D109).</summary>
+        [Fact]
+        public void A_prepend_starting_with_zero_cannot_be_stored()
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.PrependDigits = "011";
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.routes.Insert(route));
+
+            Assert.Contains("international", ex.Message);
+            Assert.Empty(this.routes.GetAll());
+        }
     }
 }

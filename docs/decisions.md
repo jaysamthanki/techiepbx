@@ -1554,3 +1554,29 @@ Consequences worth naming: an apply that toggles voicemail now rewrites `pjsip.c
 (`ConfigApplierTests` updated), and `modules.conf` changes mean an **Asterisk restart** is
 required (D33) — piece 24's restart offer handles it. Lab VM verified: the two modules load
 clean, `voicemail show users` unchanged.
+
+### D109. Route patterns are stored with their underscore, and routes gain prepend and strip digits (2026-09-19)
+User request, closing the question D44 deliberately left open. Three changes, one piece:
+
+- **The underscore is added, not demanded.** A pattern without its leading `_` is what a
+  caller means, not an error: `OutboundRoute.NormalizePattern` puts it on, and the repository
+  calls it on every save, so `NXXXXXX` is stored as `_NXXXXXX`. The form says so in its hint.
+  A pattern a human could not have meant — bad characters, a leading 0 — is still refused as
+  before (D46, D47).
+- **`PrependDigits`** (schema `014_outbound_route_digits.sql`): digits written in front of the
+  number before it reaches the trunk. Seven dialled digits, home area code on the front:
+  `_NXXXXXX` + prepend `1714` sends `1714XXXXXXX`. Ten dialled digits, long-distance one:
+  `_714XXXXXXX` + prepend `1` sends eleven.
+- **`StripDigits`**: how many leading dialled digits are dropped first — "dial 9 for an
+  outside line" is `_9NXXXXXXXXX` with strip 1. Both are per-route, and both empty means the
+  dialplan is exactly what it was before this change (the golden files other than the new one
+  did not move).
+
+The renderer sends `prepend${EXTEN:strip}` in the trunk's dial string, and the routes table
+shows the number the trunk will get (e.g. `_NXXXXXX → 1714${EXTEN}`) so the transform is
+visible without opening the edit form.
+
+The international guard extends to the new door (D47): a prepend may not start with `0`,
+because `00`/`011` prepended is the same bill as a pattern starting with 0 — the guard was
+otherwise walked around from the other side. This is the same North-American assumption D47
+already names; a site that needs a national 0-prefix is the same escape-hatch question.

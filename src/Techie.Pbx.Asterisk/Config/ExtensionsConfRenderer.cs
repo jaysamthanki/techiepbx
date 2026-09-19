@@ -822,15 +822,21 @@ namespace Techie.Pbx.Asterisk.Config
                 var trunk = trunks.Single(t => t.TrunkID == route.TrunkID);
                 var name = ConfText.Safe(route.Name, "route name");
                 var pattern = ConfText.Safe(route.DialPattern, "dial pattern");
+                var prepend = ConfText.Safe(route.PrependDigits, "prepend digits");
                 var trunkName = ConfText.Safe(trunk.Name, "trunk name");
                 var trunkHost = ConfText.Safe(trunk.ServerHost, "trunk server host");
+
+                // What the trunk is given: the prepend in front of the dialled digits with the
+                // stripped ones dropped (D109). Strip 0 + empty prepend is plain ${EXTEN}, which
+                // is what the file said before either field existed.
+                var sent = route.StripDigits > 0 ? $"${{EXTEN:{route.StripDigits}}}" : "${EXTEN}";
 
                 sb.Append('\n');
                 sb.Append($"[{ConfText.Safe(route.Context, "route context")}]\n");
                 sb.Append($"; {name} ({route.Priority}) out over {trunkName}\n");
                 // The full URI form is required: chan_pjsip treats a bare dialstring as a literal
                 // URI and rejects it ("Could not create dialog to invalid URI").
-                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:${{EXTEN}}@{trunkHost},{OutboundRingSeconds})\n");
+                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:{prepend}{sent}@{trunkHost},{OutboundRingSeconds})\n");
                 sb.Append(" same => n,Hangup()\n");
             }
 

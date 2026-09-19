@@ -9,6 +9,13 @@ namespace Techie.Pbx.Web.Pages.Routes
         public long OutboundRouteID { get; set; }
         public int Priority { get; set; }
 
+        /// <summary>
+        /// The number the trunk is given when it differs from what was dialled, as the
+        /// <c>${EXTEN}</c>-style expression the dialplan will carry (D109). Empty when the route
+        /// sends exactly what the caller dialled.
+        /// </summary>
+        public string SentNumber { get; set; } = "";
+
         /// <summary>The trunk's name, or a note when it is not there any more.</summary>
         public string Trunk { get; set; } = "";
 

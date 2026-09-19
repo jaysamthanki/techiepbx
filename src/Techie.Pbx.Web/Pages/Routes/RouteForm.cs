@@ -16,8 +16,17 @@ namespace Techie.Pbx.Web.Pages.Routes
         public string? Name { get; set; } = "";
         public long OutboundRouteID { get; set; }
 
+        /// <summary>
+        /// Digits put in front of the number the trunk is given (D109). Blank means none; the
+        /// placeholder is the home-area-code example.
+        /// </summary>
+        public string? PrependDigits { get; set; } = "";
+
         /// <summary>Lower is tried first; the default leaves room either side.</summary>
         public int Priority { get; set; } = 100;
+
+        /// <summary>How many dialled digits to drop before the number is sent (D109).</summary>
+        public int StripDigits { get; set; }
 
         public long TrunkID { get; set; }
 

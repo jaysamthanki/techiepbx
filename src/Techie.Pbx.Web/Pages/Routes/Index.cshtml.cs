@@ -46,7 +46,9 @@ namespace Techie.Pbx.Web.Pages.Routes
                 Enabled = route.Enabled,
                 Name = route.Name,
                 OutboundRouteID = route.OutboundRouteID,
+                PrependDigits = route.PrependDigits,
                 Priority = route.Priority,
+                StripDigits = route.StripDigits,
                 TrunkID = route.TrunkID,
                 Trunks = this.UsableTrunks(),
             });
@@ -69,6 +71,9 @@ namespace Techie.Pbx.Web.Pages.Routes
                         Name = route.Name,
                         OutboundRouteID = route.OutboundRouteID,
                         Priority = route.Priority,
+                        SentNumber = route.PrependDigits.Length > 0 || route.StripDigits > 0
+                            ? route.SentNumberExpression
+                            : "",
                         Trunk = trunk?.Name ?? "(trunk deleted)",
                         TrunkUsable = trunk is { Enabled: true },
                     };
@@ -105,7 +110,9 @@ namespace Techie.Pbx.Web.Pages.Routes
             route.DialPattern = Text(form.DialPattern);
             route.Enabled = form.Enabled;
             route.Name = Text(form.Name);
+            route.PrependDigits = Text(form.PrependDigits);
             route.Priority = form.Priority;
+            route.StripDigits = form.StripDigits;
             route.TrunkID = form.TrunkID;
 
             try

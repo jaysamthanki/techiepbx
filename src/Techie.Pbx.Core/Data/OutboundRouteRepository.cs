@@ -6,7 +6,8 @@ namespace Techie.Pbx.Core.Data
 {
     public class OutboundRouteRepository
     {
-        private const string Columns = "OutboundRouteID, Name, DialPattern, TrunkID, Priority, Enabled";
+        private const string Columns =
+            "OutboundRouteID, Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled";
         private const int SqliteConstraintError = 19;
 
         private readonly Database database;
@@ -42,14 +43,15 @@ namespace Techie.Pbx.Core.Data
 
         public long Insert(OutboundRoute route)
         {
+            Normalize(route);
             this.ThrowIfInvalid(route);
 
             using var connection = this.database.Open();
             try
             {
                 route.OutboundRouteID = connection.ExecuteScalar<long>(
-                    "INSERT INTO OutboundRoutes (Name, DialPattern, TrunkID, Priority, Enabled) " +
-                    "VALUES (@Name, @DialPattern, @TrunkID, @Priority, @Enabled); SELECT last_insert_rowid();",
+                    "INSERT INTO OutboundRoutes (Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled) " +
+                    "VALUES (@Name, @DialPattern, @PrependDigits, @StripDigits, @TrunkID, @Priority, @Enabled); SELECT last_insert_rowid();",
                     route);
 
                 this.pending.Raise();
@@ -63,13 +65,15 @@ namespace Techie.Pbx.Core.Data
 
         public void Update(OutboundRoute route)
         {
+            Normalize(route);
             this.ThrowIfInvalid(route);
 
             using var connection = this.database.Open();
             try
             {
                 var rows = connection.Execute(
-                    "UPDATE OutboundRoutes SET Name = @Name, DialPattern = @DialPattern, TrunkID = @TrunkID, " +
+                    "UPDATE OutboundRoutes SET Name = @Name, DialPattern = @DialPattern, " +
+                    "PrependDigits = @PrependDigits, StripDigits = @StripDigits, TrunkID = @TrunkID, " +
                     "Priority = @Priority, Enabled = @Enabled WHERE OutboundRouteID = @OutboundRouteID",
                     route);
                 if (rows == 0)
@@ -103,6 +107,18 @@ namespace Techie.Pbx.Core.Data
 
             if (errors.Count > 0)
                 throw new ValidationFailedException(errors);
+        }
+
+        /// <summary>
+        /// What is stored is what Asterisk needs: the underscore on the pattern (D109) and no
+        /// stray whitespace anywhere. A caller typing <c>NXXXXXX</c> meant the pattern, so it is
+        /// stored as one rather than rejected for missing the underscore.
+        /// </summary>
+        private static void Normalize(OutboundRoute route)
+        {
+            route.DialPattern = OutboundRoute.NormalizePattern(route.DialPattern);
+            route.Name = route.Name.Trim();
+            route.PrependDigits = route.PrependDigits.Trim();
         }
     }
 }

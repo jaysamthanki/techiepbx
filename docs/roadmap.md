@@ -182,8 +182,10 @@ Still to do:
 - **Place a real outbound call from the lab VM.** Nothing here has dialled a provider yet: worth
   checking the route order, that an unmatched number fails closed, and that `ss-noservice` is
   actually installed (D45) rather than leaving the caller in silence.
-- **No strip or prepend digits** (D44), so "dial 9 for an outside line" is not possible. Ask if it
-  is wanted; it is one field and one line of renderer.
+- ~~**No strip or prepend digits** (D44), so "dial 9 for an outside line" is not possible.~~
+  Added 2026-09-19 (D109): `PrependDigits` / `StripDigits` per route, schema `014`, the
+  pattern's underscore stored on save, and the prepend door closed to the international guard.
+  Golden file `extensions-routes-digits.conf`; existing goldens unchanged.
 - **The international guard assumes North American dialling** (D47). A UK or European site cannot
   write a route at all under it, and will need a deliberate per-system escape hatch.
 

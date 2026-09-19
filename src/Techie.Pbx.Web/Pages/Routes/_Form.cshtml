@@ -49,9 +49,34 @@
                maxlength="41" autocomplete="off" placeholder="_1NXXXXXXXXX" required />
         <div class="form-text">
             Asterisk pattern syntax: <code>X</code> any digit, <code>N</code> 2–9, <code>Z</code> 1–9,
-            <code>[2-9]</code> a set, a trailing <code>.</code> for the rest.
+            <code>[2-9]</code> a set, a trailing <code>.</code> for the rest. The leading
+            <code>_</code> is what makes it a pattern — leave it off and we add it for you.
             <strong>International dialling cannot be routed</strong> — a pattern may not start with 0,
             or with a wildcard that could match one, because that is how a compromised PBX runs up a bill.
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-6 mb-3">
+            <label class="form-label" for="route-prepend">Prepend digits</label>
+            <input class="form-control font-monospace" id="route-prepend" name="prependDigits"
+                   value="@Model.PrependDigits" maxlength="10" inputmode="numeric"
+                   autocomplete="off" placeholder="1714" />
+            <div class="form-text">
+                Digits added in front of the number before it goes to the trunk. Dial seven digits
+                locally, send eleven: pattern <code>_NXXXXXX</code> with prepend <code>1714</code>.
+                Dial <code>714xxxxxxx</code>, send eleven: pattern <code>_714XXXXXXX</code> with
+                prepend <code>1</code>.
+            </div>
+        </div>
+        <div class="col-6 mb-3">
+            <label class="form-label" for="route-strip">Strip digits</label>
+            <input class="form-control" id="route-strip" name="stripDigits" value="@Model.StripDigits"
+                   type="number" min="0" max="10" />
+            <div class="form-text">
+                How many leading dialled digits to drop first — "dial 9 for an outside line" is
+                pattern <code>_9NXXXXXXXXX</code> with strip 1.
+            </div>
         </div>
     </div>
 
