@@ -31,7 +31,7 @@ this file is the **order**.
 | 22 | Phone provisioning: Polycom (DHCP option 160 -> http://user:pass@host/polycom, MAC capture on first contact, generated per-device config) | supporting | **Done 2026-09-21** (D77–D83). Lab-verified with a spoofed VVX 450 User-Agent: no/bad Basic auth → 401, valid auth + non-Polycom UA → 403; first contact auto-registered the MAC (model, firmware, IP); unassigned phone got a minimal no-reg config; after assigning ext 1001 in the UI the generated config carries reg.1 with the real secret, server, MWI and the deterministic local SIP port; a model mismatch on a known MAC → 403. Schema `011_phones.sql`, `Phone` model + `PhoneRepository`, `PolycomUserAgent`, `BasicAuth`, the `/polycom` controller outside the Entra cookie, master + per-phone renderers with golden files, `Provisioning.Username`/`Provisioning.Password` settings keys, and the Phones page. **Round 2 (D84–D87)**: NTP server as a setting (default pool.ntp.org), Polycom device web passwords as secret settings (admin one doubles as the push digest credential), push-on-save `Action:UpdateConfig` + Reboot phone button — best-effort, polling is the safety net. **Round 3 — Yealink (D88–D91)**: `/yealink` endpoint on the same gate, plain key=value config generated per request, Brand column (schema 012), tabbed Phones page (Phones | Settings → Polycom | Yealink), SIP-NOTIFY signal via generated `notify.conf` + AMI PJSIPSendNotify (res_pjsip_notify added to the allowlist); Yealink uses DHCP option 66. Yealink path pending lab verification. See [piece 22 detail](#piece-22-detail-built-2026-09-21-not-yet-lab-verified). |
 | 19 | Helper: Unix socket, peer credential check, first commands (firewall) | | |
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |
-| 21 | Installer script for fresh Debian (users, permissions, hardened systemd units, polkit rule, Asterisk build) | | |
+| 21 | Installer script for fresh Debian (users, permissions, hardened systemd units, polkit rule, Asterisk build) | | **Part 1 built 2026-09-22, pending install-from-scratch verification** (D92–D94). `src/Techie.Pbx.Core/scripts/install.sh`: preflight + `--dry-run`, UTC clock + NTP (D74), packages, the asterisk and `tnpbx` users with `tnpbx` in the asterisk group, the setgid `/etc/asterisk` layout, Asterisk 22 built from source, and our hardened unit enabled but **not started**. **Part 2 — the web app deploy, its systemd unit and the polkit rule — is deferred by user decision** (D92) until the app is finalised. See [piece 21 detail](#piece-21-detail-part-1-built-2026-09-22-not-yet-verified). |
 
 The order after piece 7 is a proposal. The reasoning: trunks and routes first so the system can
 make and take real calls; voicemail before email because voicemail-to-email is the first email
@@ -269,3 +269,43 @@ Still to do:
 - **No upload endpoints** for the `logs`, `overrides` and `contacts` directories the master file
   names (D79), **no firmware serving** (D83), no BLF, no attendant console, no softkey layout, no
   second line, and no non-Polycom phones. Each is its own piece.
+
+## Piece 21 detail (part 1 built 2026-09-22, not yet verified)
+
+`src/Techie.Pbx.Core/scripts/install.sh` turns a fresh Debian 12/13 server into everything a
+TNPBX box is **except the application** (D92). It is the lab spike
+(`build-asterisk-vm.sh`) with the hand-written config removed, the `tnpbx` user added and the
+layout the lab proved made explicit (D94).
+
+What it produces, in order: preflight (root, Debian version, architecture, memory-aware build
+jobs) → the clock set to `Etc/UTC` with NTP before anything else (D74) → one `apt-get` for build
+and runtime dependencies, with `libicu72`/`libicu76` chosen by Debian version and `ffmpeg`
+because announcements require it (D55) → the `asterisk` and `tnpbx` system users, `tnpbx` in the
+`asterisk` group, and the directory layout including `/etc/asterisk` at **2770 root:asterisk**
+(D18) and `/opt/tnpbx` at 0750 `tnpbx:asterisk`, created and left empty → Asterisk 22 built from
+the tarball with a verified sha256, bundled pjproject and `BUILD_NATIVE` off → our own systemd
+unit, `daemon-reload`, `enable`, and **no start** (D93).
+
+`--dry-run` prints every mutating step instead of running it, and skips the root check, so the
+whole install can be read before it is run. `--rebuild` forces the Asterisk build the way the
+spike script does; otherwise an existing `22.x` binary is left alone.
+
+Still to do:
+
+- **Run it on a genuinely fresh Debian 12 and Debian 13 VM.** Nothing here has been executed
+  yet — only `bash -n` and a `--dry-run` pass. The two things most likely to be wrong are the
+  package list (a missing runtime dependency only shows up when the app is deployed) and the
+  `libicu` name on Debian 12.
+- **Part 2: deploy the application.** Publishing it into `/opt/tnpbx`, `tnpbx-web.service` with
+  the hardening named in [security.md](security.md) (`NoNewPrivileges`, `ProtectSystem=strict`,
+  explicit `ReadWritePaths`), binding 80/443 as an unprivileged user (D76), and the polkit rule
+  that lets the web user restart `asterisk.service` (D33).
+- **The firewall (piece 19), the Helper (piece 19) and fail2ban (piece 20)** are not installed
+  and not referenced. The script prints them as "deliberately not done" so the operator is not
+  left believing the box is protected.
+- **`make samples` is not run**, so `/etc/asterisk` is empty until the first apply. That is the
+  point (D93), but it means an operator who starts Asterisk by hand before deploying the app
+  gets an Asterisk with no config at all.
+- **The announcements directory is created `asterisk:asterisk` 2770**, which is what the lab VM
+  has; D56 describes it as `root:asterisk`. Both work — `tnpbx` writes there through the
+  `asterisk` group either way — but the two should be reconciled.
