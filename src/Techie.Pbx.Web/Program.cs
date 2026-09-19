@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using log4net;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Identity.Web;
@@ -64,6 +65,20 @@ namespace Techie.Pbx.Web
             // Cookie-based Entra ID sign-in. API controllers use the same cookie (only our Razor pages call them).
             builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
                 .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+
+            // The auth cookie, the OIDC correlation cookies and the antiforgery tokens are all
+            // encrypted with this key ring, so it must survive restarts and re-deploys: a fresh
+            // key per process would sign everyone out mid-flow — and an OIDC flow that straddles
+            // a restart lands on the error page with a state it cannot read. The ring lives
+            // beside the database, inside the deploy target (D95): appsettings and Data/ are the
+            // server's live state, and this is the same kind of thing. Keys expire after a year
+            // (user decision): an appliance renews them in the background, and a year is long
+            // enough that a re-deploy never loses the ring, short enough that a key does not
+            // outlive its usefulness.
+            builder.Services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(
+                    Path.Combine(builder.Environment.ContentRootPath, "Data", "keys")))
+                .SetDefaultKeyLifetime(TimeSpan.FromDays(365));
 
             // An unauthenticated API or htmx call must not be answered with a redirect to Entra:
             // the browser cannot follow it from fetch, so the caller sees a CORS failure instead
