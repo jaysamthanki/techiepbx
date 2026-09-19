@@ -33,6 +33,7 @@ this file is the **order**.
 | 20 | fail2ban setup, then own AMI-security-event blocker via Helper | | |
 | 23 | Certificate management: in-process ACME (Certes, HTTP-01), Kestrel on 80/443, SIP TLS, auto-renewal | security | **Done 2026-09-22, verified live end to end** (D97–D101). `013_certificates.sql` + `CertificateRepository` (Current() = newest usable), Certes-based `AcmeCertificateService` answering its own HTTP-01 challenges on port 80, `WebBindings` (80 + 8080 always, 443 with a usable cert; `CAP_NET_BIND_SERVICE` in the unit), daily renewal at ≤30 days, Certificates page, combined `tnpbx-cert.pem` feeding the generated pjsip `transport-tls` on `Sip.TlsPort` (D71 real). **Live verification**: staging order first (proved the ACME loop through the Azure NAT, caught a Certes cross-signed-chain bug we fixed by taking leaf/issuers off the chain object), then a **production order — `pbx.techie.gd` serves a real Let's Encrypt cert on 443**, port 80 redirects everything except provisioning + the ACME challenge (a redirect-on-8080 bug fixed en route: 8080 stays plain HTTP as the way back in), and Asterisk serves `transport-tls` on 5061 with the same cert. 857 tests. |
 | 21 | Installer script for fresh Debian (users, permissions, hardened systemd units, polkit rule, Asterisk build) | | **Done 2026-09-22** (D92–D96). Part 1 (`scripts/install.sh`) verified one-shot on a freshly wiped lab VM (Debian 13.7, zero manual steps): UTC clock + NTP synced, `tnpbx` in the `asterisk` group, `/etc/asterisk` root:asterisk 2770 and empty, `/opt/tnpbx` deploy target, Asterisk 22.11.0, unit enabled but inactive by design. Part 2 (`scripts/app-deploy.sh <publish.tgz>`, D95) deployed the app the same day: hardened `tnpbx-web.service` (User=tnpbx, ProtectSystem=strict), polkit rule scoped to exactly `asterisk.service`, `appsettings.json` + `Data/` preserved across re-deploys. Full first-run proven on the fresh box (D96): sign in → settings → extension → first apply wrote all nine conf files → Asterisk started on generated config → AMI/pjsip/provisioning live. See [piece 21 detail](#piece-21-detail-part-1-built-2026-09-22-not-yet-verified). |
+| 24 | Smarter apply: settings scopes, and a confirmed Asterisk restart after apply | supporting | **Built 2026-09-23, pending lab verification** (D103, D104). Settings carry a `SettingScope` (Asterisk / Phones / App) classified by what actually reads each key, and only an Asterisk-scoped write raises the config-pending marker — a provisioning password or the phones' NTP server no longer lights the apply button, and the toast says phones pick it up at their next poll. The apply response now carries `RestartRequired` + `RestartFiles`; when an apply writes a startup-only file the page asks with a sweetalert2 confirm and, on yes, posts `/api/config/restartAsterisk`, which runs `systemctl restart asterisk.service` as `tnpbx` through the existing polkit rule (no sudo, no shell, 30s timeout). A declined restart leaves an "Asterisk restart required" badge + Restart button in the navbar poll area, backed by `AsteriskRestartMarker` beside the database. 890 tests. |
 
 The order after piece 7 is a proposal. The reasoning: trunks and routes first so the system can
 make and take real calls; voicemail before email because voicemail-to-email is the first email
@@ -132,8 +133,9 @@ Still to do:
   reconciled by putting the script's secret into the `Settings` table by hand.
 - Confirm whether `res_rtp_asterisk` reloads `rtp.conf` cleanly (D33), and move it out of the
   restart group if it does.
-- Restarting Asterisk is still a manual step. A button for it needs the polkit rule and a
-  decision about dropping live calls.
+- ~~Restarting Asterisk is still a manual step.~~ Done in piece 24 (D104): an apply that owes a
+  restart offers it, the app runs it through the polkit rule, and a declined restart leaves a
+  banner in the navbar.
 
 ## Piece 8 detail (in progress, started 2026-09-17)
 

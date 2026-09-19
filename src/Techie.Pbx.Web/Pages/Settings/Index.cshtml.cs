@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Web.Pages.Settings
 {
@@ -75,7 +76,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             this.settings.Delete(name);
 
             Log.Info($"Setting {name} reset to its default by {this.User.Identity?.Name}");
-            return this.Changed($"{name} is back to its default.");
+            return this.Changed(name, $"{name} is back to its default.");
         }
 
         /// <summary>
@@ -101,7 +102,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             form.Value = isSecret ? "" : value;
 
             if (value.Length == 0 && isSecret)
-                return this.Changed($"{key} left as it was.");
+                return this.Unchanged($"{key} left as it was.");
 
             try
             {
@@ -117,29 +118,64 @@ namespace Techie.Pbx.Web.Pages.Settings
             }
 
             Log.Info($"Setting {key} changed by {this.User.Identity?.Name}");
-            return this.Changed(value.Length == 0 ? $"{key} is back to its default." : $"{key} saved.");
+            return this.Changed(key, value.Length == 0 ? $"{key} is back to its default." : $"{key} saved.");
         }
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
-        /// "settingsChanged" refreshes the table, "configChanged" wakes the navbar's apply button
-        /// (D43) — every one of these keys is read while config is generated — and "pbxToast"
-        /// says what happened.
+        /// "settingsChanged" refreshes the table and "pbxToast" says what happened.
+        ///
+        /// "configChanged", which wakes the navbar's apply button (D43), depends on the key: only
+        /// an Asterisk-scoped setting is written into a generated conf file, so only that one has
+        /// anything to apply (D103). A phone setting is already live — those files are generated
+        /// per request (D79) — and the toast says so instead, and an app setting changes nothing
+        /// outside this process.
         /// </summary>
-        private IActionResult Changed(string message)
+        private IActionResult Changed(string key, string message)
+        {
+            var scope = SettingsKeys.ScopeOf(key);
+
+            var events = new Dictionary<string, object?>
+            {
+                ["settingsChanged"] = null,
+                ["pbxToast"] = new { message = message + ScopeNote(scope) },
+            };
+
+            if (scope == SettingScope.Asterisk)
+                events["configChanged"] = null;
+
+            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
+            return new StatusCodeResult(StatusCodes.Status204NoContent);
+        }
+
+        /// <summary>
+        /// What the toast adds about where the change has got to. Nothing for an Asterisk-scoped
+        /// key: the apply button turning red says it better than a sentence would.
+        /// </summary>
+        private static string ScopeNote(SettingScope scope) => scope switch
+        {
+            SettingScope.Phones => " Phone configs are generated per request, so each phone picks this up at its next poll.",
+            _ => "",
+        };
+
+        /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
+        private static string Text(string? value) => (value ?? "").Trim();
+
+        /// <summary>
+        /// The answer to a save that stored nothing — a secret's box left blank (D68). The table
+        /// still refreshes, but nothing changed, so there is nothing to apply and nothing to say
+        /// about phones.
+        /// </summary>
+        private IActionResult Unchanged(string message)
         {
             var events = new Dictionary<string, object?>
             {
                 ["settingsChanged"] = null,
-                ["configChanged"] = null,
                 ["pbxToast"] = new { message },
             };
 
             this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
             return new StatusCodeResult(StatusCodes.Status204NoContent);
         }
-
-        /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
-        private static string Text(string? value) => (value ?? "").Trim();
     }
 }

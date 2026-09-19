@@ -1412,3 +1412,60 @@ callback could not read its own state. The ring now persists to Data/keys beside
 inside the deploy target — the same protected live state as appsettings.json and Data/ (D95) —
 and keys are created with a 365-day lifetime (user decision): the appliance rolls the key over
 in the background long before expiry, and a ring that survives re-deploys is the point.
+
+### D103. Settings have a scope, and only an Asterisk-scoped one lights the apply button (2026-09-23)
+Every settings write raised the config-pending marker, because when the Settings table held only
+AMI and SIP keys that was true (D69). It stopped being true when phone provisioning and ACME
+arrived: changing a Polycom device password or the NTP server phones are told to use turned the
+apply button red, and the apply it asked for then wrote nothing, because a phone's config is
+generated per request and never lands in `/etc/asterisk` (D79). An apply button that sometimes
+means nothing is worse than no apply button.
+
+So each key in `SettingsKeys` carries a `SettingScope`, classified by the code that actually reads
+it rather than by the prefix it happens to start with:
+
+- **Asterisk** — something in `ConfigApplier.Render` writes it into a conf file, or the applier
+  needs it to work: `Asterisk.ConfDirectory`, `Ami.Host/Port/Username/Secret` (manager.conf), every
+  `Sip.*` key (pjsip.conf and rtp.conf), and `System.Timezone`, which every `GotoIfTime` in the
+  generated dialplan names (D74).
+- **Phones** — only a phone's generated config carries it: `Provisioning.Username/Password` (the
+  gate), `Provisioning.AdminPassword/UserPassword` (D84) and `System.NtpServer`.
+- **App** — nothing outside this process reads it: `Ami.TimeoutSeconds` (how long our own client
+  waits; no file carries it), and `Cert.AcmeServer`, `Cert.AcmeAccountKeyPem` and `Cert.Email`,
+  which the certificate service reads when it orders.
+
+`SettingsRepository.Set`/`Delete` raise the marker only for an Asterisk-scoped key, so the rule
+holds however a setting was edited — the Settings page, the SIP page, or the Polycom and Yealink
+tabs on the Phones page, which all post to the same handler. The settings page's 204 sends
+`configChanged` only in that case too, and a phone-scoped save says so in its toast instead:
+"each phone picks this up at its next poll". The edit form says which before you save.
+
+Two deliberate calls. `System.Timezone` is read by both the dialplan and a Polycom config, and
+Asterisk wins, because that half is the half that needs an apply. And `Cert.*` is App, not
+Asterisk, even though a certificate ends up in a conf file: what an order produces is a row in
+`Certificates`, and `CertificateRepository` raises the marker itself (D101), so the file Asterisk
+reads is still applied — the ordering details themselves reach no renderer. An unclassified key
+falls back to Asterisk, and a test says there is no such key: an apply that writes nothing costs a
+click, while a missed one leaves Asterisk running config nobody was told had changed.
+
+### D104. The app restarts Asterisk itself, after asking, and keeps saying so until it happens (2026-09-23)
+D33 left the restart manual: some files are only read when Asterisk starts, so an apply writes
+them and reports that a restart is owed. The reason it stayed manual was that a restart drops live
+calls, not that the app could not do it — the installer has written the polkit rule since piece 21
+(D95), scoped to exactly `asterisk.service` for exactly the `tnpbx` user.
+
+So the app does it, and asks first. An apply that wrote a startup-only file answers with
+`RestartRequired` and the file names, and the page asks with a sweetalert2 confirm — "Asterisk
+needs a restart to load: modules.conf. Calls in progress will be dropped." Confirming posts to
+`POST /api/config/restartAsterisk`, which runs `systemctl restart asterisk.service` as the web
+user: `Process.Start` with a fixed program and a fixed argv list, **no sudo and no shell** (D3,
+D18), a 30-second timeout, INFO on success and ERROR with what systemd said on failure. A failure
+comes back as a 502 carrying our own sentence, because it is the admin who has to do something
+about it.
+
+Declining is a normal answer, so the state is kept rather than forgotten: `AsteriskRestartMarker`
+is a file beside the database and the apply marker (D26), raised by an apply that owes a restart
+and cleared by a restart that worked. The navbar poll that already asks about the apply button
+(D43) asks about this too, and shows an "Asterisk restart required" badge with a Restart button
+beside it — same endpoint, same confirm. No new page and no new nav: a restart being owed is a
+property of the whole system, like the apply button next to it.

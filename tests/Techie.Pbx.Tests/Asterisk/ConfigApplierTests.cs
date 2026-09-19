@@ -213,6 +213,28 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// What the apply response hands the page, so it can name the files in the restart confirm
+        /// it then offers (D104): every startup-only file the apply wrote, and only those. A
+        /// reload picked up nothing here, so the list is the whole change.
+        /// </summary>
+        [Fact]
+        public void An_apply_reports_every_startup_only_file_it_wrote()
+        {
+            AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
+            this.applier.Write();
+
+            foreach (var fileName in new[] { "asterisk.conf", "modules.conf", "rtp.conf" })
+                File.Delete(Path.Combine(this.confDirectory, fileName));
+
+            var result = this.applier.Apply();
+
+            Assert.True(result.RestartRequired);
+            Assert.Equal(new[] { "asterisk.conf", "modules.conf", "rtp.conf" }, result.RestartRequiredFiles);
+            Assert.Equal(result.ChangedFiles, result.RestartRequiredFiles);
+            Assert.Empty(result.ReloadedModules);
+        }
+
+        /// <summary>
         /// Reloading manager.conf can close the session the reloads are being sent on, so it goes
         /// last and the files that need a restart are not in the plan at all (D34).
         /// </summary>

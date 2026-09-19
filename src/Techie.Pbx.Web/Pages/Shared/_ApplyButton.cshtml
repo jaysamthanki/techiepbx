@@ -1,11 +1,25 @@
-@model bool
+@model ApplyStatus
 @*
-    The apply button, or nothing (D43). It is in the navbar rather than on each page because
-    "Asterisk is running config older than the database" is true of the whole system, not of the
-    page you happen to be looking at, and because a button that is only there when there is
-    something to do needs no explaining.
+    The apply button and the restart banner, or nothing (D43, D104). They are in the navbar rather
+    than on each page because "Asterisk is running config older than the database" is true of the
+    whole system, not of the page you happen to be looking at, and because a control that is only
+    there when there is something to do needs no explaining.
+
+    The banner stays until a restart actually happens: an apply that wrote a startup-only file
+    offers the restart straight away, and this is where an admin who said "not now" comes back to
+    it (D33, D104).
 *@
-@if (Model)
+@if (Model.RestartRequired)
+{
+    <span class="badge text-bg-warning me-2" title="An apply wrote a file Asterisk only reads when it starts, so it is still running the config it started with.">
+        Asterisk restart required
+    </span>
+    <button type="button" class="btn btn-warning me-2" onclick="pbx.restartAsterisk(this)"
+            title="Restarts Asterisk so it reads the files it only reads at startup. This drops any calls in progress.">
+        Restart Asterisk
+    </button>
+}
+@if (Model.ConfigPending)
 {
     <button type="button" class="btn btn-danger" onclick="pbx.applyConfig(this)"
             title="The configuration has changed since the last apply. This writes it to Asterisk and reloads what changed.">
