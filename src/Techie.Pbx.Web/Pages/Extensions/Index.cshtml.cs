@@ -56,6 +56,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             {
                 Enabled = extension.Enabled,
                 ExtensionID = extension.ExtensionID,
+                MaxContacts = extension.MaxContacts,
                 Name = extension.Name,
                 Number = extension.Number,
                 VoicemailAttachRecording = extension.VoicemailAttachRecording,
@@ -126,6 +127,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 return this.NotFound();
 
             extension.Enabled = form.Enabled;
+            extension.MaxContacts = form.MaxContacts;
             extension.Name = Text(form.Name);
             extension.Number = Text(form.Number);
             extension.VoicemailAttachRecording = form.VoicemailAttachRecording;

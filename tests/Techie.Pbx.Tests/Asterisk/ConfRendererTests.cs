@@ -294,5 +294,51 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains($"VoiceMail(1002@{context},u)", ExtensionsConfRenderer.Render(SampleExtensions()));
             Assert.Contains($"VoiceMailMain(${{CALLERID(num)}}@{context},s)", ExtensionsConfRenderer.Render(SampleExtensions()));
         }
+
+        /// <summary>
+        /// A multi-device extension carries max_contacts = N and loses remove_existing, which
+        /// would otherwise delete every other contact the moment one device re-registered (D110).
+        /// A single-device extension is exactly the file it always was.
+        /// </summary>
+        [Fact]
+        public void A_multi_device_extension_keeps_its_contacts()
+        {
+            var extensions = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111", MaxContacts = 2 },
+            };
+
+            var actual = PjsipConfRenderer.Render(new PjsipTransport(), extensions);
+
+            Assert.Contains("max_contacts = 2\nremove_existing = no\n", actual);
+            Assert.DoesNotContain("remove_existing = yes", actual);
+        }
+
+        [Fact]
+        public void A_single_device_extension_replaces_its_own_stale_contact()
+        {
+            var extensions = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111" },
+            };
+
+            var actual = PjsipConfRenderer.Render(new PjsipTransport(), extensions);
+
+            Assert.Contains("max_contacts = 1\nremove_existing = yes\n", actual);
+        }
+
+        /// <summary>No value a hand-edited row could carry reaches a conf file (D110).</summary>
+        [Theory]
+        [InlineData(0)]
+        [InlineData(6)]
+        public void An_invalid_max_contacts_value_is_never_rendered(int maxContacts)
+        {
+            var extensions = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111", MaxContacts = maxContacts },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => PjsipConfRenderer.Render(new PjsipTransport(), extensions));
+        }
     }
 }

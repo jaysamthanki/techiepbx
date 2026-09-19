@@ -44,6 +44,17 @@
         <div class="form-text">Shown as the caller ID name on internal calls.</div>
     </div>
 
+    <div class="mb-3">
+        <label class="form-label" for="extension-max-contacts">Max devices</label>
+        <input class="form-control" id="extension-max-contacts" name="maxContacts" value="@Model.MaxContacts"
+               type="number" min="1" max="5" />
+        <div class="form-text">
+            How many devices may register to this extension at once — an office phone plus a
+            laptop softphone is 2. A call rings every registered device. 1 means a new
+            registration replaces the old one.
+        </div>
+    </div>
+
     @if (Model.IsNew)
     {
         <div class="mb-3">

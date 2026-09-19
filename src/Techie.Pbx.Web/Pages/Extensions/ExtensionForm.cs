@@ -15,6 +15,10 @@ namespace Techie.Pbx.Web.Pages.Extensions
         public List<string> Errors { get; set; } = new();
         public long ExtensionID { get; set; }
         public bool IsNew => this.ExtensionID == 0;
+
+        /// <summary>How many devices may register at once (D110). Default 1.</summary>
+        public int MaxContacts { get; set; } = 1;
+
         public string? Name { get; set; } = "";
         public string? Number { get; set; } = "";
 

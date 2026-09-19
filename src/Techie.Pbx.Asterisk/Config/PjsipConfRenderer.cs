@@ -97,6 +97,9 @@ namespace Techie.Pbx.Asterisk.Config
 
             foreach (var extension in ConfText.EnabledInOrder(extensions))
             {
+                if (extension.MaxContacts is < 1 or > 5)
+                    throw new InvalidOperationException($"Extension {extension.Number} has an invalid max contacts value.");
+
                 var number = ConfText.Safe(extension.Number, "number");
                 var name = ConfText.Safe(extension.Name, "name");
                 var secret = ConfText.Safe(extension.Secret, "secret");
@@ -131,8 +134,17 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append('\n');
                 sb.Append($"[{number}]\n");
                 sb.Append("type = aor\n");
-                sb.Append("max_contacts = 1\n");
-                sb.Append("remove_existing = yes\n");
+
+                // How many devices may be registered at once (D110). With more than one,
+                // remove_existing must be off: it deletes every other contact on a new
+                // REGISTER, which is the opposite of an office phone plus a laptop softphone
+                // coexisting. Stale contacts are still pruned by the registration expiring.
+                sb.Append($"max_contacts = {extension.MaxContacts}\n");
+
+                if (extension.MaxContacts > 1)
+                    sb.Append("remove_existing = no\n");
+                else
+                    sb.Append("remove_existing = yes\n");
             }
 
             foreach (var trunk in TrunkRenderOrder(trunks))

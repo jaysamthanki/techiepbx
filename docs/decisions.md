@@ -1580,3 +1580,19 @@ The international guard extends to the new door (D47): a prepend may not start w
 because `00`/`011` prepended is the same bill as a pattern starting with 0 — the guard was
 otherwise walked around from the other side. This is the same North-American assumption D47
 already names; a site that needs a national 0-prefix is the same escape-hatch question.
+
+### D110. Max contacts per extension: an office phone and a softphone on one number (2026-09-19)
+User request, from FreePBX's max contacts field. The renderer hardcoded `max_contacts = 1`
+with `remove_existing = yes` on every aor, so a second device registering displaced the
+first — the softphone would knock the desk phone offline.
+
+`Extensions.MaxContacts` (schema `015_extension_max_contacts.sql`, default 1) is now the aor's
+`max_contacts`, capped at 5. With more than one, `remove_existing` flips to **no**: it exists
+to replace a device's own stale contact, but with several devices it deletes every *other*
+contact on each new REGISTER — the opposite of coexisting. Pruning of dead contacts falls to
+registration expiry instead. A call to the extension rings every registered contact; that is
+how PJSIP dials an endpoint, so no dialplan change is involved.
+
+Default 1 keeps every existing endpoint byte-identical (golden pjsip files unchanged), and
+the value is validated in the model, the repository and the renderer like every other field
+that reaches a conf file.

@@ -183,5 +183,41 @@ namespace Techie.Pbx.Tests.Core
             database.Migrate();
             database.Migrate();
         }
+
+        /// <summary>
+        /// The multi-device setting survives a save and a load (D110): an office phone and a
+        /// softphone on one extension is the use case. Default is 1 for everything existing.
+        /// </summary>
+        [Fact]
+        public void Max_contacts_survive_a_round_trip()
+        {
+            var extension = new Extension { Number = "1001", Name = "Front Desk", Secret = SecretGenerator.Create() };
+            this.repository.Insert(extension);
+
+            Assert.Equal(1, this.repository.GetByNumber("1001")!.MaxContacts);
+
+            extension.MaxContacts = 2;
+            this.repository.Update(extension);
+
+            Assert.Equal(2, this.repository.GetByNumber("1001")!.MaxContacts);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(6)]
+        public void Max_contacts_outside_one_to_five_is_refused(int maxContacts)
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                MaxContacts = maxContacts,
+            };
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.repository.Insert(extension));
+
+            Assert.Contains("Max contacts", ex.Message);
+        }
     }
 }
