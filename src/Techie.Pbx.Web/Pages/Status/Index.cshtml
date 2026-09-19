@@ -1,0 +1,23 @@
+@page "/"
+@model IndexModel
+@{
+    ViewData["Title"] = "Status";
+
+    var attentionUrl = Url.Page("Index", "Attention");
+    var liveUrl = Url.Page("Index", "Live");
+}
+
+@*
+    The home page, on two clocks. The tiles and the calls in progress come from Asterisk, so they
+    poll; the findings and the counts come from the database, so they only come back when
+    something changed — the same events the navbar's apply button listens for (D43).
+*@
+<h1 class="h3 mb-3">Status</h1>
+
+<div hx-get="@liveUrl" hx-trigger="load, every 5s">
+    <p class="text-secondary">Asking Asterisk…</p>
+</div>
+
+<div hx-get="@attentionUrl" hx-trigger="load, configChanged from:body, configApplied from:body">
+    <p class="text-secondary">Checking this system…</p>
+</div>

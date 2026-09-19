@@ -199,6 +199,13 @@ namespace Techie.Pbx.Tests.Core
             Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.AsteriskConfDirectory, "etc/asterisk"));
         }
 
+        [Fact]
+        public void The_log_directory_has_to_be_an_absolute_path()
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.AsteriskLogDirectory, "/var/log/asterisk"));
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.AsteriskLogDirectory, "var/log/asterisk"));
+        }
+
         [Theory]
         [InlineData("Europe/London")]
         [InlineData("America/Los_Angeles")]

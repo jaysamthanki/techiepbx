@@ -158,6 +158,12 @@ An action that changes data does not decide what to redraw: it names what happen
 page's containers listen. The table and the apply reminder re-fetch on `extensionsChanged`
 (`trunksChanged` on the trunks page), and `pbxToast` closes the form modal and says what happened.
 
+The status page (`/`, `Pages/Status`) is the same shape on two clocks: `?handler=Live` polls
+Asterisk every five seconds over one AMI session for the health tiles and the calls in progress,
+and `?handler=Attention` reads the database on load and on `configChanged` / `configApplied` for
+the findings (`AttentionRules`, a pure function in the Asterisk project) and the counts.
+`/Status/Logs` tails one of three named log files, chosen by name and never by path (D106, D107).
+
 The database itself is opened once at startup by `PbxDatabase` and read from `Database:Path`
 (default `/var/lib/tnpbx/tnpbx.db`); pages and controllers construct their repositories over it
 with `new` rather than taking them from the container (D22).

@@ -41,6 +41,19 @@ namespace Techie.Pbx.Asterisk.Ami
         public string ReadGreeting() => _reader.ReadGreeting();
 
         /// <summary>
+        /// What Asterisk says about itself: when it started, when it last reloaded, how many calls
+        /// it has up. A plain response rather than a list, so there is nothing to collect.
+        ///
+        /// Covered by the AMI account's existing "read = system" permission, like
+        /// <see cref="ShowContacts"/>, so <c>ManagerConfRenderer</c> does not change for it: the
+        /// status page asks new questions, not for new rights (D32).
+        ///
+        /// The type is named for the namespace because this method has the same name as it, which
+        /// is the action's name and worth keeping.
+        /// </summary>
+        public CoreStatus CoreStatus() => Ami.CoreStatus.FromResponse(this.Send(new AmiAction("CoreStatus")));
+
+        /// <summary>
         /// Logs in. Throws AmiException if Asterisk rejects the credentials. The secret is never
         /// logged.
         /// </summary>
@@ -120,6 +133,24 @@ namespace Techie.Pbx.Asterisk.Ami
         {
             Send(new AmiAction("PJSIPSendNotify").Add("Endpoint", endpoint).Add("NotificationName", notificationName));
             Log.Info($"Sent NOTIFY '{notificationName}' to endpoint '{endpoint}'");
+        }
+
+        /// <summary>
+        /// Every channel Asterisk has open right now. The items are "CoreShowChannel" events and
+        /// the list ends with "CoreShowChannelsComplete", which carries the EventList: Complete
+        /// that <see cref="SendEventList"/> stops on; a system with no calls answers the action
+        /// with Success and that final event straight away, so there is no empty-list error to
+        /// tolerate here as there is for the contacts list (D19).
+        ///
+        /// Like <see cref="CoreStatus"/>, this is covered by the account's existing
+        /// "read = system" permission, so <c>ManagerConfRenderer</c> is unchanged.
+        /// </summary>
+        public List<ActiveChannel> ShowChannels()
+        {
+            return this.SendEventList(new AmiAction("CoreShowChannels")).Events
+                .Where(e => string.Equals(e.EventName, "CoreShowChannel", StringComparison.OrdinalIgnoreCase))
+                .Select(ActiveChannel.FromEvent)
+                .ToList();
         }
 
         /// <summary>

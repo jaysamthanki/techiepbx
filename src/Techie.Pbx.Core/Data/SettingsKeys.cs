@@ -15,6 +15,14 @@ namespace Techie.Pbx.Core.Data
         /// <summary>Where generated conf files are written. Defaults to /etc/asterisk.</summary>
         public const string AsteriskConfDirectory = "Asterisk.ConfDirectory";
 
+        /// <summary>
+        /// Where Asterisk writes its logs. Defaults to <see cref="Diagnostics.LogTail.DefaultLogDirectory"/>
+        /// — asterisk.conf leaves directories at their built-in defaults, so this is only different
+        /// if a site has moved them. Nothing generated reads this back (D103): it is the directory
+        /// the Logs page reads from, not one Asterisk is told to use.
+        /// </summary>
+        public const string AsteriskLogDirectory = "Asterisk.LogDirectory";
+
         public const string AmiHost = "Ami.Host";
         public const string AmiPort = "Ami.Port";
         public const string AmiUsername = "Ami.Username";
@@ -141,6 +149,7 @@ namespace Techie.Pbx.Core.Data
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
             AsteriskConfDirectory,
+            AsteriskLogDirectory,
             AmiHost,
             AmiPort,
             AmiUsername,
@@ -189,6 +198,10 @@ namespace Techie.Pbx.Core.Data
         {
             // Where the applier writes, and the directory the pjsip TLS certificate is named from.
             [AsteriskConfDirectory] = SettingScope.Asterisk,
+
+            // Nothing generated reads this back — it is the directory the Logs page reads from,
+            // not a directory Asterisk is told to use, so there is nothing an apply would write.
+            [AsteriskLogDirectory] = SettingScope.App,
 
             // Host, port, username and secret are all in the generated manager.conf: the renderer
             // writes the port and the account, and refuses to write a file whose host is not the

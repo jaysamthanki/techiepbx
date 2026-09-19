@@ -2,6 +2,7 @@ using System.Globalization;
 using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Diagnostics;
 using Techie.Pbx.Core.Models;
 using Techie.Pbx.Core.Security;
 
@@ -29,6 +30,13 @@ namespace Techie.Pbx.Web.Pages.Settings
                 Description = "Where the generated conf files are written. Only change it to test against a copy of Asterisk's config.",
                 Key = SettingsKeys.AsteriskConfDirectory,
                 Sample = "/etc/asterisk",
+            },
+            new SettingDescriptor
+            {
+                Default = LogTail.DefaultLogDirectory,
+                Description = "Where Asterisk writes its logs. The Logs page reads messages.log and security.log from here; only change it to match a site that has moved them.",
+                Key = SettingsKeys.AsteriskLogDirectory,
+                Sample = "/var/log/asterisk",
             },
             new SettingDescriptor
             {

@@ -1,0 +1,36 @@
+@model LogLinesView
+@{
+    var result = Model.Result;
+    var filterSuffix = Model.Filter != null ? $" matching '{Model.Filter}'" : "";
+}
+
+@if (Model.Path == null)
+{
+    <p class="text-secondary">The application is not logging to a file.</p>
+}
+else if (!result.Exists)
+{
+    <p class="text-secondary">This log does not exist yet at @Model.Path.</p>
+}
+else
+{
+    <p class="text-secondary small mb-1">
+        @Model.Path &middot;
+        @Model.FileSizeText &middot;
+        last written @Model.LastWriteText &middot;
+        showing the last @Model.Lines lines@(result.ScanCapped ? " (older lines not scanned)" : "")@filterSuffix
+    </p>
+
+    if (result.Error != null)
+    {
+        <p class="text-danger">@result.Error</p>
+    }
+    else if (result.Lines.Count == 0)
+    {
+        <p class="text-secondary">No lines@filterSuffix.</p>
+    }
+    else
+    {
+        <pre class="border rounded bg-light p-2 small mb-0" style="max-height: 70vh; overflow: auto;">@string.Join("\n", result.Lines)</pre>
+    }
+}

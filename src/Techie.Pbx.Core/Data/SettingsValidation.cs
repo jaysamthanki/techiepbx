@@ -108,6 +108,11 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("The config directory must be an absolute path, e.g. /etc/asterisk.");
                     break;
 
+                case SettingsKeys.AsteriskLogDirectory:
+                    if (!text.StartsWith('/'))
+                        errors.Add("The log directory must be an absolute path, e.g. /var/log/asterisk.");
+                    break;
+
                 case SettingsKeys.ProvisioningUsername:
                     if (!ProvisioningUsernamePattern().IsMatch(text))
                         errors.Add("Provisioning username must be 1 to 64 letters, digits, dots, dashes or underscores — it goes into the DHCP option 160 URL, where anything else would have to be escaped.");

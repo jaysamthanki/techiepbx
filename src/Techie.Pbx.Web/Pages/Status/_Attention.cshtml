@@ -1,0 +1,57 @@
+@using Techie.Pbx.Asterisk.Status
+@model AttentionView
+@*
+    What this system would want an admin to know, and how big it is. Both come from the database,
+    so this arrives on load and again after a change, not on the five second poll.
+*@
+<div class="card mb-3">
+    <div class="card-header">Needs attention</div>
+
+    @if (Model.Findings.Count == 0)
+    {
+        <div class="card-body py-2">
+            <span class="text-success">Nothing needs attention.</span>
+        </div>
+    }
+    else
+    {
+        <ul class="list-group list-group-flush">
+            @foreach (var finding in Model.Findings)
+            {
+                var badgeClass = finding.Severity switch
+                {
+                    FindingSeverity.Danger => "text-bg-danger",
+                    FindingSeverity.Warning => "text-bg-warning",
+                    _ => "text-bg-secondary",
+                };
+
+                var badgeText = finding.Severity switch
+                {
+                    FindingSeverity.Danger => "Problem",
+                    FindingSeverity.Warning => "Check",
+                    _ => "Note",
+                };
+
+                @* Straight to the page it is about: a finding nobody can act on from here is a
+                   finding that only makes work (the subject says which page, not the rule). *@
+                <li class="list-group-item">
+                    <a class="text-decoration-none text-body" href="@Url.Page(SubjectPage.For(finding.Subject))">
+                        <span class="badge @badgeClass me-2">@badgeText</span>@finding.Text
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+<p class="text-secondary small mb-0">
+    @for (var i = 0; i < Model.Counts.Count; i++)
+    {
+        if (i > 0)
+        {
+            <span class="mx-1">·</span>
+        }
+
+        <a class="text-secondary" href="@Model.Counts[i].Url">@Model.Counts[i].Text</a>
+    }
+</p>

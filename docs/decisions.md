@@ -1480,3 +1480,48 @@ and cleared by a restart that worked. The navbar poll that already asks about th
 (D43) asks about this too, and shows an "Asterisk restart required" badge with a Restart button
 beside it — same endpoint, same confirm. No new page and no new nav: a restart being owed is a
 property of the whole system, like the apply button next to it.
+
+### D106. The Status page is the home page (2026-09-19)
+Signing in lands on `/`, which is now what this PBX is doing right now rather than the ASP.NET
+template's welcome text. An admin opens a PBX either to find out whether it is working or to
+change something, so the page is a triage screen, not a dashboard: FreePBX's home page of CPU
+gauges, call-volume graphs and module nags is the surface-area problem this project exists to
+avoid.
+
+Two halves on two clocks. The live half polls every five seconds over **one** AMI connection
+asking four questions — `PJSIPShowContacts`, `PJSIPShowRegistrationsOutbound`,
+`CoreShowChannels`, `CoreStatus` — and renders six tiles (Asterisk and its uptime, trunks
+registered, extensions registered, calls in progress, certificate days left, config
+applied / pending / restart owed) and the calls in progress as a plain table: one row per
+bridge, the older channel taken as the caller, and not bootstrap-table because markup replaced
+every five seconds cannot keep a sort. `CoreShowChannels` and `CoreStatus` are covered by the AMI
+account's existing `read = system`, so `manager.conf` is unchanged (D32).
+
+The other half reads the database on load and on `configChanged` / `configApplied` and lists
+what needs attention: AMI not answering, a restart owed or an apply pending, a trunk rejected or
+unregistered, a trunk nothing routes over, a stored destination the catalog can no longer find
+(D35 — the gap the roadmap has noted since piece 11), a phone with no extension or one pointed at
+a disabled extension, no usable certificate or one inside fourteen days of expiry, a failed
+order, a disk at 80 / 90 %, and time conditions running on UTC because no zone is set.
+`AttentionRules` is a pure function over a `StatusSnapshot` in `Techie.Pbx.Asterisk`, tested rule
+by rule; a finding names a `FindingSubject`, and only the Web project maps a subject to a page.
+Below the list, counts of everything as links.
+
+Deliberately left out: graphs, CPU and memory, call history (F5, which needs storage this page
+does not have) and security events (piece 20). Everything shown is either true right now or a
+row in a table that already exists.
+
+### D107. Logs page: three named logs, tailed from the end (2026-09-19)
+`/Status/Logs` shows Asterisk's `messages.log` and `security.log` and our own log4net file,
+read-only. The browser never sends a path: it sends one of three fixed names
+(`asterisk-messages`, `asterisk-security`, `app`), `LogSources.Find` is the only code that turns
+a name into a file, and anything else is a 400. `LogTail` seeks to the last 4 MB rather than
+reading the file, so a poll against a large `messages.log` costs one seek; it applies the filter
+and returns the last 100 / 250 / 1000 lines. A missing file, an unreadable one and an empty tail
+are three different sentences, never an exception. `Asterisk.LogDirectory` (App scope, D103,
+default `/var/log/asterisk`) says where Asterisk writes; the app log's path is read from the live
+log4net `FileAppender`, so it cannot drift from `log4net.config`. "Follow" is htmx's conditional
+`every 5s [...]` trigger, and the only JavaScript is a scroll to the bottom after each swap.
+Asterisk creates its log files 0644 (checked on the lab VM), so `tnpbx` reads them as a group
+member with no change to either unit; if a site's Asterisk ever creates them tighter, the fix is
+a `UMask=` line in the Asterisk unit, not a privilege.

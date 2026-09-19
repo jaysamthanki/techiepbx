@@ -1,0 +1,55 @@
+@model LiveStatus
+@*
+    One poll's worth of Asterisk: the health tiles and the calls in progress.
+
+    The call table is a plain Bootstrap table and not bootstrap-table, unlike every list page in
+    this app. This markup is replaced every five seconds, so a sort or a search the admin set
+    would be thrown away before they finished reading it — and a table of live calls has nothing
+    worth sorting anyway (D48's reasoning, the other way round).
+*@
+<div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-2 mb-4">
+    @foreach (var tile in Model.Tiles())
+    {
+        <div class="col">
+            <div class="card h-100 border-start border-4 @tile.BorderClass">
+                <div class="card-body py-2 px-3">
+                    <div class="small text-secondary">@tile.Title</div>
+                    <div class="fw-semibold">@tile.Text</div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<h2 class="h5">Calls in progress</h2>
+
+@if (Model.ActiveCalls.Count == 0)
+{
+    <p class="text-secondary mb-0">No calls in progress.</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>From</th>
+                <th>To</th>
+                <th>Duration</th>
+                <th>State</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var call in Model.ActiveCalls)
+            {
+                @* The channel names are what an admin needs to follow a call in the logs, and
+                   what nobody needs in a column of their own. *@
+                <tr title="@string.Join(", ", call.Channels)">
+                    <td>@call.From</td>
+                    <td>@call.To</td>
+                    <td>@(call.Duration is { } duration ? $"{(int)duration.TotalMinutes}:{duration.Seconds:00}" : "")</td>
+                    <td>@call.State</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

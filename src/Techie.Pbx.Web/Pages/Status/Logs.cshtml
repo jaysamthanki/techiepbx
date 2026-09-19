@@ -1,0 +1,53 @@
+@page
+@model LogsModel
+@{
+    ViewData["Title"] = "Logs";
+
+    var linesUrl = Url.Page("Logs", "Lines");
+}
+
+<h1 class="h3">Logs</h1>
+
+@*
+    Everything htmx needs to redo the poll lives on this form, so hx-include is the only thing a
+    control here has to know about (D42-style: JavaScript of ours stays out of the loop). Follow
+    is read by the trigger below, not posted - it only ever turns "every 5s" on or off.
+*@
+<form id="log-toolbar" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label for="log-source" class="form-label">Log</label>
+        <select id="log-source" name="source" class="form-select">
+            @foreach (var source in LogSources.All)
+            {
+                <option value="@source.Name" selected="@(source.Name == "asterisk-messages")">@source.Label</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label for="log-lines" class="form-label">Lines</label>
+        <select id="log-lines" name="lines" class="form-select">
+            <option value="100">100</option>
+            <option value="250" selected>250</option>
+            <option value="1000">1000</option>
+        </select>
+    </div>
+    <div class="col-auto">
+        <label for="log-filter" class="form-label">Filter</label>
+        <input id="log-filter" name="filter" type="search" maxlength="100" class="form-control" placeholder="Filter…">
+    </div>
+    <div class="col-auto form-check mb-2">
+        <input id="log-follow" name="follow" type="checkbox" class="form-check-input" checked>
+        <label for="log-follow" class="form-check-label">Follow</label>
+    </div>
+</form>
+
+<div id="log-view"
+     hx-get="@linesUrl"
+     hx-include="#log-toolbar"
+     hx-trigger="load, change from:#log-toolbar, keyup changed delay:500ms from:#log-filter, every 5s [document.getElementById('log-follow').checked]">
+    <p class="text-secondary">Loading…</p>
+</div>
+
+@section Scripts {
+    <script src="~/js/logs.js" asp-append-version="true"></script>
+}

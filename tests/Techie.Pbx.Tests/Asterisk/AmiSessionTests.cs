@@ -160,6 +160,93 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains("Permission denied", ex.Message);
         }
 
+        /// <summary>
+        /// The channel list behind the status page's calls table. Two channels in one bridge is
+        /// what an ordinary answered call looks like on the wire.
+        /// </summary>
+        [Fact]
+        public void Show_channels_collects_the_event_list_and_stops_at_complete()
+        {
+            var session = LoggedIn(
+                "Response: Success\r\nActionID: 2\r\nEventList: start\r\nMessage: Channels will follow\r\n\r\n" +
+                "Event: CoreShowChannel\r\nActionID: 2\r\nChannel: PJSIP/1001-00000012\r\n" +
+                "ChannelState: 6\r\nChannelStateDesc: Up\r\nCallerIDNum: 1001\r\nCallerIDName: Alice\r\n" +
+                "ConnectedLineNum: 2025551234\r\nConnectedLineName: <unknown>\r\nAccountcode: \r\n" +
+                "Context: from-internal\r\nExten: 2025551234\r\nPriority: 2\r\nUniqueid: 1758196201.42\r\n" +
+                "Application: Dial\r\nApplicationData: PJSIP/2025551234@callcentric\r\n" +
+                "Duration: 00:01:17\r\nBridgeId: 9c1f6d2a-0f11-4a2b-9a3f-6b0f5f1d2c34\r\n\r\n" +
+                "Event: CoreShowChannel\r\nActionID: 2\r\nChannel: PJSIP/callcentric-00000013\r\n" +
+                "ChannelState: 6\r\nChannelStateDesc: Up\r\nCallerIDNum: 2025551234\r\nCallerIDName: \r\n" +
+                "ConnectedLineNum: 1001\r\nConnectedLineName: Alice\r\nContext: from-trunk-callcentric\r\n" +
+                "Exten: \r\nPriority: 1\r\nUniqueid: 1758196203.43\r\nApplication: AppDial\r\n" +
+                "ApplicationData: (Outgoing Line)\r\nDuration: 00:01:15\r\n" +
+                "BridgeId: 9c1f6d2a-0f11-4a2b-9a3f-6b0f5f1d2c34\r\n\r\n" +
+                "Event: CoreShowChannelsComplete\r\nActionID: 2\r\nEventList: Complete\r\nListItems: 2\r\n\r\n" +
+                "Event: AfterTheList\r\n\r\n");
+
+            var channels = session.ShowChannels();
+
+            Assert.Equal(new[] { "PJSIP/1001-00000012", "PJSIP/callcentric-00000013" }, channels.Select(c => c.Channel));
+            Assert.Equal("Up", channels[0].ChannelStateDesc);
+            Assert.Equal("1001", channels[0].CallerIDNum);
+            Assert.Equal("Alice", channels[0].CallerIDName);
+            Assert.Equal("2025551234", channels[0].ConnectedLineNum);
+            Assert.Equal("from-internal", channels[0].Context);
+            Assert.Equal("2025551234", channels[0].Exten);
+            Assert.Equal("Dial", channels[0].Application);
+            Assert.Equal("PJSIP/2025551234@callcentric", channels[0].ApplicationData);
+            Assert.Equal("00:01:17", channels[0].Duration);
+            Assert.Equal(TimeSpan.FromSeconds(77), channels[0].DurationSpan);
+            Assert.Equal(channels[0].BridgeId, channels[1].BridgeId);
+            Assert.EndsWith("Action: CoreShowChannels\r\nActionID: 2\r\n\r\n", _sent.ToString());
+        }
+
+        /// <summary>
+        /// Unlike the contacts list, an idle system answers this one properly: Success, then the
+        /// complete event with nothing in between.
+        /// </summary>
+        [Fact]
+        public void Show_channels_on_a_system_with_no_calls()
+        {
+            var session = LoggedIn(
+                "Response: Success\r\nActionID: 2\r\nEventList: start\r\nMessage: Channels will follow\r\n\r\n" +
+                "Event: CoreShowChannelsComplete\r\nActionID: 2\r\nEventList: Complete\r\nListItems: 0\r\n\r\n");
+
+            Assert.Empty(session.ShowChannels());
+        }
+
+        /// <summary>
+        /// The uptime tile. The startup date and time arrive as two headers and are read as UTC,
+        /// because that is what the server's clock is (D74).
+        /// </summary>
+        [Fact]
+        public void Core_status_reads_the_startup_time_as_utc()
+        {
+            var session = LoggedIn(
+                "Response: Success\r\nActionID: 2\r\nCoreStartupDate: 2026-09-18\r\nCoreStartupTime: 07:14:02\r\n" +
+                "CoreReloadDate: 2026-09-19\r\nCoreReloadTime: 09:01:33\r\nCoreCurrentCalls: 2\r\n\r\n");
+
+            var status = session.CoreStatus();
+
+            Assert.Equal("2026-09-18", status.CoreStartupDate);
+            Assert.Equal("07:14:02", status.CoreStartupTime);
+            Assert.Equal("2026-09-19", status.CoreReloadDate);
+            Assert.Equal("09:01:33", status.CoreReloadTime);
+            Assert.Equal(2, status.CoreCurrentCalls);
+            Assert.Equal(new DateTimeOffset(2026, 9, 18, 7, 14, 2, TimeSpan.Zero), status.StartedUtc);
+            Assert.EndsWith("Action: CoreStatus\r\nActionID: 2\r\n\r\n", _sent.ToString());
+        }
+
+        /// <summary>A build that words those headers differently must not become an uptime of years.</summary>
+        [Fact]
+        public void Core_status_with_a_date_it_cannot_read_has_no_startup_time()
+        {
+            var session = LoggedIn(
+                "Response: Success\r\nActionID: 2\r\nCoreStartupDate: Thursday\r\nCoreStartupTime: teatime\r\n\r\n");
+
+            Assert.Null(session.CoreStatus().StartedUtc);
+        }
+
         [Fact]
         public void A_connection_that_closes_mid_action_is_an_ami_exception()
         {

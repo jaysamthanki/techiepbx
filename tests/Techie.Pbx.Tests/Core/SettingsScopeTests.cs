@@ -84,9 +84,10 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
-        /// What only this application reads: how long our AMI client waits, and the three ACME
-        /// ordering details. The certificate an order produces is a row in Certificates, and that
-        /// repository raises the marker itself, so the file Asterisk reads is still applied (D101).
+        /// What only this application reads: how long our AMI client waits, the directory the
+        /// Logs page reads Asterisk's own logs from, and the three ACME ordering details. The
+        /// certificate an order produces is a row in Certificates, and that repository raises the
+        /// marker itself, so the file Asterisk reads is still applied (D101).
         /// </summary>
         [Fact]
         public void The_app_scope_is_the_keys_nothing_outside_this_process_reads()
@@ -95,6 +96,7 @@ namespace Techie.Pbx.Tests.Core
                 new[]
                 {
                     SettingsKeys.AmiTimeoutSeconds,
+                    SettingsKeys.AsteriskLogDirectory,
                     SettingsKeys.CertAcmeAccountKeyPem,
                     SettingsKeys.CertAcmeServer,
                     SettingsKeys.CertEmail,
@@ -117,6 +119,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.SipTlsPort, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.AmiSecret, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.AmiTimeoutSeconds, SettingScope.App)]
+        [InlineData(SettingsKeys.AsteriskLogDirectory, SettingScope.App)]
         [InlineData(SettingsKeys.CertEmail, SettingScope.App)]
         public void Keys_are_scoped_by_what_reads_them(string key, SettingScope expected)
         {
