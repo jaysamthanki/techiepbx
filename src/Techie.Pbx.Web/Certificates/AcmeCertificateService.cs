@@ -84,7 +84,15 @@ namespace Techie.Pbx.Web.Certificates
 
                 var key = KeyFactory.NewKey(CertificateAlgorithm);
                 var chain = await order.Generate(new CsrInfo { CommonName = hostnames[0] }, key);
-                var (leaf, issuers) = CertificatePem.SplitChain(chain.ToPem());
+
+                // The leaf and the issuers come off the chain object directly. chain.ToPem() has
+                // to sort the issuers into order, and that sort cannot handle a cross-signed
+                // root (Let's Encrypt staging serves one: it looks for an issuer of the root,
+                // which is the intermediate that already appears once). Splitting the blocks
+                // ourselves keeps both cases working — order never mattered, the file just needs
+                // the leaf followed by its issuers (D101).
+                var leaf = (chain.Certificate?.ToPem() ?? "").Trim();
+                var issuers = string.Concat(chain.Issuers.Select(issuer => (issuer.ToPem() ?? "").Trim() + "\n")).Trim();
 
                 if (leaf.Length == 0)
                     return this.Failed(certificate, "The ACME server returned no certificate.");
