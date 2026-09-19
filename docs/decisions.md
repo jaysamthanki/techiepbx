@@ -1342,3 +1342,24 @@ Open, and noted in [roadmap.md](roadmap.md): D56 describes the announcements dir
 `root:asterisk` while the lab VM and the installer make it `asterisk:asterisk`. Group write via
 `asterisk` is what matters and both forms give it, so this is a tidying-up question rather than a
 functional one.
+
+### D95. app-deploy.sh is the installer's second half; the server's live state lives in /opt/tnpbx (2026-09-22)
+Deploying the web app is `scripts/app-deploy.sh <publish.tgz>` run as root on a box prepared by
+install.sh: it unpacks the self-contained publish into /opt/tnpbx (tnpbx:asterisk 0750), writes
+tnpbx-web.service (User=tnpbx, never root; binds 0.0.0.0:8080 until the certificate piece moves
+it to 80/443 per D71/D76; hardened with NoNewPrivileges, ProtectSystem=strict and ReadWritePaths
+limited to /opt/tnpbx, /etc/asterisk, the tnpbx sound directories and the voicemail spool),
+writes the polkit rule scoped to exactly asterisk.service for user tnpbx, and enables + starts
+the service. appsettings.json and Data/ (the SQLite database) are the server's live state and
+are preserved across every re-deploy — the tarball always carries repo defaults only. Verified
+2026-09-22 on the freshly installed lab VM: app active as tnpbx-web.service, first apply wrote
+all nine conf files into the empty /etc/asterisk, Asterisk then started on generated config and
+AMI/pjsip/provisioning all came up.
+
+### D96. First apply happens before Asterisk's first start, by design (2026-09-22)
+The order proven on the fresh box is the order the installer prints: app up → sign in → set AMI
+secret/timezone → add an extension → Apply (this writes /etc/asterisk; its AMI reload fails
+harmlessly because Asterisk is still stopped — the message says exactly that) → start Asterisk.
+From then on apply-and-reload is live. This is why part 1 leaves the unit enabled but stopped
+(D93): an Asterisk started on an empty /etc/asterisk would autoload every module, and Asterisk
+cannot read config that does not exist yet.
