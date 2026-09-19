@@ -1596,3 +1596,15 @@ how PJSIP dials an endpoint, so no dialplan change is involved.
 Default 1 keeps every existing endpoint byte-identical (golden pjsip files unchanged), and
 the value is validated in the model, the repository and the renderer like every other field
 that reaches a conf file.
+
+### D111. Max contacts is one global setting, not per extension (2026-09-19)
+User decision the same day, superseding D110's per-extension column. `Sip.MaxContacts`
+(default 1, capped 5) is a Settings key read by `AsteriskSettings.Transport` into
+`PjsipTransport.MaxContacts`, and every aor in pjsip.conf carries it. Same rule for
+`remove_existing`: on with one contact, off with several, so an office phone and a laptop
+softphone coexist instead of displacing each other; a call rings every registered contact.
+
+Everything per-extension about D110 is gone: `Extensions.MaxContacts` (added by schema 015
+only minutes before, and already run on the lab VM) is dropped by schema `016`, which a fresh
+install runs 015+016 and ends with neither. Per-extension max contacts is a later piece if a
+site ever genuinely needs it.

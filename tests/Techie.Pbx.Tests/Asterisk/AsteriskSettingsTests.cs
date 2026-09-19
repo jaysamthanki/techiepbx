@@ -154,5 +154,16 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             Assert.Equal("10.8.20.1", AsteriskSettings.NtpServer(Values((SettingsKeys.SystemNtpServer, "10.8.20.1"))));
         }
+
+        /// <summary>
+        /// The multi-device setting reaches the transport object (D110): unset is the default 1,
+        /// set is what every aor in pjsip.conf will carry.
+        /// </summary>
+        [Fact]
+        public void Max_contacts_come_out_of_the_database()
+        {
+            Assert.Equal(1, AsteriskSettings.Transport(Values()).MaxContacts);
+            Assert.Equal(2, AsteriskSettings.Transport(Values((SettingsKeys.SipMaxContacts, "2"))).MaxContacts);
+        }
     }
 }

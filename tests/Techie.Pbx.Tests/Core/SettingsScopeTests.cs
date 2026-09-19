@@ -53,6 +53,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.SipCodecs,
                     SettingsKeys.SipExternalAddress,
                     SettingsKeys.SipLocalNets,
+                    SettingsKeys.SipMaxContacts,
                     SettingsKeys.SipPort,
                     SettingsKeys.SipStunServer,
                     SettingsKeys.SipTcpPort,

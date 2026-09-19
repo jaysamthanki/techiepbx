@@ -32,6 +32,14 @@ namespace Techie.Pbx.Asterisk.Config
 
         public string? ExternalAddress { get; set; }
         public List<string> LocalNets { get; set; } = new();
+
+        /// <summary>
+        /// How many devices may register to one extension at once (D110): an office phone and
+        /// a laptop softphone on the same number is 2. A call rings every registered contact,
+        /// which is how PJSIP dials an endpoint. Default 1: a second registration replaces the
+        /// first. One value for the whole system — per-extension is a later piece if ever wanted.
+        /// </summary>
+        public int MaxContacts { get; set; } = 1;
         public int Port { get; set; } = DefaultPort;
 
         /// <summary>The STUN server as host or host:port, or null for no STUN at all (D72).</summary>
@@ -58,6 +66,9 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (Port is < 1 or > 65535)
                 errors.Add("Port must be between 1 and 65535.");
+
+            if (MaxContacts is < 1 or > 5)
+                errors.Add("Max contacts must be between 1 and 5.");
 
             if (TcpPort is < 1 or > 65535)
                 errors.Add("TCP port must be between 1 and 65535.");

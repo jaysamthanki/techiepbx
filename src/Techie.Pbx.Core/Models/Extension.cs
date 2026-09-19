@@ -10,15 +10,6 @@ namespace Techie.Pbx.Core.Models
     {
         public bool Enabled { get; set; } = true;
         public long ExtensionID { get; set; }
-
-        /// <summary>
-        /// How many devices may be registered at once (D110): an office phone and a laptop
-        /// softphone on the same extension is 2. A call rings every registered contact
-        /// (that is how PJSIP dials an endpoint), so this is the field that makes that work.
-        /// Default 1: a second registration replaces the first, as before.
-        /// </summary>
-        public int MaxContacts { get; set; } = 1;
-
         public string Name { get; set; } = "";
         public string Number { get; set; } = "";
         public string Secret { get; set; } = "";
@@ -69,9 +60,6 @@ namespace Techie.Pbx.Core.Models
 
             if (!SecretPattern().IsMatch(Secret))
                 errors.Add("Secret must be 16 to 64 letters or digits.");
-
-            if (MaxContacts is < 1 or > 5)
-                errors.Add("Max contacts must be between 1 and 5.");
 
             // The PIN only has to be there when there is a mailbox to unlock; the other voicemail
             // settings are kept whether the mailbox is on or off, so a switched-off box that is

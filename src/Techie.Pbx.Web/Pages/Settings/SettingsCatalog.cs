@@ -111,6 +111,13 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Default = Number(TransportDefaults.MaxContacts),
+                Description = "How many devices may register to one extension at once, for every extension — an office phone and a laptop softphone on the same number is 2. A call rings every registered device. 1 means a new registration replaces the old one.",
+                Key = SettingsKeys.SipMaxContacts,
+                Sample = "2",
+            },
+            new SettingDescriptor
+            {
                 Description = "The private networks this server is on, comma separated in CIDR form. Required when an external address is set, so Asterisk knows which calls are local.",
                 Key = SettingsKeys.SipLocalNets,
                 Sample = "10.8.20.0/24, 192.168.0.0/16",

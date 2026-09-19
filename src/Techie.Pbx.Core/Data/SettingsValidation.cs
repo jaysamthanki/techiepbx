@@ -70,6 +70,11 @@ namespace Techie.Pbx.Core.Data
                     Port(errors, "SIP TLS port", text);
                     break;
 
+                case SettingsKeys.SipMaxContacts:
+                    if (!int.TryParse(text, out var maxContacts) || maxContacts is < 1 or > 5)
+                        errors.Add("Max contacts must be a whole number between 1 and 5.");
+                    break;
+
                 case SettingsKeys.SipStunServer:
                     if (!IsStunServer(text))
                         errors.Add("STUN server must be a hostname or IP address, optionally with :port, e.g. stun.l.google.com:19302.");

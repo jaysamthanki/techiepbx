@@ -68,6 +68,13 @@ namespace Techie.Pbx.Core.Data
         /// <summary>Comma separated CIDRs, e.g. "10.8.20.0/24".</summary>
         public const string SipLocalNets = "Sip.LocalNets";
 
+        /// <summary>
+        /// How many devices may register to one extension at once, for every extension (D110).
+        /// An office phone and a laptop softphone on the same number is 2; the default 1 means
+        /// a second registration replaces the first.
+        /// </summary>
+        public const string SipMaxContacts = "Sip.MaxContacts";
+
         /// <summary>Public IP when the server is behind 1:1 NAT. Unset means no NAT.</summary>
         public const string SipExternalAddress = "Sip.ExternalAddress";
 
@@ -162,6 +169,7 @@ namespace Techie.Pbx.Core.Data
             SipStunServer,
             SipCodecs,
             SipLocalNets,
+            SipMaxContacts,
             SipExternalAddress,
             ProvisioningUsername,
             ProvisioningPassword,
@@ -224,6 +232,7 @@ namespace Techie.Pbx.Core.Data
             [SipCodecs] = SettingScope.Asterisk,
             [SipLocalNets] = SettingScope.Asterisk,
             [SipExternalAddress] = SettingScope.Asterisk,
+            [SipMaxContacts] = SettingScope.Asterisk,
 
             // The provisioning gate and the two device passwords are read by the Polycom and
             // Yealink controllers only; no conf file has ever carried them (D79, D84).
