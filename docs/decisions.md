@@ -1401,3 +1401,14 @@ write, one mode to get right, no way for a cert and its key to be applied apart.
 written even when there is no certificate (empty), so a stale key never lingers, and it joins the
 restart set (D33): a transport reads its certificate when it is built, so a renewed one reaches
 SIP at the next Asterisk restart. This makes the parked Sip.TlsPort setting real (D71).
+
+### D102. The data-protection key ring persists in Data/keys, with a one-year key lifetime (2026-09-22)
+The auth cookie, the OIDC state and correlation cookies and the antiforgery tokens are all
+encrypted with the data-protection key ring, and the default ring lives in process memory — every
+restart or re-deploy issued a fresh key (the journal showed three key GUIDs in one afternoon),
+signing everyone out and killing any sign-in flow that straddled the restart. That is exactly the
+"first sign-in took me to an error page but everything works afterwards" report: the OIDC
+callback could not read its own state. The ring now persists to Data/keys beside the database,
+inside the deploy target — the same protected live state as appsettings.json and Data/ (D95) —
+and keys are created with a 365-day lifetime (user decision): the appliance rolls the key over
+in the background long before expiry, and a ring that survives re-deploys is the point.
