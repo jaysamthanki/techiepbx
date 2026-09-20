@@ -73,9 +73,11 @@ namespace Techie.Pbx.Asterisk.Ami
 
         /// <summary>
         /// Sends an action and returns its response, skipping any events that arrive first.
-        /// Throws AmiException if the response is an error.
+        /// Throws AmiException if the response is an error, unless the message is one the caller
+        /// said to tolerate.
         /// </summary>
-        public AmiMessage Send(AmiAction action) => SendAndWait(action).Response;
+        public AmiMessage Send(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null) =>
+            SendAndWait(action, toleratedErrors).Response;
 
         /// <summary>
         /// Sends an action whose answer is a list: the response, then one event per item, then a
@@ -118,9 +120,14 @@ namespace Techie.Pbx.Asterisk.Ami
         /// A typed action rather than a CLI command, so the AMI user doesn't need "command"
         /// permission.
         /// </summary>
-        public void Reload(string module)
+        /// <param name="toleratedErrors">
+        /// Error messages to treat as "nothing to do". The apply uses this for "No such module"
+        /// when modules.conf is part of the change: the module will first exist after the restart
+        /// that same apply asks for, so refusing here would fail an apply that is actually fine.
+        /// </param>
+        public void Reload(string module, IReadOnlyCollection<string>? toleratedErrors = null)
         {
-            Send(new AmiAction("Reload").Add("Module", module));
+            Send(new AmiAction("Reload").Add("Module", module), toleratedErrors);
             Log.Info($"Reloaded Asterisk module '{module}'");
         }
 

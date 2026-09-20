@@ -51,6 +51,10 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string ParkingModule = "res_parking";
 
+        /// <summary>Asterisk's answer when a reload names a module that is not loaded — which an
+        /// apply that also changed modules.conf answers with a restart, not an error (D119).</summary>
+        private static readonly IReadOnlyList<string> NoSuchModule = new[] { "No such module" };
+
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigApplier));
 
         /// <summary>
@@ -178,8 +182,13 @@ namespace Techie.Pbx.Asterisk.Config
                 using var client = new AmiClient(this.ami);
                 var session = client.Connect();
 
+                // modules.conf is in the change: the restart it asks for is what loads any module
+                // new to this apply, so a reload that answers "No such module" is the restart
+                // doing that job, not a failed apply (D119).
+                var restartLoadsModules = restartFiles.Contains("modules.conf", StringComparer.Ordinal);
+
                 foreach (var module in modules)
-                    this.Reload(session, module);
+                    this.Reload(session, module, restartLoadsModules ? NoSuchModule : null);
             }
 
             // Only once the reloads worked: a failure leaves the marker up, and it should.
@@ -288,17 +297,17 @@ namespace Techie.Pbx.Asterisk.Config
         /// reload happened, so losing the connection here is not a failed apply. Every other
         /// module's reload still has to succeed.
         /// </summary>
-        private void Reload(AmiSession session, string module)
+        private void Reload(AmiSession session, string module, IReadOnlyCollection<string>? toleratedErrors = null)
         {
             if (!string.Equals(module, ManagerModule, StringComparison.Ordinal))
             {
-                session.Reload(module);
+                session.Reload(module, toleratedErrors);
                 return;
             }
 
             try
             {
-                session.Reload(module);
+                session.Reload(module, toleratedErrors);
             }
             catch (Exception ex) when (ex is AmiException or IOException)
             {
