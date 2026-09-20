@@ -72,6 +72,7 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 "pbx_config.so",            // extensions.conf itself
                 "app_dial.so",              // Dial()
+                "app_directed_pickup.so",   // Pickup(): *8 takes a call ringing elsewhere (D120)
                 "app_playback.so",          // Playback(): prompts, and the announcements (D55)
                 "app_echo.so",              // Echo(), the *43 test
                 "app_voicemail.so",         // VoiceMail() and VoiceMailMain()
