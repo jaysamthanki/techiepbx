@@ -110,32 +110,32 @@ window.pbx = (function () {
         },
 
         // A call to one of our own JSON endpoints, with the antiforgery header (D23) and the
-        // session-expiry handling (D20) every one of them needs. A body is sent as JSON when one
-        // is given; most of these endpoints need nothing but the URL.
-        send: async function (method, url, body) {
+        // session-expiry handling (D20) every one of them needs. A payload is sent as JSON when
+        // one is given; most of these endpoints need nothing but the URL.
+        send: async function (method, url, payload) {
             // The header name is Program.AntiforgeryHeaderName.
             const headers = { 'RequestVerificationToken': token, 'Accept': 'application/json' };
 
-            if (body !== undefined) {
+            if (payload !== undefined) {
                 headers['Content-Type'] = 'application/json';
             }
 
             const response = await fetch(url, {
                 method: method,
                 headers: headers,
-                body: body === undefined ? undefined : JSON.stringify(body)
+                body: payload === undefined ? undefined : JSON.stringify(payload)
             });
 
             if (response.status === 401) {
                 throw sessionEnded();
             }
 
-            const body = await response.json().catch(function () { return null; });
+            const parsed = await response.json().catch(function () { return null; });
             if (!response.ok) {
-                throw new Error((body && body.message) || (response.status + ' ' + response.statusText));
+                throw new Error((parsed && parsed.message) || (response.status + ' ' + response.statusText));
             }
 
-            return body;
+            return parsed;
         },
 
         // The Email tab's test button (D115). sweetalert2 asks for the address, because a prompt
