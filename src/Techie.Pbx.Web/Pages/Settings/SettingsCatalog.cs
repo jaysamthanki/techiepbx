@@ -60,7 +60,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The password for that AMI account. Stored here and written into manager.conf, and shown only when you ask for it.",
+                Description = "The password for that AMI account. Stored here and written into manager.conf; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.AmiSecret,
             },
             new SettingDescriptor
@@ -136,17 +136,17 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The password half of that same DHCP option 160 URL. Stored here and shown only when you ask for it. At least 8 characters, and only ones that need no escaping in a URL: letters, digits and . - _ ~",
+                Description = "The password half of that same DHCP option 160 URL. Stored here; the table shows dots, the edit form shows it. At least 8 characters, and only ones that need no escaping in a URL: letters, digits and . - _ ~",
                 Key = SettingsKeys.ProvisioningPassword,
             },
             new SettingDescriptor
             {
-                Description = "The password for the Polycom web UI's built-in \"Polycom\" (admin) account, written into every phone's config. This app also uses it to push a config reload or reboot to a phone over that same web UI when you save or ask for one. Stored here and shown only when you ask for it.",
+                Description = "The password for the Polycom web UI's built-in \"Polycom\" (admin) account, written into every phone's config. This app also uses it to push a config reload or reboot to a phone over that same web UI when you save or ask for one. Stored here; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.ProvisioningAdminPassword,
             },
             new SettingDescriptor
             {
-                Description = "The password for the Polycom web UI's built-in \"User\" account, written into every phone's config. Stored here and shown only when you ask for it.",
+                Description = "The password for the Polycom web UI's built-in \"User\" account, written into every phone's config. Stored here; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.ProvisioningUserPassword,
             },
             new SettingDescriptor
@@ -159,7 +159,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The ACME account key, generated the first time a certificate is ordered and reused for every renewal after it. There is normally no reason to touch this; it is shown only when you ask for it. Clearing it makes the next order register a new account.",
+                Description = "The ACME account key, generated the first time a certificate is ordered and reused for every renewal after it. There is normally no reason to touch this; the edit form shows it. Clearing it makes the next order register a new account.",
                 Key = SettingsKeys.CertAcmeAccountKeyPem,
             },
             new SettingDescriptor
