@@ -124,9 +124,27 @@
         </main>
     </div>
 
-    <footer class="border-top footer text-muted">
+    @*
+        Who and where, on every page. The navbar used to carry the name; down here it is out of the
+        way of navigation and still answers the question an admin with several boxes open actually
+        asks — which one am I on, and as whom. text-body-secondary rather than text-muted so it
+        follows data-bs-theme instead of staying light-mode grey (D113).
+    *@
+    @{
+        var signedInAs = Techie.Pbx.Web.Security.SignedInUser.DisplayName(User);
+    }
+    <footer class="border-top footer text-body-secondary">
         <div class="container">
-            &copy; 2026 - TNPBX
+            @(DateTime.Today.Year) (C) Techie Networks Inc - Techie PBX
+            @if (signedInAs.Length > 0)
+            {
+                <text>- Logged in as @signedInAs on @Environment.MachineName</text>
+            }
+            else
+            {
+                @* Nobody signed in — the sign-in page uses this layout too. Still say which box. *@
+                <text>- @Environment.MachineName</text>
+            }
         </div>
     </footer>
 

@@ -10,7 +10,7 @@
                 Local sign-in bypass
             </span>
         }
-        <span class="navbar-text text-body">Hello @User.Identity?.Name!</span>
+        @* Who is signed in belongs in the footer now, not up here: the navbar is for navigation. *@
         <li class="nav-item">
             <a class="nav-link text-body" asp-area="MicrosoftIdentity" asp-controller="Account" asp-action="SignOut">Sign out</a>
         </li>
