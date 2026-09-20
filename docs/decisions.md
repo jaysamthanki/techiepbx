@@ -1784,3 +1784,11 @@ codec_g722.so and codec_slin.so are loaded, and the Sip.Codecs setting accepts g
 Yealink provisioning now writes G722 (payload 9) when it is chosen; Yealink has no slin, so
 that stays a server-side codec only. Defaults are unchanged — an existing install keeps offering
 ulaw,alaw until the administrator edits the setting.
+
+### D117 follow-up: prompts and voicemail stay wideband (2026-09-19)
+`make install` ships the core prompts in GSM only, so G.722 calls heard prompts transcoded up
+from GSM. The installer (and the lab build script) now also extract the official
+asterisk-core-sounds-en-g722 tarball into /var/lib/asterisk/sounds/en, and voicemail.conf
+records `format = g722|wav49` so messages keep their width for wideband phones while the wav49
+copy remains the universally playable one. Verified live: a G.722 INVITE to *97 answered
+payload 9 and played vm-youhave.g722 natively.

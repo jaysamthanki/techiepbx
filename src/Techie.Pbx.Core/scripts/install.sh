@@ -24,6 +24,8 @@ ASTERISK_MAJOR="22"   # current LTS; bump when the next LTS ships
 DOWNLOAD_BASE="https://downloads.asterisk.org/pub/telephony/asterisk"
 TARBALL="asterisk-${ASTERISK_MAJOR}-current.tar.gz"
 BUILD_DIR="/usr/src/asterisk-${ASTERISK_MAJOR}"
+CORE_SOUNDS_URL="https://downloads.asterisk.org/pub/telephony/sounds/releases"
+CORE_SOUNDS_VERSION="1.6.1"   # matches the GSM set make install ships
 
 APP_USER="tnpbx"
 APP_HOME="/opt/tnpbx"
@@ -224,6 +226,7 @@ else
     echo "  [dry-run] make menuselect.makeopts && menuselect/menuselect --disable BUILD_NATIVE menuselect.makeopts"
     echo "  [dry-run] make -j${JOBS}"
     echo "  [dry-run] make install    (binaries, core sounds; samples deliberately NOT installed)"
+    echo "  [dry-run] fetch + extract G.722 core sounds into /var/lib/asterisk/sounds/en (D117)"
     echo "  [dry-run] ldconfig"
   else
     cd "$BUILD_DIR"
@@ -250,6 +253,16 @@ else
     make install > /tmp/asterisk-install.log 2>&1 \
       || die "install failed, see /tmp/asterisk-install.log"
     ldconfig
+
+    # make install ships the core prompts in GSM only. The G.722 set (D117) is fetched from the
+    # official releases so wideband prompts are not transcoded up from GSM. The tarball is flat,
+    # so it extracts straight into the language directory alongside the GSM copies; the licenses
+    # and CHANGES that ship in it belong there too.
+    log "installing G.722 core sounds"
+    run curl -sSfL -o /tmp/core-sounds-g722.tar.gz \
+      "${CORE_SOUNDS_URL}/asterisk-core-sounds-en-g722-${CORE_SOUNDS_VERSION}.tar.gz"
+    run tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
+    run rm -f /tmp/core-sounds-g722.tar.gz
   fi
 
   # make install creates its own directories; re-assert the layout over the top of them.

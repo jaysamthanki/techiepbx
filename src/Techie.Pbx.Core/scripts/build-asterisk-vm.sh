@@ -121,6 +121,14 @@ else
   make install > /tmp/asterisk-install.log 2>&1 \
     || die "install failed, see /tmp/asterisk-install.log"
   ldconfig
+
+  # G.722 core prompts (D117): make install ships GSM only, and wideband prompts should not be
+  # transcoded up from GSM. Flat tarball, extracted straight into the language directory.
+  log "installing G.722 core sounds"
+  curl -sSfL -o /tmp/core-sounds-g722.tar.gz \
+    "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-core-sounds-en-g722-1.6.1.tar.gz"
+  tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
+  rm -f /tmp/core-sounds-g722.tar.gz
 fi
 
 # --- ownership ---------------------------------------------------------------
