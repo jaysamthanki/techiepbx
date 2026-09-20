@@ -1792,3 +1792,10 @@ asterisk-core-sounds-en-g722 tarball into /var/lib/asterisk/sounds/en, and voice
 records `format = g722|wav49` so messages keep their width for wideband phones while the wav49
 copy remains the universally playable one. Verified live: a G.722 INVITE to *97 answered
 payload 9 and played vm-youhave.g722 natively.
+
+### D118. Phone push stays same-LAN only, by design (2026-09-20)
+Reboot/config push goes to the phone's web UI at its LastIP, which for remote phones is the
+NAT public address (stored in IPv6-mapped form, `::ffff:1.2.3.4`). Accepted as-is: deployments
+are expected to be cloud PBXes where phones are never IP-reachable from the server anyway.
+Remote phones pick up changes at their next poll; the reboot's SIP NOTIFY path remains the
+LAN-capable alternative. The 500 on a mapped-form address is a known cosmetic edge, not fixed.
