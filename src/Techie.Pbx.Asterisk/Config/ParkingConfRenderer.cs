@@ -11,11 +11,13 @@ namespace Techie.Pbx.Asterisk.Config
     ///
     /// Two things this file deliberately does not do.
     ///
-    /// It does not set <c>parkext</c>. With a parkext, Asterisk creates a park extension and one
-    /// extension per slot in the lot's own context, and the way to reach them is to include that
-    /// context. This system writes its slot extensions itself, in
-    /// <see cref="ExtensionsConfRenderer"/>, for the reason every other number here is written out
-    /// one at a time: only numbers we generated can be dialled (D12, D46, D60).
+    /// It does not let the lot's own context be dialled from ours. The slot extensions are
+    /// written in <see cref="ExtensionsConfRenderer"/>, one at a time, like every other number
+    /// here, because only numbers we generated can be dialled (D12, D46, D60). The
+    /// <c>parkext</c> below is not reachable from a phone: it lives in the lot's private
+    /// context, and it is there because the DTMF feature parks by blind-transferring the peer
+    /// into that extension — with no parkext the feature hook fires and nothing happens,
+    /// which the lab found the hard way (D119).
     ///
     /// And when the parked caller is meant to hear silence, it writes no <c>parkedmusicclass</c>
     /// at all. Asterisk's parking has no "silence" option — a parked channel joins a holding
@@ -27,11 +29,18 @@ namespace Techie.Pbx.Asterisk.Config
     public static class ParkingConfRenderer
     {
         /// <summary>
-        /// The lot's dialplan context. Nothing is created in it, because <c>parkext</c> is unset;
-        /// it is written so that an admin reading the file is not left wondering what the default
-        /// would have been.
+        /// The lot's dialplan context. Its only extension is <see cref="ParkExt"/>, which no
+        /// phone can dial; it is written so that an admin reading the file is not left wondering
+        /// what the default would have been.
         /// </summary>
         public const string Context = "parkedcalls";
+
+        /// <summary>
+        /// Where the park feature transfers the parked channel into the lot. It exists only in
+        /// <see cref="Context"/>, so it cannot collide with an extension, and no phone dials it:
+        /// retrieval is the slot numbers written into the dialplan (D119).
+        /// </summary>
+        public const string ParkExt = "700";
 
         /// <summary>
         /// The lot's name, which is also its section heading. Asterisk guarantees a lot called
@@ -74,9 +83,11 @@ namespace Techie.Pbx.Asterisk.Config
 
             sb.Append('\n');
             sb.Append($"[{LotName}]\n");
-            sb.Append($"; Slots 1 to {slots}. No parkext: the slot extensions are written into the\n");
-            sb.Append("; generated dialplan one at a time, like every other number here (D119).\n");
+            sb.Append($"; Slots 1 to {slots}. Slot extensions are written into the generated\n");
+            sb.Append("; dialplan one at a time, like every other number here; the parkext is only\n");
+            sb.Append("; what the DTMF feature blind-transfers the parked channel into (D119).\n");
             sb.Append($"context => {Context}\n");
+            sb.Append($"parkext => {ParkExt}\n");
             sb.Append($"parkpos => 1-{slots}\n");
 
             // 'first' rather than 'next': a caller who parks two calls in a row expects slot 1 and
