@@ -1921,3 +1921,11 @@ divider says it is not another thing to administer.
 - **Ring group, announcement, IVR and time-condition numbers are deliberately not on it.** They
   are dialable, but they are not what a wall sheet is for, and the page has to stay one page. Ask
   before adding them.
+
+### D120 addition: directed call pickup, *8 (2026-09-20)
+Dialling *8 followed by the ringing extension (*8100) takes the call, the FreePBX convention.
+The pattern `_*8.` demands a digit after the code, so bare *8 matches nothing — this system
+has no pickup groups, only the directed form, and a code that does nothing is worse than none.
+The `pickupexten` default in features.conf is not used: Pickup() is reached through a
+generated pattern, like every other dialable number here. On the cheat sheet under
+"From your phone".

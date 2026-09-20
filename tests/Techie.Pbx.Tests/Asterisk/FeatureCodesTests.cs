@@ -147,7 +147,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var codes = FeatureCodes.All(parking, voicemailInUse: true);
 
             foreach (var code in codes.Where(c => c.Code.StartsWith('*')))
-                Assert.True(dialplan.Contains($"exten => {code.Code},") || features.Contains($"> {code.Code}\n"), $"{code.Code} is printed but not generated");
+                Assert.True(dialplan.Contains($"exten => {code.Code},") || dialplan.Contains($"exten => _{code.Code}.") || features.Contains($"> {code.Code}\n"), $"{code.Code} is printed but not generated");
 
             // The slots, one extension each, exactly as many as the settings say.
             foreach (var slot in parking.SlotNumbers)

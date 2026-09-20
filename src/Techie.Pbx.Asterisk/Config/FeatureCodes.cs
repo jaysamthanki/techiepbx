@@ -101,6 +101,15 @@ namespace Techie.Pbx.Asterisk.Config
                 Name = "Echo test",
             });
 
+            codes.Add(new FeatureCode
+            {
+                Code = ExtensionsConfRenderer.PickupCode,
+                Description = "Hear another extension ringing? Dial this code followed by that extension's " +
+                    "number and the call moves to your phone.",
+                Group = FromYourPhone,
+                Name = "Take a ringing call",
+            });
+
             return codes;
         }
 

@@ -46,6 +46,15 @@ namespace Techie.Pbx.Asterisk.Config
         public const string VoicemailMainNumber = "*97";
 
         /// <summary>
+        /// Directed call pickup: dial this followed by the extension that is ringing to take the
+        /// call from your own phone ("I hear 100 ringing and I'm at 103, so I dial *8100"). The
+        /// pattern demands at least one digit after the code, so bare *8 matches nothing — this
+        /// system has no pickup groups, only the directed form, and a code that does nothing is
+        /// worse than none. FreePBX's number, for the same reason as *97.
+        /// </summary>
+        public const string PickupCode = "*8";
+
+        /// <summary>
         /// Where an IVR sends a caller who has run out of retries: a named extension in the menu's
         /// own context, so the final destination is written once however many ways lead to it.
         /// A caller cannot reach it by pressing keys — a keypad cannot spell it.
@@ -219,6 +228,11 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             AppendParkingSlots(sb, parking);
+
+            sb.Append('\n');
+            sb.Append("; Directed call pickup: the code above followed by the extension that is ringing\n");
+            sb.Append($"exten => _{PickupCode}.,1,Pickup(${{EXTEN:{PickupCode.Length}}}@{InternalContext})\n");
+            sb.Append(" same => n,Hangup()\n");
 
             foreach (var extension in enabled)
             {
