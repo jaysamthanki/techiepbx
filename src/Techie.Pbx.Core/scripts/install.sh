@@ -30,6 +30,7 @@ CORE_SOUNDS_VERSION="1.6.1"   # matches the GSM set make install ships
 APP_USER="tnpbx"
 APP_HOME="/opt/tnpbx"
 ANNOUNCEMENTS_DIR="/var/lib/asterisk/sounds/tnpbx/announcements"
+MOH_DIR="/var/lib/asterisk/moh"
 
 DRY_RUN=0
 REBUILD=0
@@ -159,7 +160,7 @@ fi
 
 log "creating directories"
 run mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk \
-             "$ANNOUNCEMENTS_DIR" "$APP_HOME"
+             "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$APP_HOME"
 
 apply_layout() {
   run chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
@@ -175,6 +176,11 @@ apply_layout() {
   # user writes stay group-readable by asterisk (D56).
   run chown -R asterisk:asterisk /var/lib/asterisk/sounds/tnpbx
   run chmod 2770 /var/lib/asterisk/sounds/tnpbx "$ANNOUNCEMENTS_DIR"
+
+  # Music on hold (converted uploads) lands here, in the one directory the generated
+  # musiconhold.conf names as its class's directory (D119). Same setgid model again.
+  run chown -R asterisk:asterisk "$MOH_DIR"
+  run chmod 2770 "$MOH_DIR"
 
   # The application's deploy target. Created and left EMPTY: the app is deployed separately.
   run chown "${APP_USER}:asterisk" "$APP_HOME"
@@ -321,6 +327,7 @@ Created:
   /var/log/asterisk        asterisk:asterisk  0755
   ${ANNOUNCEMENTS_DIR}
                            asterisk:asterisk  2770  setgid
+  ${MOH_DIR}     asterisk:asterisk  2770  setgid
   ${APP_HOME}               ${APP_USER}:asterisk  0750  EMPTY, the deploy target
   /usr/sbin/asterisk       Asterisk ${ASTERISK_MAJOR}.x built from source
   asterisk.service         our hardened unit, enabled

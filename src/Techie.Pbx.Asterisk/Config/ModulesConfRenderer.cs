@@ -59,6 +59,13 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 "bridge_simple.so",
                 "bridge_native_rtp.so",
+                "bridge_holding.so",        // where a parked call waits: res_parking needs it (D119)
+            }),
+
+            ("Call parking and the music a parked caller hears (D119)", new[]
+            {
+                "res_parking.so",           // res_parking.conf, the Park/ParkedCall applications
+                "res_musiconhold.so",       // musiconhold.conf, the one generated hold class
             }),
 
             ("Dialplan and the applications it calls", new[]

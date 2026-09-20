@@ -35,8 +35,10 @@ namespace Techie.Pbx.Tests.Core
         /// <summary>
         /// The Asterisk set is exactly the keys something in ConfigApplier.Render reads: the conf
         /// directory it writes to, the AMI account manager.conf carries, every Sip key that
-        /// AsteriskSettings.Transport turns into pjsip.conf or rtp.conf, and the timezone every
-        /// GotoIfTime in the generated dialplan names (D74).
+        /// AsteriskSettings.Transport turns into pjsip.conf or rtp.conf, the timezone every
+        /// GotoIfTime in the generated dialplan names (D74), and every Parking key — those land in
+        /// features.conf, res_parking.conf and the dialplan's slot entries, so all five need an
+        /// apply (D119).
         /// </summary>
         [Fact]
         public void The_asterisk_scope_is_the_keys_a_generated_conf_file_carries()
@@ -49,6 +51,11 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.AmiSecret,
                     SettingsKeys.AmiUsername,
                     SettingsKeys.AsteriskConfDirectory,
+                    SettingsKeys.ParkingAudio,
+                    SettingsKeys.ParkingDtmfCode,
+                    SettingsKeys.ParkingEnabled,
+                    SettingsKeys.ParkingSlots,
+                    SettingsKeys.ParkingTimeout,
                     SettingsKeys.SipBindAddress,
                     SettingsKeys.SipCodecs,
                     SettingsKeys.SipExternalAddress,
@@ -142,6 +149,8 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.AsteriskLogDirectory, SettingScope.App)]
         [InlineData(SettingsKeys.CertEmail, SettingScope.App)]
         [InlineData(SettingsKeys.WebRequestLog, SettingScope.App)]
+        [InlineData(SettingsKeys.ParkingEnabled, SettingScope.Asterisk)]
+        [InlineData(SettingsKeys.ParkingAudio, SettingScope.Asterisk)]
         public void Keys_are_scoped_by_what_reads_them(string key, SettingScope expected)
         {
             Assert.Equal(expected, SettingsKeys.ScopeOf(key));

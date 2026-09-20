@@ -491,5 +491,96 @@ namespace Techie.Pbx.Tests.Core
             Assert.True(SettingsKeys.IsSecret(SettingsKeys.ProvisioningAdminPassword));
             Assert.True(SettingsKeys.IsSecret(SettingsKeys.ProvisioningUserPassword));
         }
+
+        /// <summary>
+        /// One to nine parking slots (D119). Not ten: a slot is picked up by dialling its number,
+        /// so every slot number has to be a single digit.
+        /// </summary>
+        [Theory]
+        [InlineData("1")]
+        [InlineData("5")]
+        [InlineData("9")]
+        public void A_slot_count_of_one_digit_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ParkingSlots, value));
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("10")]
+        [InlineData("-1")]
+        [InlineData("nine")]
+        public void A_slot_count_outside_one_to_nine_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.ParkingSlots, value));
+        }
+
+        [Theory]
+        [InlineData("30")]
+        [InlineData("60")]
+        [InlineData("600")]
+        public void A_parking_timeout_in_range_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ParkingTimeout, value));
+        }
+
+        [Theory]
+        [InlineData("29")]
+        [InlineData("601")]
+        [InlineData("")]
+        [InlineData("a while")]
+        public void A_parking_timeout_out_of_range_is_rejected_unless_it_is_blank(string value)
+        {
+            // Blank is "not set" everywhere in this table, so it is the one value that is fine.
+            var errors = SettingsValidation.Errors(SettingsKeys.ParkingTimeout, value);
+
+            if (value.Length == 0)
+                Assert.Empty(errors);
+            else
+                Assert.NotEmpty(errors);
+        }
+
+        /// <summary>A star and one or two digits, which is the whole vocabulary of a feature code.</summary>
+        [Theory]
+        [InlineData("*3")]
+        [InlineData("*72")]
+        [InlineData("*0")]
+        public void A_park_feature_code_of_a_star_and_digits_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ParkingDtmfCode, value));
+            Assert.True(SettingsValidation.IsParkingDtmfCode(value));
+        }
+
+        [Theory]
+        [InlineData("3")]
+        [InlineData("#3")]
+        [InlineData("*123")]
+        [InlineData("*")]
+        [InlineData("*3a")]
+        [InlineData("*3;evil")]
+        public void A_park_feature_code_of_any_other_shape_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.ParkingDtmfCode, value));
+            Assert.False(SettingsValidation.IsParkingDtmfCode(value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.ParkingEnabled, "on")]
+        [InlineData(SettingsKeys.ParkingEnabled, "off")]
+        [InlineData(SettingsKeys.ParkingAudio, "silence")]
+        [InlineData(SettingsKeys.ParkingAudio, "moh")]
+        public void The_parking_word_settings_take_the_words_they_list(string key, string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(key, value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.ParkingEnabled, "yes")]
+        [InlineData(SettingsKeys.ParkingAudio, "music")]
+        [InlineData(SettingsKeys.ParkingAudio, "ringing")]
+        public void The_parking_word_settings_refuse_anything_else(string key, string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(key, value));
+        }
     }
 }

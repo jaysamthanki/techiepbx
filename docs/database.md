@@ -152,6 +152,18 @@ one. Nothing here is rendered into `/etc/asterisk` — a phone's config is gener
 | `ExtensionID` | INTEGER FK → `Extensions`, nullable | `ON DELETE SET NULL`: deleting an extension unassigns the phone rather than being refused (D80) |
 | `Enabled` | INTEGER | 0/1, default 1. A disabled phone is refused its config at the next poll |
 
+### MohFiles (017)
+
+The music on hold tracks (D119). One class, one directory, one row per file in it — there is no
+per-class UI, so a track has no options of its own and nothing points at it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `MohFileID` | INTEGER PK | Also the first part of the stored file name, which is what makes it unique |
+| `Name` | TEXT | Up to 64 chars. **Not** unique: nothing refers to a track by name |
+| `File` | TEXT, unique | Stored file name, `<MohFileID>-<slug>.wav`, under `/var/lib/asterisk/moh`. Unique because one flat directory is what `res_musiconhold` plays |
+| `CreatedUnix` | INTEGER | When it was uploaded. Shown, nothing else |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).
@@ -169,6 +181,11 @@ Current keys: `Asterisk.ConfDirectory`, `Ami.Host`, `Ami.Port`, `Ami.Username`, 
 Also `Sip.TcpPort`, `Sip.TlsPort`, `Sip.StunServer`, `Sip.Codecs`, `System.Timezone`,
 `Provisioning.Username` and `Provisioning.Password` — the last two being the user:pass a phone
 sends to fetch its configuration, i.e. the credentials embedded in the DHCP option 160 URL (D77).
+
+And call parking (D119), all five of which a generated conf file carries: `Parking.Enabled`
+(`on`/`off`, default off), `Parking.DtmfCode` (a star and one or two digits, default `*3`),
+`Parking.Slots` (1–9, default 9), `Parking.Timeout` (30–600 seconds, default 60) and
+`Parking.Audio` (`silence` or `moh`, default silence).
 
 And the mail settings (D115), which this application reads and no generated conf file carries:
 `Mail.Transport` (`graph`, `smtp`, or blank for "decide for me"), `Mail.FromAddress`,

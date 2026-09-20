@@ -150,7 +150,7 @@ namespace Techie.Pbx.Tests.Asterisk
         public void A_route_dials_its_own_trunk_with_the_number_that_was_dialled()
         {
             Assert.Contains(
-                "exten => _NXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN}@callcentric.com,60)\n same => n,Hangup()\n",
+                "exten => _NXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN}@callcentric.com,60,tTkK)\n same => n,Hangup()\n",
                 Render(SampleRoutes()[3]));
         }
 
@@ -195,7 +195,7 @@ namespace Techie.Pbx.Tests.Asterisk
             };
 
             Assert.Contains(
-                "exten => _NXXXXXX,1,Dial(PJSIP/callcentric/sip:1714${EXTEN}@callcentric.com,60)\n",
+                "exten => _NXXXXXX,1,Dial(PJSIP/callcentric/sip:1714${EXTEN}@callcentric.com,60,tTkK)\n",
                 Render(local));
         }
 
@@ -212,7 +212,7 @@ namespace Techie.Pbx.Tests.Asterisk
             };
 
             Assert.Contains(
-                "exten => _9NXXXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN:1}@callcentric.com,60)\n",
+                "exten => _9NXXXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN:1}@callcentric.com,60,tTkK)\n",
                 Render(dialNine));
         }
 

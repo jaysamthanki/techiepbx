@@ -1799,3 +1799,59 @@ NAT public address (stored in IPv6-mapped form, `::ffff:1.2.3.4`). Accepted as-i
 are expected to be cloud PBXes where phones are never IP-reachable from the server anyway.
 Remote phones pick up changes at their next poll; the reboot's SIP NOTIFY path remains the
 LAN-capable alternative. The 500 on a mapped-form address is a known cosmetic edge, not fixed.
+
+### D119. Call parking, and music on hold with it (2026-09-19)
+
+Call parking is one lot, off by default, and five settings — all `SettingScope.Asterisk`, because
+every one of them lands in a generated conf file.
+
+- **Park with a DTMF feature code**, `Parking.DtmfCode`, default `*3`, shape `*` + 1–2 digits. It
+  is the `parkcall` entry of a new generated `features.conf` — Asterisk's own name for it; `park`
+  is the application, `parkcall` is the feature — and its built-in default is empty, so a file
+  without that line is a system where no DTMF parks anything.
+- **Every generated `Dial()` now carries `tTkK`.** The featuremap is opt-in per Dial and per side:
+  `k`/`K` are what let the called/calling party park, and without them the feature code is a line
+  in a file nothing consults. `t`/`T` come with it for transfers, which also turns on Asterisk's
+  default blind-transfer digit `#` — accepted, and written down here because nothing in the
+  generated config says it.
+- **Slots 1..N**, `Parking.Slots`, 1–9, default 9. Retrieval is dialling the slot number from any
+  phone. Safe because extensions are three digits or more and feature codes are star-prefixed;
+  the cap of 9 is the whole reason it is safe, so it is a validated bound rather than a guideline.
+- **The slot entries are generated, not Asterisk's.** `res_parking.conf` sets no `parkext`, so
+  Asterisk creates nothing; `extensions.conf` gets one `exten => <n>,1,ParkedCall(default,<n>)`
+  per slot instead. Same rule as everywhere else here: only numbers we wrote can be dialled (D12,
+  D46, D60), and an `include` of a context we do not control is not that.
+- **The PBX speaks the slot number to the parker.** No dialplan work: `res_parking` does it with
+  `ast_say_digits` on the parker's channel, and the core digit sounds are already installed in
+  GSM and G.722 (D117).
+- **Timeout is `Parking.Timeout`, 30–600 seconds, default 60**, written as `parkingtime`, with
+  `comebacktoorigin = yes` and `comebackdialtime = 30`. The call goes back to the phone that
+  parked it — the one answer that needs no destination picker. `res_parking` creates the
+  `park-dial` context for that itself.
+- **`findslot => first`**, so parking twice in a row gives slot 1 then slot 2.
+- **The file is `res_parking.conf`, not `parking.conf`.** Parking moved out of `features.conf`
+  into its own module in Asterisk 12 and the file moved with it.
+- **Parked audio is `Parking.Audio`: `silence` (default) or `moh`.** Asterisk has no "silence"
+  option for a parked call — the parkee joins a holding bridge whose idle mode is always music on
+  hold — so silence is implemented as *having no class to start*: no `parkedmusicclass`, and a
+  generated `musiconhold.conf` that never defines a class called `default`. `bridge_holding` falls
+  back to a silence generator when `ast_moh_start` fails, which is the whole mechanism.
+- **The music on hold class is called `parking`, deliberately not `default`.** Asterisk falls back
+  to a class named `default` whenever music is asked for and none was named, so a class by that
+  name would be played to a parked caller whose setting says silence. `preferchannelclass = no`
+  in `[general]` for the mirror-image reason: a PJSIP endpoint suggests `default` without being
+  asked, and the lot's class has to win.
+- **One class, files uploaded by the admin, no per-class UI.** `mode = files` on
+  `/var/lib/asterisk/moh` with `sort = alpha`. Asterisk plays the directory rather than a list, so
+  the rows are written into the file as comments — there to be read next to an `ls`, not obeyed.
+  New table `MohFiles` (017), the announcements upload/convert pattern (D55) with one flat
+  directory: the stored name is `<MohFileID>-<slug>.wav`, ID first because two names that slug the
+  same way would otherwise be one file.
+- **Three modules join the allowlist**: `res_parking.so`, `res_musiconhold.so` and
+  `bridge_holding.so` — the last being the one that is easy to forget and impossible to work
+  without, since a parked call lives in a holding bridge. Unconditional, so turning parking on and
+  off is a reload rather than a restart; the modules.conf change itself needs the usual restart
+  (D33).
+- **A dedicated `/Parking` page** carries the settings and the music on hold table, rather than
+  five more rows on the flat settings list. `_Sections.cshtml` moved to `Pages/Shared` so a page
+  that is not one of the settings pages can use it.

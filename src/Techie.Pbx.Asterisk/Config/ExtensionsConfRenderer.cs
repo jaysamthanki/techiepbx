@@ -15,6 +15,19 @@ namespace Techie.Pbx.Asterisk.Config
         public const string EchoTestNumber = "*43";
 
         /// <summary>
+        /// The options every generated Dial() carries, so that the features.conf featuremap is
+        /// consulted at all during a call (D119). Asterisk's DTMF features are opt-in per Dial and
+        /// per side: <c>t</c> and <c>T</c> let the called and the calling party transfer,
+        /// <c>k</c> and <c>K</c> let them park. Both halves of each pair, because "whoever is on
+        /// the call may park it" is what an admin means by call parking, and which end of the call
+        /// dialled is not something they think about.
+        ///
+        /// The cost, and it is worth knowing: <c>t</c>/<c>T</c> also turn on blind transfer, whose
+        /// Asterisk default is <c>#</c>. Pressing # mid-call now starts one.
+        /// </summary>
+        public const string DialOptions = "tTkK";
+
+        /// <summary>
         /// Where a number that matched no outbound route ends up: its own context, included last,
         /// so that every route has already been tried (D46).
         /// </summary>
@@ -136,10 +149,26 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<TimeCondition> timeConditions) =>
             Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, AsteriskSettings.DefaultTimezone);
 
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            string timezone) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, timezone, new ParkingSettings());
+
         /// <param name="timezone">
         /// The IANA zone a time condition's open hours are written in. It is named as the fifth
         /// argument of every GotoIfTime the condition contexts generate, so Asterisk evaluates the
         /// rule in that zone — DST and all — whatever the server's own clock is set to (D74).
+        /// </param>
+        /// <param name="parking">
+        /// Call parking, which adds one entry per slot to the internal context when it is switched
+        /// on and nothing at all when it is not (D119).
         /// </param>
         public static string Render(
             IEnumerable<Extension> extensions,
@@ -150,8 +179,11 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<Announcement> announcements,
             IEnumerable<Ivr> ivrs,
             IEnumerable<TimeCondition> timeConditions,
-            string timezone)
+            string timezone,
+            ParkingSettings parking)
         {
+            parking.ThrowIfInvalid();
+
             var enabled = ConfText.EnabledInOrder(extensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
@@ -186,6 +218,8 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append(" same => n,Hangup()\n");
             }
 
+            AppendParkingSlots(sb, parking);
+
             foreach (var extension in enabled)
             {
                 var number = ConfText.Safe(extension.Number, "number");
@@ -193,7 +227,7 @@ namespace Techie.Pbx.Asterisk.Config
 
                 sb.Append('\n');
                 sb.Append($"; {name}\n");
-                sb.Append($"exten => {number},1,Dial(PJSIP/{number},30)\n");
+                sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{DialOptions})\n");
 
                 if (extension.VoicemailEnabled)
                 {
@@ -550,6 +584,43 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
+        /// One entry per parking slot: dial the slot number from any phone and you pick up the
+        /// call parked in it (D119). Nothing at all when parking is switched off.
+        ///
+        /// Written out one slot at a time rather than by letting res_parking generate them from a
+        /// <c>parkext</c>, for the reason every other number in this context is written out one at
+        /// a time: only numbers we generated can be dialled (D12, D46, D60). The alternative would
+        /// be an <c>include</c> of the lot's own context, which is a context this file does not
+        /// control the contents of.
+        ///
+        /// A single digit is safe here because everything else in this context is longer: an
+        /// extension is 3 to 6 digits and every feature code starts with a star. Asterisk matches
+        /// the whole extension, so 1 and 1001 are different numbers — but a phone dialling 1001
+        /// digit by digit would match 1 first, which is why the slot count cannot grow past 9 and
+        /// why slots are deliberately not the same shape as anything else people dial.
+        /// </summary>
+        private static void AppendParkingSlots(StringBuilder sb, ParkingSettings parking)
+        {
+            if (!parking.Enabled)
+                return;
+
+            var lot = ConfText.Safe(ParkingConfRenderer.LotName, "parking lot");
+
+            sb.Append('\n');
+            sb.Append($"; Call parking. Press {ConfText.Safe(parking.DtmfCode, "park feature code")} during a call to park it; the system says which\n");
+            sb.Append("; slot it went into. Dial that slot number from any phone to pick it up.\n");
+            sb.Append($"; An unclaimed call rings back the phone that parked it after {parking.TimeoutSeconds.ToString(CultureInfo.InvariantCulture)}s (D119).\n");
+
+            foreach (var slot in parking.SlotNumbers)
+            {
+                var number = slot.ToString(CultureInfo.InvariantCulture);
+
+                sb.Append($"exten => {number},1,ParkedCall({lot},{number})\n");
+                sb.Append(" same => n,Hangup()\n");
+            }
+        }
+
+        /// <summary>
         /// One ring group: an entry in the internal context that rings its members and then sends
         /// the call wherever the group says (D52). Generated Dial() rather than a queue, so there
         /// is nothing to load and nothing to keep in step.
@@ -580,12 +651,12 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (group.ToStrategy() == RingStrategy.All)
             {
-                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds})\n");
+                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds},{DialOptions})\n");
             }
             else
             {
                 foreach (var member in members)
-                    sb.Append($" same => n,Dial({member},{group.RingSeconds})\n");
+                    sb.Append($" same => n,Dial({member},{group.RingSeconds},{DialOptions})\n");
             }
 
             sb.Append(DestinationDialplan.Lines(group.ToDestination()));
@@ -836,7 +907,7 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append($"; {name} ({route.Priority}) out over {trunkName}\n");
                 // The full URI form is required: chan_pjsip treats a bare dialstring as a literal
                 // URI and rejects it ("Could not create dialog to invalid URI").
-                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:{prepend}{sent}@{trunkHost},{OutboundRingSeconds})\n");
+                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:{prepend}{sent}@{trunkHost},{OutboundRingSeconds},{DialOptions})\n");
                 sb.Append(" same => n,Hangup()\n");
             }
 

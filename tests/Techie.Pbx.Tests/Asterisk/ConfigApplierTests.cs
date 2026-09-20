@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Data.Sqlite;
 using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
@@ -21,6 +22,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
+        private readonly MohFileRepository mohFiles;
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
         private readonly SettingsRepository settings;
@@ -40,6 +42,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.extensions = new ExtensionRepository(this.database);
             this.inbound = new InboundRouteRepository(this.database);
             this.ivrs = new IvrRepository(this.database);
+            this.mohFiles = new MohFileRepository(this.database);
             this.ringGroups = new RingGroupRepository(this.database);
             this.routes = new OutboundRouteRepository(this.database);
             this.settings = new SettingsRepository(this.database);
@@ -51,8 +54,9 @@ namespace Techie.Pbx.Tests.Asterisk
             var ami = new AmiSettings { Port = 1, Username = "tnpbx", Secret = "not-a-real-secret", TimeoutSeconds = 1 };
             this.certificates = new CertificateRepository(this.database);
             this.applier = new ConfigApplier(
-                this.confDirectory, new PjsipTransport(), this.certificates, this.extensions, this.trunks, this.routes,
-                this.inbound, this.ringGroups, this.announcements, this.ivrs, this.timeConditions, ami, this.pending);
+                this.confDirectory, new PjsipTransport(), new ParkingSettings(), this.certificates, this.extensions,
+                this.trunks, this.routes, this.inbound, this.ringGroups, this.announcements, this.ivrs,
+                this.timeConditions, this.mohFiles, ami, this.pending);
         }
 
         public void Dispose()
@@ -78,6 +82,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
                     "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf", "pjsip_notify.conf",
                     "extensions.conf", "voicemail.conf",
+                    "features.conf", "musiconhold.conf", "res_parking.conf",
                 },
                 files.Select(f => f.FileName));
 
@@ -87,11 +92,12 @@ namespace Techie.Pbx.Tests.Asterisk
                     null, null, null, ConfigApplier.LoggerModule,
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
+                    ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
                 },
                 files.Select(f => f.Module));
 
             Assert.Contains("[1001]", files.Single(f => f.FileName == "pjsip.conf").Content);
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30)", files.Single(f => f.FileName == "extensions.conf").Content);
+            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30,tTkK)", files.Single(f => f.FileName == "extensions.conf").Content);
         }
 
         /// <summary>
@@ -116,9 +122,12 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var written = this.applier.Write().Select(f => f.FileName).ToList();
 
-            // Ten files since piece 23: tnpbx-cert.pem is always written (empty when no
-            // certificate exists, so a stale key never lingers — D101).
-            Assert.Equal(10, written.Count);
+            // Thirteen files since call parking (D119): the ten of piece 23 — tnpbx-cert.pem is
+            // always written, empty when no certificate exists so a stale key never lingers
+            // (D101) — plus features.conf, musiconhold.conf and res_parking.conf, which are
+            // written whether parking is switched on or not so that switching it off is itself
+            // something an apply carries out.
+            Assert.Equal(13, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
@@ -252,6 +261,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 {
                     ConfigApplier.LoggerModule, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
+                    ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
                     ConfigApplier.ManagerModule,
                 },
                 plan);
@@ -307,6 +317,8 @@ namespace Techie.Pbx.Tests.Asterisk
         public void FromDatabase_takes_the_conf_directory_transport_and_ami_details_from_settings()
         {
             this.settings.Set(SettingsKeys.AsteriskConfDirectory, this.confDirectory);
+            this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
+            this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
             this.settings.Set(SettingsKeys.SipExternalAddress, "203.0.113.10");
             this.settings.Set(SettingsKeys.SipLocalNets, "10.8.20.0/24");
             this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
@@ -315,7 +327,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var applier = ConfigApplier.FromDatabase(
                 this.database, this.settings, this.extensions, this.trunks, this.routes, this.inbound,
-                this.ringGroups, this.announcements, this.ivrs, this.timeConditions);
+                this.ringGroups, this.announcements, this.ivrs, this.timeConditions, this.mohFiles);
             var changed = applier.Write();
 
             Assert.Contains("pjsip.conf", changed.Select(f => f.FileName));
@@ -323,6 +335,84 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains("external_media_address = 203.0.113.10", pjsip);
             Assert.Contains("local_net = 10.8.20.0/24", pjsip);
         }
+
+        /// <summary>
+        /// Parking is five settings and four files (D119), so switching it on has to reach the
+        /// feature code, the lot and the dialplan in one apply — and nothing before that.
+        /// </summary>
+        [Fact]
+        public void Parking_settings_reach_the_feature_code_the_lot_and_the_dialplan()
+        {
+            this.settings.Set(SettingsKeys.AsteriskConfDirectory, this.confDirectory);
+            this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
+            this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
+            this.settings.Set(SettingsKeys.ParkingEnabled, Toggles.On);
+            this.settings.Set(SettingsKeys.ParkingDtmfCode, "*72");
+            this.settings.Set(SettingsKeys.ParkingSlots, "4");
+            this.settings.Set(SettingsKeys.ParkingTimeout, "90");
+
+            var files = this.FromSettings().Render();
+
+            Assert.Contains("parkcall => *72\n", Content(files, "features.conf"));
+            Assert.Contains("parkpos => 1-4\n", Content(files, "res_parking.conf"));
+            Assert.Contains("parkingtime => 90\n", Content(files, "res_parking.conf"));
+            Assert.Contains("exten => 4,1,ParkedCall(default,4)\n", Content(files, "extensions.conf"));
+            Assert.DoesNotContain("exten => 5,1,", Content(files, "extensions.conf"));
+        }
+
+        /// <summary>
+        /// An uploaded track becomes a class in musiconhold.conf, and the lot names that class
+        /// only once the audio setting says music (D119).
+        /// </summary>
+        [Fact]
+        public void Music_on_hold_reaches_the_class_and_the_lot()
+        {
+            this.settings.Set(SettingsKeys.AsteriskConfDirectory, this.confDirectory);
+            this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
+            this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
+            this.settings.Set(SettingsKeys.ParkingEnabled, Toggles.On);
+            this.mohFiles.Insert(new MohFile { Name = "Piano Loop", CreatedUnix = 1 });
+
+            var silent = this.FromSettings().Render();
+
+            Assert.Contains("[parking]\n", Content(silent, "musiconhold.conf"));
+            Assert.Contains("; 1-piano-loop.wav - Piano Loop\n", Content(silent, "musiconhold.conf"));
+            Assert.DoesNotContain("parkedmusicclass =", Content(silent, "res_parking.conf"));
+
+            this.settings.Set(SettingsKeys.ParkingAudio, ParkingAudio.MusicOnHold);
+
+            Assert.Contains("parkedmusicclass = parking\n", Content(this.FromSettings().Render(), "res_parking.conf"));
+        }
+
+        /// <summary>
+        /// A setting stored out of range cannot fail an apply: the applier falls back to the
+        /// default and the settings page is what reports the bad value (D67).
+        /// </summary>
+        [Fact]
+        public void A_parking_setting_that_could_not_be_written_out_falls_back_to_the_default()
+        {
+            this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
+            this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
+
+            // Past the repository, which would refuse it, so that the reader is what is tested.
+            using (var connection = this.database.Open())
+            {
+                connection.Execute(
+                    "INSERT INTO Settings (\"Key\", Value) VALUES (@key, '99'), (@enabled, 'on')",
+                    new { key = SettingsKeys.ParkingSlots, enabled = SettingsKeys.ParkingEnabled });
+            }
+
+            var parking = Content(this.FromSettings().Render(), "res_parking.conf");
+
+            Assert.Contains($"parkpos => 1-{ParkingSettings.DefaultSlots}\n", parking);
+        }
+
+        private static string Content(List<GeneratedFile> files, string fileName) =>
+            files.Single(f => f.FileName == fileName).Content;
+
+        private ConfigApplier FromSettings() => ConfigApplier.FromDatabase(
+            this.database, this.settings, this.extensions, this.trunks, this.routes, this.inbound,
+            this.ringGroups, this.announcements, this.ivrs, this.timeConditions, this.mohFiles);
 
         [Fact]
         public void An_empty_database_still_renders_a_usable_dialplan()

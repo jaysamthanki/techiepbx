@@ -196,6 +196,40 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         public const string WebRequestLog = "Web.RequestLog";
 
+        /// <summary>
+        /// What a parked caller hears: a <see cref="Models.ParkingAudio"/> value, silence or the
+        /// uploaded music on hold (D119). Written into res_parking.conf as parkedmusicclass, or
+        /// deliberately left out of it, which is what makes silence silence.
+        /// </summary>
+        public const string ParkingAudio = "Parking.Audio";
+
+        /// <summary>
+        /// The DTMF a user presses mid-call to park it: a star and one or two digits, default
+        /// <c>*3</c> (D119). It is the <c>parkcall</c> entry of the generated features.conf, so it
+        /// is matched inside a live call rather than dialled, and cannot collide with an extension.
+        /// </summary>
+        public const string ParkingDtmfCode = "Parking.DtmfCode";
+
+        /// <summary>
+        /// Whether call parking is generated at all: a <see cref="Models.Toggles"/> value, off
+        /// until somebody turns it on (D119). Off means no park feature code, no slot routes in
+        /// the dialplan and an empty res_parking.conf — the modules stay loaded, but nothing can
+        /// reach them.
+        /// </summary>
+        public const string ParkingEnabled = "Parking.Enabled";
+
+        /// <summary>
+        /// How many parking slots there are, 1 to 9, default 9 (D119). One digit each, because a
+        /// slot is retrieved by dialling its number and extensions here are three digits or more.
+        /// </summary>
+        public const string ParkingSlots = "Parking.Slots";
+
+        /// <summary>
+        /// How long a call stays parked before it comes back to the phone that parked it, in
+        /// seconds: 30 to 600, default 60 (D119). res_parking.conf's parkingtime.
+        /// </summary>
+        public const string ParkingTimeout = "Parking.Timeout";
+
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
             AsteriskConfDirectory,
@@ -228,6 +262,11 @@ namespace Techie.Pbx.Core.Data
             MailSmtpPort,
             MailSmtpUsername,
             MailSmtpPassword,
+            ParkingAudio,
+            ParkingDtmfCode,
+            ParkingEnabled,
+            ParkingSlots,
+            ParkingTimeout,
             SystemNtpServer,
             SystemHostname,
             SystemTimezone,
@@ -311,6 +350,16 @@ namespace Techie.Pbx.Core.Data
             [MailSmtpPort] = SettingScope.App,
             [MailSmtpUsername] = SettingScope.App,
             [MailSmtpPassword] = SettingScope.App,
+
+            // Every Parking key lands in a generated conf file: the feature code in features.conf,
+            // the slots and the timeout in res_parking.conf, the audio choice in res_parking.conf
+            // (as parkedmusicclass, or its absence), and whether any of it exists at all in the
+            // generated dialplan's slot routes (D119). All of it therefore needs an apply.
+            [ParkingAudio] = SettingScope.Asterisk,
+            [ParkingDtmfCode] = SettingScope.Asterisk,
+            [ParkingEnabled] = SettingScope.Asterisk,
+            [ParkingSlots] = SettingScope.Asterisk,
+            [ParkingTimeout] = SettingScope.Asterisk,
 
             // Phones are told where to get the time from; nothing else reads it.
             [SystemNtpServer] = SettingScope.Phones,

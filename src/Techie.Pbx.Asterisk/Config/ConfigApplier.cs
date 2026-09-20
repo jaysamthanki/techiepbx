@@ -35,6 +35,22 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string ManagerModule = "manager";
 
+        /// <summary>
+        /// features.conf, the park feature code (D119). Core like the logger and the manager:
+        /// mid-call features live in Asterisk's own main/features.c, which registers itself as a
+        /// reloadable module called "features".
+        /// </summary>
+        public const string FeaturesModule = "features";
+
+        /// <summary>Owns musiconhold.conf, the one generated hold class (D119).</summary>
+        public const string MohModule = "res_musiconhold";
+
+        /// <summary>
+        /// Owns res_parking.conf — not parking.conf: parking moved out of features.conf into its
+        /// own module in Asterisk 12, and the file moved with it (D119).
+        /// </summary>
+        public const string ParkingModule = "res_parking";
+
         private static readonly ILog Log = LogManager.GetLogger(typeof(ConfigApplier));
 
         /// <summary>
@@ -47,6 +63,7 @@ namespace Techie.Pbx.Asterisk.Config
 
         private readonly string confDirectory;
         private readonly PjsipTransport transport;
+        private readonly ParkingSettings parking;
         private readonly CertificateRepository certificates;
         private readonly ExtensionRepository extensions;
         private readonly TrunkRepository trunks;
@@ -56,12 +73,14 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly AnnouncementRepository announcements;
         private readonly IvrRepository ivrs;
         private readonly TimeConditionRepository timeConditions;
+        private readonly MohFileRepository mohFiles;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
         public ConfigApplier(
             string confDirectory,
             PjsipTransport transport,
+            ParkingSettings parking,
             CertificateRepository certificates,
             ExtensionRepository extensions,
             TrunkRepository trunks,
@@ -71,11 +90,13 @@ namespace Techie.Pbx.Asterisk.Config
             AnnouncementRepository announcements,
             IvrRepository ivrs,
             TimeConditionRepository timeConditions,
+            MohFileRepository mohFiles,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
             this.confDirectory = confDirectory;
             this.transport = transport;
+            this.parking = parking;
             this.certificates = certificates;
             this.extensions = extensions;
             this.trunks = trunks;
@@ -85,6 +106,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.announcements = announcements;
             this.ivrs = ivrs;
             this.timeConditions = timeConditions;
+            this.mohFiles = mohFiles;
             this.ami = ami;
             this.pending = pending;
         }
@@ -105,13 +127,15 @@ namespace Techie.Pbx.Asterisk.Config
             RingGroupRepository ringGroups,
             AnnouncementRepository announcements,
             IvrRepository ivrs,
-            TimeConditionRepository timeConditions)
+            TimeConditionRepository timeConditions,
+            MohFileRepository mohFiles)
         {
             var values = settings.GetAll();
 
             return new ConfigApplier(
                 AsteriskSettings.ConfDirectory(values),
                 AsteriskSettings.Transport(values),
+                AsteriskSettings.Parking(values),
                 new CertificateRepository(database),
                 extensions,
                 trunks,
@@ -121,6 +145,7 @@ namespace Techie.Pbx.Asterisk.Config
                 announcements,
                 ivrs,
                 timeConditions,
+                mohFiles,
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database))
             {
@@ -182,6 +207,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allAnnouncements = this.announcements.GetAll();
             var allIvrs = this.ivrs.GetAll();
             var allTimeConditions = this.timeConditions.GetAll();
+            var allMohFiles = this.mohFiles.GetAll();
 
             // One certificate feeds both the TLS transport and the file it points at, so it is read
             // once here. Anything unusable — switched off, never issued, expired — counts as none
@@ -207,8 +233,16 @@ namespace Techie.Pbx.Asterisk.Config
                     this.transport, all, allTrunks, certificate, this.confDirectory)),
                 new("pjsip_notify.conf", NotifyModule, NotifyConfRenderer.Render()),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
-                    all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions, this.Timezone)),
+                    all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
+                    this.Timezone, this.parking)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
+
+                // Call parking (D119). features.conf carries the DTMF that parks a call,
+                // musiconhold.conf the class a parked caller might hear, and res_parking.conf the
+                // lot itself — in that order, so the class exists before the lot names it.
+                new("features.conf", FeaturesModule, FeaturesConfRenderer.Render(this.parking)),
+                new("musiconhold.conf", MohModule, MohConfRenderer.Render(allMohFiles)),
+                new("res_parking.conf", ParkingModule, ParkingConfRenderer.Render(this.parking)),
             };
 
             return files;

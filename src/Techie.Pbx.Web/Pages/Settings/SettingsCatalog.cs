@@ -23,6 +23,13 @@ namespace Techie.Pbx.Web.Pages.Settings
         private static readonly AmiSettings AmiDefaults = new();
         private static readonly PjsipTransport TransportDefaults = new();
 
+        /// <summary>
+        /// On and off, with off first. The form's dropdown has no blank entry and treats the first
+        /// choice as the default (D75), and parking is off until somebody turns it on — the other
+        /// way round from <see cref="Toggles.All"/>, which is ordered for a setting that is on.
+        /// </summary>
+        private static readonly IReadOnlyList<string> ParkingToggles = new[] { Toggles.Off, Toggles.On };
+
         private static readonly Dictionary<string, SettingDescriptor> Descriptors = new[]
         {
             new SettingDescriptor
@@ -211,6 +218,43 @@ namespace Techie.Pbx.Web.Pages.Settings
             {
                 Description = "The password for that relay account — a SendGrid API key, a Google app password, or whatever your own relay issued. Stored here; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.MailSmtpPassword,
+            },
+            new SettingDescriptor
+            {
+                Choices = ParkingAudio.All,
+                Default = ParkingAudio.Silence,
+                Description = "What a parked caller hears while they wait. Music plays the tracks on the Parking page, as one class, in the order they are listed — with no tracks uploaded it is silence either way.",
+                Key = SettingsKeys.ParkingAudio,
+                Sample = ParkingAudio.MusicOnHold,
+            },
+            new SettingDescriptor
+            {
+                Default = ParkingSettings.DefaultDtmfCode,
+                Description = "The keys a user presses during a call to park it: a star and one or two digits. It is matched inside a live call rather than dialled, so it cannot collide with an extension or a feature code.",
+                Key = SettingsKeys.ParkingDtmfCode,
+                Sample = ParkingSettings.DefaultDtmfCode,
+            },
+            new SettingDescriptor
+            {
+                Choices = ParkingToggles,
+                Default = Toggles.Off,
+                Description = "Whether call parking exists at all. Off means no park feature code, no parking lot and no slot numbers in the dialplan — nothing to dial by accident.",
+                Key = SettingsKeys.ParkingEnabled,
+                Sample = Toggles.On,
+            },
+            new SettingDescriptor
+            {
+                Default = Number(ParkingSettings.DefaultSlots),
+                Description = $"How many parking slots there are, {SettingsValidation.MinParkingSlots} to {SettingsValidation.MaxParkingSlots}. A slot is picked up by dialling its number, so each one is a single digit — which is what keeps them clear of extensions, which are three digits or more.",
+                Key = SettingsKeys.ParkingSlots,
+                Sample = Number(ParkingSettings.DefaultSlots),
+            },
+            new SettingDescriptor
+            {
+                Default = Number(ParkingSettings.DefaultTimeoutSeconds),
+                Description = $"How long a call stays parked before it rings back the phone that parked it, in seconds ({SettingsValidation.MinParkingTimeoutSeconds} to {SettingsValidation.MaxParkingTimeoutSeconds}).",
+                Key = SettingsKeys.ParkingTimeout,
+                Sample = Number(ParkingSettings.DefaultTimeoutSeconds),
             },
             new SettingDescriptor
             {

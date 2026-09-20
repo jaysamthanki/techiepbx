@@ -27,6 +27,29 @@ namespace Techie.Pbx.Core.Data
         public const int MinProvisioningPasswordLength = 8;
 
         /// <summary>
+        /// The most parking slots there can be. A parked call is retrieved by dialling the slot
+        /// number from any phone, so a slot number has to be one digit — which caps this at 9 and
+        /// is what keeps slots clear of extensions, which are three digits or more (D119).
+        /// </summary>
+        public const int MaxParkingSlots = 9;
+
+        /// <summary>
+        /// The longest a call may sit parked. Ten minutes: longer than that and the caller has
+        /// given up, and the call coming back to a phone nobody is at helps nobody.
+        /// </summary>
+        public const int MaxParkingTimeoutSeconds = 600;
+
+        /// <summary>One slot is still parking. Fewer than one is switching it off, which is a setting of its own.</summary>
+        public const int MinParkingSlots = 1;
+
+        /// <summary>
+        /// The shortest a call may sit parked. Half a minute is about as long as it takes to walk
+        /// to the phone the call was parked for; anything shorter is a call that bounces back
+        /// before anybody could have picked it up.
+        /// </summary>
+        public const int MinParkingTimeoutSeconds = 30;
+
+        /// <summary>
         /// Every problem with this key and value; empty means it can be stored. Unknown keys are
         /// rejected here rather than only at the database, so the UI can say so too.
         /// </summary>
@@ -190,6 +213,31 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("The SMTP password cannot contain line breaks.");
                     break;
 
+                case SettingsKeys.ParkingAudio:
+                    if (!ParkingAudio.IsKnown(text))
+                        errors.Add($"What a parked caller hears must be one of: {string.Join(", ", ParkingAudio.All)}. Leave it blank for the default, which is silence.");
+                    break;
+
+                case SettingsKeys.ParkingDtmfCode:
+                    if (!IsParkingDtmfCode(text))
+                        errors.Add("The park feature code must be a star and one or two digits, e.g. *3. It is pressed during a call, not dialled, so it cannot collide with an extension.");
+                    break;
+
+                case SettingsKeys.ParkingEnabled:
+                    if (!Toggles.IsKnown(text))
+                        errors.Add($"The parking setting must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is off.");
+                    break;
+
+                case SettingsKeys.ParkingSlots:
+                    if (!int.TryParse(text, out var slots) || slots is < MinParkingSlots or > MaxParkingSlots)
+                        errors.Add($"The number of parking slots must be a whole number between {MinParkingSlots} and {MaxParkingSlots}. A slot is retrieved by dialling its number, so there can only be as many as there are single digits.");
+                    break;
+
+                case SettingsKeys.ParkingTimeout:
+                    if (!int.TryParse(text, out var parkingTimeout) || parkingTimeout is < MinParkingTimeoutSeconds or > MaxParkingTimeoutSeconds)
+                        errors.Add($"The parking timeout must be a whole number of seconds between {MinParkingTimeoutSeconds} and {MaxParkingTimeoutSeconds}.");
+                    break;
+
                 case SettingsKeys.SystemNtpServer:
                     if (!HostPattern().IsMatch(text))
                         errors.Add("NTP server must be a hostname or IP address, e.g. pool.ntp.org.");
@@ -234,6 +282,14 @@ namespace Techie.Pbx.Core.Data
                 int.TryParse(port, out var number) &&
                 number is >= 1 and <= 65535;
         }
+
+        /// <summary>
+        /// The shape of the DTMF a user presses to park a call: a star and one or two digits
+        /// (D119). Public because <c>ParkingSettings</c> checks it the same way before the value
+        /// reaches features.conf, so the value the page accepts and the value the file can carry
+        /// are the same value — the rule <see cref="IsZoneName"/> follows, for the same reason.
+        /// </summary>
+        public static bool IsParkingDtmfCode(string value) => ParkingDtmfPattern().IsMatch(value.Trim());
 
         /// <summary>
         /// Whether a value looks like a PEM private key, which is all that can honestly be checked
@@ -345,6 +401,13 @@ namespace Techie.Pbx.Core.Data
         /// <summary>A hostname or IP address, the same shape a trunk's server host has to be.</summary>
         [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
         private static partial Regex HostPattern();
+
+        /// <summary>
+        /// A star and one or two digits: the whole vocabulary a mid-call feature code has, and
+        /// narrow enough that nothing here could ever break out of a features.conf line (D119).
+        /// </summary>
+        [GeneratedRegex(@"^\*[0-9]{1,2}$")]
+        private static partial Regex ParkingDtmfPattern();
 
         /// <summary>
         /// URL-safe characters only, because <see cref="SettingsKeys.ProvisioningPassword"/> ends

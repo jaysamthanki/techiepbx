@@ -88,6 +88,37 @@ namespace Techie.Pbx.Asterisk.Config
             Text(settings, SettingsKeys.SystemNtpServer) ?? DefaultNtpServer;
 
         /// <summary>
+        /// Call parking as the generated config sees it (D119). A stored value that is out of
+        /// range or the wrong shape falls back to the default rather than throwing, for the reason
+        /// <see cref="Timezone"/> does the same: a bad row must not be able to fail an apply, and
+        /// the settings page is what reports it. The renderers then re-check what they are handed.
+        /// </summary>
+        public static ParkingSettings Parking(IReadOnlyDictionary<string, string> settings)
+        {
+            var parking = new ParkingSettings();
+
+            parking.Enabled = Toggles.Is(settings, SettingsKeys.ParkingEnabled, false);
+
+            var audio = Text(settings, SettingsKeys.ParkingAudio);
+            if (audio != null && ParkingAudio.IsKnown(audio))
+                parking.Audio = audio;
+
+            var code = Text(settings, SettingsKeys.ParkingDtmfCode);
+            if (code != null && SettingsValidation.IsParkingDtmfCode(code))
+                parking.DtmfCode = code;
+
+            var slots = Number(settings, SettingsKeys.ParkingSlots, parking.Slots);
+            if (slots is >= SettingsValidation.MinParkingSlots and <= SettingsValidation.MaxParkingSlots)
+                parking.Slots = slots;
+
+            var timeout = Number(settings, SettingsKeys.ParkingTimeout, parking.TimeoutSeconds);
+            if (timeout is >= SettingsValidation.MinParkingTimeoutSeconds and <= SettingsValidation.MaxParkingTimeoutSeconds)
+                parking.TimeoutSeconds = timeout;
+
+            return parking;
+        }
+
+        /// <summary>
         /// The IANA zone a time condition's open hours are written in, e.g. "Europe/London". It is
         /// named in every GotoIfTime the dialplan generates, so it decides behaviour and not just
         /// what a comment says (D74). Anything that is not shaped like a zone name falls back to

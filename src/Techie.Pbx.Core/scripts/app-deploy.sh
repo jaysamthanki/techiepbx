@@ -32,6 +32,7 @@ set -euo pipefail
 APP_USER="tnpbx"
 APP_GROUP="asterisk"
 APP_HOME="/opt/tnpbx"
+MOH_DIR="/var/lib/asterisk/moh"
 UNIT="/etc/systemd/system/tnpbx-web.service"
 POLKIT="/etc/polkit-1/rules.d/40-tnpbx-asterisk.rules"
 
@@ -71,6 +72,19 @@ chown -R "${APP_USER}:${APP_GROUP}" "$APP_HOME"
 chmod 0750 "$APP_HOME"
 [[ -f "${APP_HOME}/Techie.Pbx.Web" ]] || die "tarball did not contain Techie.Pbx.Web — is this the self-contained publish?"
 
+# --- music on hold directory ---------------------------------------------------
+#
+# The one directory res_musiconhold plays for the generated hold class (D119). The
+# same setgid model as the announcements directory: owned by asterisk, group
+# writable, so the files tnpbx uploads are group-readable by the asterisk process.
+# Created here as well as in install.sh, because an existing box was installed
+# before this directory existed.
+
+log "creating ${MOH_DIR}"
+mkdir -p "$MOH_DIR"
+chown asterisk:asterisk "$MOH_DIR"
+chmod 2770 "$MOH_DIR"
+
 # --- systemd unit --------------------------------------------------------------
 
 log "writing tnpbx-web.service"
@@ -93,7 +107,7 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/tnpbx /etc/asterisk /var/lib/asterisk/sounds/tnpbx /var/spool/asterisk
+ReadWritePaths=/opt/tnpbx /etc/asterisk /var/lib/asterisk/sounds/tnpbx /var/lib/asterisk/moh /var/spool/asterisk
 ProtectHome=true
 LimitNOFILE=8192
 # Ports 80 and 443 are privileged; the app runs as tnpbx, so it gets exactly
@@ -139,6 +153,7 @@ cat <<EOF
 TNPBX web application deployed
 ================================================================================
   /opt/tnpbx            app + Data/tnpbx.db (SQLite, preserved on re-deploy)
+  ${MOH_DIR}   asterisk:asterisk 2770, the music on hold class's directory
   tnpbx-web.service     User=tnpbx, http://0.0.0.0:8080, hardened
   ${POLKIT}
                         tnpbx may start/stop/restart asterisk.service only
