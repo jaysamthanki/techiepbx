@@ -1626,3 +1626,24 @@ Tables still never carry a secret (SettingRow masks), phone config files still n
 and conf-file secrets are untouched. The threat model shifts from "never in the browser" to
 "behind the admin login" for these two admin-only forms, which is where it belongs for a PBX
 whose passwords have to be readable to be typed into a phone.
+
+### D113. Dark mode is chosen in the browser and nowhere else (2026-09-19)
+User request. Bootstrap 5.3 themes itself from `data-bs-theme` on `<html>`, so that is the whole
+mechanism: a sun/moon button in the navbar writes `light` or `dark` into `localStorage` under
+`pbx-theme`, and a short inline script in the head of `_Layout` applies it before the first paint.
+With nothing stored the operating system decides, and goes on deciding while the page is open.
+
+No setting, no column, no round trip. The choice belongs to the person at the keyboard rather than
+to the PBX, and two admins sharing one box should be free to disagree about it.
+
+The markup that changed is colour only. `navbar-light bg-white` and the `text-dark` nav links
+pinned the bar to the light palette, the log view was `bg-light`, the unknown registration badge
+was `text-bg-light` (a fixed near white in *both* themes, so on a dark page the one badge meaning
+"no answer" was the brightest thing in the table), and the layout CSS still carried the ASP.NET
+template's `#0077cc` links and `#e5e5e5` borders. All of them follow Bootstrap's variables now.
+D112's sibling, the placeholder rule from the day before, keeps its idea and inverts its
+direction: gray-400 on light, gray-600 on dark, so a hint never reads as a typed value either way.
+
+Two libraries needed help. sweetalert2 has themes of its own and follows the operating system by
+default, which is not the same answer as the button, so it is re-mixed with `theme` on each
+toggle; bootstrap-table 1.24 paints its loading overlay white, which one rule in site.css covers.

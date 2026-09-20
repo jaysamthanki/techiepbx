@@ -239,3 +239,43 @@ window.pbx = (function () {
         pbx.toast('error', 'The server refused that request (' + event.detail.xhr.status + '). Reload the page and try again.');
     });
 })();
+
+// Light or dark. The theme itself is already on <html> by the time this runs: the inline script in
+// _Layout's head puts it there before the first paint. What is left is the navbar button, writing
+// the choice down, and telling sweetalert2 which way round it should be.
+(function () {
+    'use strict';
+
+    const swal = window.Swal;
+
+    function apply(theme) {
+        document.documentElement.setAttribute('data-bs-theme', theme);
+
+        // sweetalert2 has themes of its own and follows the operating system by default, which is
+        // not the same thing as the theme chosen here. Its dialogs are a layer above Bootstrap's
+        // CSS variables, so they have to be told separately. Always mixed from the original, so
+        // toggling twice does not stack a mixin on a mixin.
+        window.Swal = swal.mixin({ theme: theme });
+    }
+
+    function current() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    apply(current());
+
+    document.getElementById('theme-toggle')?.addEventListener('click', function () {
+        const theme = current() === 'dark' ? 'light' : 'dark';
+
+        localStorage.setItem('pbx-theme', theme);
+        apply(theme);
+    });
+
+    // Until someone presses the button, the operating system is the choice, including when it
+    // changes while the page is open.
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function (event) {
+        if (!localStorage.getItem('pbx-theme')) {
+            apply(event.matches ? 'dark' : 'light');
+        }
+    });
+})();

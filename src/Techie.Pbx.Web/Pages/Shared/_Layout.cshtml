@@ -11,6 +11,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="request-verification-token" content="@requestToken" />
     <title>@ViewData["Title"] - TNPBX</title>
+    @*
+        Dark mode, before anything is drawn. Bootstrap 5.3 themes itself off data-bs-theme on
+        <html>, and this has to run in the head: set from js/site.js it would arrive after the
+        browser had already painted a white page. Remembered choice first, the operating system
+        otherwise. The toggle that writes pbx-theme is in the navbar below.
+    *@
+    <script>
+        (function () {
+            var stored = localStorage.getItem('pbx-theme');
+            var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/lib/bootstrap-table/bootstrap-table.min.css" />
@@ -19,7 +33,9 @@
 </head>
 <body hx-headers='{"@Techie.Pbx.Web.Program.AntiforgeryHeaderName": "@requestToken"}'>
     <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+        @* bg-body-tertiary rather than bg-white, and no navbar-light: both of those pin the bar
+           to the light palette instead of letting data-bs-theme decide. *@
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm bg-body-tertiary border-bottom box-shadow mb-3">
             <div class="container">
                 <a class="navbar-brand" asp-area="" asp-page="/Status/Index">TNPBX</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
@@ -31,28 +47,28 @@
                         @* First, because it is the home page: what this box is doing, and what it
                            has to say about itself. *@
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Status</a>
+                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Status</a>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Status/Index">Status</a></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Status/Logs">Logs</a></li>
                             </ul>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Extensions/Index">Extensions</a>
+                            <a class="nav-link text-body" asp-area="" asp-page="/Extensions/Index">Extensions</a>
                         </li>
                         @* Next to Extensions: a phone is the hardware an extension lives on. *@
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Phones/Index">Phones</a>
+                            <a class="nav-link text-body" asp-area="" asp-page="/Phones/Index">Phones</a>
                         </li>
                         @* After Phones: certificates are part of how this box presents itself, not call handling. *@
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Certificates/Index">Certificates</a>
+                            <a class="nav-link text-body" asp-area="" asp-page="/Certificates/Index">Certificates</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Trunks/Index">Trunks</a>
+                            <a class="nav-link text-body" asp-area="" asp-page="/Trunks/Index">Trunks</a>
                         </li>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Call Handling</a>
+                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Call Handling</a>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Routes/Index">Routes</a></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Inbound/Index">Inbound routes</a></li>
@@ -63,7 +79,7 @@
                             </ul>
                         </li>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-dark" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Settings</a>
+                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Settings</a>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">Settings</a></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Sip">SIP settings</a></li>
@@ -80,6 +96,24 @@
                     <div class="d-flex align-items-center ms-2"
                          hx-get="/ConfigStatus"
                          hx-trigger="load, every 5s, configChanged from:body, configApplied from:body"></div>
+
+                    @*
+                        Light or dark. Both icons are in the page and CSS shows the one that matches
+                        data-bs-theme, so the button is right on the first paint too, before site.js
+                        has run. The icon is the theme you are in, not the one you would get.
+                    *@
+                    <button type="button" id="theme-toggle" class="btn btn-link nav-link text-body px-2 ms-2"
+                            title="Switch between light and dark" aria-label="Switch between light and dark">
+                        <svg class="theme-icon-light" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="4" />
+                            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M19.07 4.93l-1.41 1.41M6.34 17.66l-1.41 1.41" />
+                        </svg>
+                        <svg class="theme-icon-dark" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                        </svg>
+                    </button>
                 </div>
             </div>
         </nav>

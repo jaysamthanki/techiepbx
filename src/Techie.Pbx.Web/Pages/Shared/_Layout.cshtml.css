@@ -7,9 +7,8 @@ a.navbar-brand {
   word-break: break-all;
 }
 
-a {
-  color: #0077cc;
-}
+/* The template's "a { color: #0077cc }" was here. It is gone: that blue is dark enough to be hard
+   work against a dark background, and Bootstrap's own link colour already changes with the theme. */
 
 .btn-primary {
   color: #fff;
@@ -23,11 +22,13 @@ a {
   border-color: #1861ac;
 }
 
+/* Bootstrap's border colour rather than a fixed near white, which on a dark page is a bright line
+   across the top of the footer and under the navbar. */
 .border-top {
-  border-top: 1px solid #e5e5e5;
+  border-top: 1px solid var(--bs-border-color);
 }
 .border-bottom {
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--bs-border-color);
 }
 
 .box-shadow {

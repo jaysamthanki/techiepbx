@@ -16,7 +16,9 @@ namespace Techie.Pbx.Web.Pages.Shared
             RegistrationState.Rejected => "text-bg-danger",
             RegistrationState.Unreachable => "text-bg-warning",
             RegistrationState.NotRegistered => "text-bg-secondary",
-            _ => "text-bg-light border",
+            // Not text-bg-light: "light" is a fixed near white in both themes, so on a dark page
+            // the one badge that means "no answer" would be the brightest thing in the table.
+            _ => "bg-body-secondary text-body-secondary border",
         };
 
         /// <summary>The element id the poll swaps into, so both renderings have to agree on it.</summary>

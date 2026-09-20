@@ -8,8 +8,9 @@ html {
   }
 }
 
+/* The inner ring of a focus outline is the page showing through, so it is whatever the page is. */
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+  box-shadow: 0 0 0 0.1rem var(--bs-body-bg), 0 0 0 0.25rem #258cfb;
 }
 
 html {
@@ -37,9 +38,45 @@ tr[data-edit-url] {
 
 /* Placeholders should read as suggestions, not values someone already typed. Bootstrap's
    default is gray-600, which next to black typed text looks like content; gray-400 keeps
-   the hint legible while making it obviously not typed (Jaysam, 2026-09-19). */
+   the hint legible while making it obviously not typed (Jaysam, 2026-09-19). Dark mode wants
+   the same distance in the other direction: there the text is near white, so gray-400 would be
+   the thing that looks typed and the hint has to go darker instead. */
+:root {
+  --pbx-placeholder-color: var(--bs-gray-400);
+}
+
 .form-control::placeholder,
 .form-select::placeholder,
 textarea::placeholder {
-  color: var(--bs-gray-400);
+  color: var(--pbx-placeholder-color);
+}
+
+/* The light/dark switch in the navbar. Which icon shows is CSS rather than script, so the button
+   is already right on the first paint. */
+#theme-toggle .theme-icon-dark {
+  display: none;
+}
+
+[data-bs-theme="dark"] {
+  --pbx-placeholder-color: var(--bs-gray-600);
+}
+
+[data-bs-theme="dark"] #theme-toggle .theme-icon-light {
+  display: none;
+}
+
+[data-bs-theme="dark"] #theme-toggle .theme-icon-dark {
+  display: inline;
+}
+
+/* bootstrap-table 1.24 predates Bootstrap's themes in one place we can actually see: the overlay
+   it lays over a table while it is rendering is painted white, with near black dots on it. */
+[data-bs-theme="dark"] .bootstrap-table .fixed-table-container .fixed-table-body .fixed-table-loading {
+  background: var(--bs-body-bg);
+}
+
+[data-bs-theme="dark"] .bootstrap-table .fixed-table-container .fixed-table-body .fixed-table-loading .loading-wrap .animation-dot,
+[data-bs-theme="dark"] .bootstrap-table .fixed-table-container .fixed-table-body .fixed-table-loading .loading-wrap .animation-wrap::after,
+[data-bs-theme="dark"] .bootstrap-table .fixed-table-container .fixed-table-body .fixed-table-loading .loading-wrap .animation-wrap::before {
+  background: var(--bs-body-color);
 }
