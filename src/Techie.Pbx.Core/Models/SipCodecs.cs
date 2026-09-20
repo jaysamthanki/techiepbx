@@ -13,10 +13,11 @@ namespace Techie.Pbx.Core.Models
 
         /// <summary>
         /// ulaw and alaw are the two G.711 flavours every provider speaks; gsm is here because
-        /// Asterisk's own prompts ship in it. Adding to this list means adding the codec's module
-        /// to the allowlist first.
+        /// Asterisk's own prompts ship in it; g722 is the wideband HD voice the desk phones
+        /// speak; slin is signed linear, offered where a device uses it natively (D117).
+        /// Adding to this list means adding the codec's module to the allowlist first.
         /// </summary>
-        public static readonly IReadOnlyList<string> Allowed = new[] { "ulaw", "alaw", "gsm" };
+        public static readonly IReadOnlyList<string> Allowed = new[] { "ulaw", "alaw", "gsm", "g722", "slin" };
 
         public static bool IsAllowed(string codec) => Allowed.Contains(codec, StringComparer.Ordinal);
 

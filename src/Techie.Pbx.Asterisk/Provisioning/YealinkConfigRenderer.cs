@@ -125,6 +125,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
         {
             "ulaw" => ("PCMU", 0),
             "alaw" => ("PCMA", 8),
+            "g722" => ("G722", 9),
             "gsm" => ("GSM", 3),
             _ => throw new InvalidOperationException($"Refusing to write codec '{codec}': not one this system loads."),
         };
@@ -139,7 +140,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
             foreach (var codec in codecs)
             {
-                if (codec is not ("ulaw" or "alaw" or "gsm"))
+                if (codec is not ("ulaw" or "alaw" or "gsm" or "g722"))
                     continue;
 
                 slot++;

@@ -75,6 +75,8 @@ namespace Techie.Pbx.Asterisk.Config
             ("Audio: the formats our prompts and messages are stored in", new[]
             {
                 "codec_alaw.so",
+                "codec_g722.so",             // wideband HD voice, offered to endpoints that ask (D117)
+                "codec_slin.so",             // signed linear, offered where a device speaks it natively (D117)
                 "codec_ulaw.so",
                 "codec_gsm.so",             // prompts ship as GSM, voicemail records wav49
                 "format_gsm.so",

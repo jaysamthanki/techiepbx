@@ -1778,3 +1778,9 @@ a file. The one new wrinkle is that W3CLogger names its own files (`tnpbx-reques
 so the source resolves to the most recently written file with that prefix rather than to a fixed
 name. Only the newest one, the same bargain the application log makes: the page tails what is being
 written now, and anything older is on the box for whoever wants to go and look.
+
+### D117. g722 and slin join the offered codecs (2026-09-19)
+codec_g722.so and codec_slin.so are loaded, and the Sip.Codecs setting accepts g722 and slin.
+Yealink provisioning now writes G722 (payload 9) when it is chosen; Yealink has no slin, so
+that stays a server-side codec only. Defaults are unchanged — an existing install keeps offering
+ulaw,alaw until the administrator edits the setting.
