@@ -29,7 +29,7 @@ namespace Techie.Pbx.Core.Diagnostics
         public const string FileNamePrefix = "tnpbx-requests-";
 
         /// <summary>One file's cap before the logger rolls to the next, in bytes.</summary>
-        public const long FileSizeLimitBytes = 10 * 1024 * 1024;
+        public const int FileSizeLimitBytes = 10 * 1024 * 1024;
 
         /// <summary>
         /// How long a line may sit in the logger's buffer before it reaches the disk. A second,
