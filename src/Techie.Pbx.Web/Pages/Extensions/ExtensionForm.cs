@@ -19,9 +19,9 @@ namespace Techie.Pbx.Web.Pages.Extensions
         public string? Number { get; set; } = "";
 
         /// <summary>
-        /// Only filled in for a new extension, where the generated password is shown once so it
-        /// can be typed into the phone. Editing never carries the secret to the browser; the
-        /// "show password" action does that on request.
+        /// The SIP password, shown in the clear in the form for new and existing extensions
+        /// alike (D112). Blank on an existing extension keeps the current one; Regenerate
+        /// makes a new one.
         /// </summary>
         public string? Secret { get; set; } = "";
 

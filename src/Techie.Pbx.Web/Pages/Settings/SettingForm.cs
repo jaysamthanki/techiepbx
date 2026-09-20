@@ -4,9 +4,8 @@ namespace Techie.Pbx.Web.Pages.Settings
     /// What the edit modal shows for one setting: the key being edited, the value in the box, and
     /// whatever validation rejected last time. The form posts straight back into this shape.
     ///
-    /// <see cref="Value"/> is empty for a secret, always: the stored one is never rendered into
-    /// the page (D68). Blank on a secret therefore means "leave it alone" rather than "clear it",
-    /// which is what the Reset to default button is for.
+    /// The box carries the stored value, secret or not (D112): the table is where the dots are.
+    /// Blank on save means "back to the default", the same as for every other setting.
     /// </summary>
     public class SettingForm
     {

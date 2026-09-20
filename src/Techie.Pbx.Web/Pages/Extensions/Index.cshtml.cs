@@ -58,6 +58,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 ExtensionID = extension.ExtensionID,
                 Name = extension.Name,
                 Number = extension.Number,
+                Secret = extension.Secret,
                 VoicemailAttachRecording = extension.VoicemailAttachRecording,
                 VoicemailDeleteAfterEmail = extension.VoicemailDeleteAfterEmail,
                 VoicemailEmail = extension.VoicemailEmail,
@@ -134,9 +135,11 @@ namespace Techie.Pbx.Web.Pages.Extensions
             extension.VoicemailEnabled = form.VoicemailEnabled;
             extension.VoicemailPin = Text(form.VoicemailPin);
 
-            // Only a new extension carries a password on the form; editing leaves it alone.
-            if (isNew)
-                extension.Secret = string.IsNullOrWhiteSpace(form.Secret) ? SecretGenerator.Create() : Text(form.Secret);
+            // The form carries the password for new and existing extensions alike (D112). Blank on
+            // a new one generates it; blank on an existing one keeps what is already there.
+            extension.Secret = string.IsNullOrWhiteSpace(form.Secret)
+                ? (isNew ? SecretGenerator.Create() : extension.Secret)
+                : Text(form.Secret);
 
             try
             {
@@ -149,7 +152,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             {
                 // Hand back what they typed, with the reasons on it.
                 form.Errors = ex.Errors.ToList();
-                form.Secret = isNew ? extension.Secret : "";
+                form.Secret = extension.Secret;
                 return this.Partial("_Form", form);
             }
 

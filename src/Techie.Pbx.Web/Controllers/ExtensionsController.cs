@@ -7,8 +7,8 @@ using Techie.Pbx.Core.Security;
 namespace Techie.Pbx.Web.Controllers
 {
     /// <summary>
-    /// The extension actions that answer with data rather than with a piece of the page: showing
-    /// and regenerating the SIP password. Everything else about extensions is a Razor Pages
+    /// The extension action that answers with data rather than with a piece of the page:
+    /// regenerating the SIP password. Everything else about extensions is a Razor Pages
     /// handler returning HTML for htmx.
     /// </summary>
     [ApiController]
@@ -22,21 +22,6 @@ namespace Techie.Pbx.Web.Controllers
         public ExtensionsController()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
-        }
-
-        /// <summary>
-        /// The SIP password for one extension, on explicit request. Who asked is logged; the
-        /// value never is.
-        /// </summary>
-        [HttpGet("{extensionID:long}/secret")]
-        public IActionResult GetSecret(long extensionID)
-        {
-            var extension = this.extensions.GetByID(extensionID);
-            if (extension == null)
-                return this.NotFound(new MessageResponse("That extension no longer exists."));
-
-            Log.Info($"SIP password for extension {extension.Number} shown to {this.User.Identity?.Name}");
-            return this.Ok(new SecretResponse { Number = extension.Number, Secret = extension.Secret });
         }
 
         /// <summary>

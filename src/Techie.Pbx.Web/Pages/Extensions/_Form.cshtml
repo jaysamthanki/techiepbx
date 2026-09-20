@@ -44,14 +44,15 @@
         <div class="form-text">Shown as the caller ID name on internal calls.</div>
     </div>
 
-    @if (Model.IsNew)
-    {
-        <div class="mb-3">
-            <label class="form-label" for="extension-secret">SIP password</label>
-            <input class="form-control font-monospace" id="extension-secret" name="secret" value="@Model.Secret" readonly />
-            <div class="form-text">Generated. Put it into the phone; you can show it again from the table later.</div>
+    <div class="mb-3">
+        <label class="form-label" for="extension-secret">SIP password</label>
+        <input class="form-control font-monospace" id="extension-secret" name="secret" value="@Model.Secret"
+               maxlength="64" autocomplete="off" spellcheck="false" />
+        <div class="form-text">
+            Shown in the clear. Blank on an existing extension keeps the current password;
+            Regenerate makes a new one.
         </div>
-    }
+    </div>
 
     <div class="form-check mb-4">
         <input class="form-check-input" type="checkbox" id="extension-enabled" name="enabled" value="true"
@@ -111,12 +112,10 @@
     <div class="modal-footer justify-content-between">
         <div class="d-flex gap-2">
             @if (!Model.IsNew)
-            {
-                <button type="button" class="btn btn-outline-secondary"
-                        onclick="pbxExtensions.showSecret(@Model.ExtensionID)">Show password</button>
-                <button type="button" class="btn btn-outline-secondary"
-                        onclick="pbxExtensions.regenerateSecret(@Model.ExtensionID, '@Model.Number')">Regenerate</button>
-                <button type="button" class="btn btn-outline-danger"
+                    {
+                        <button type="button" class="btn btn-outline-secondary"
+                                onclick="pbxExtensions.regenerateSecret(@Model.ExtensionID, '@Model.Number')">Regenerate password</button>
+                        <button type="button" class="btn btn-outline-danger"
                         hx-post="@deleteUrl"
                         hx-vals='{"extensionID": @Model.ExtensionID}'
                         hx-swap="none"

@@ -13,11 +13,10 @@ namespace Techie.Pbx.Web.Pages.Settings
     /// has been stored for it (D67). Built like the other list pages — a shell htmx fills, the
     /// form in the shared Bootstrap modal (D42), rows that open their own edit form (D48).
     ///
-    /// Two things are its own. A secret's value never reaches the page: the table shows that one
-    /// is stored, the form's box is empty, and reading the stored one back is an explicit request
-    /// to the API, the way an extension's password is (D68). And blank means "put it back to the
-    /// default" rather than "store an empty string", so the table always shows either a value
-    /// somebody chose or the default the code will use.
+    /// Two things are its own. The table masks a secret with dots, but the edit form shows the
+    /// stored value in the clear (D112). And blank means "put it back to the default" rather
+    /// than "store an empty string", so the table always shows either a value somebody chose
+    /// or the default the code will use.
     /// </summary>
     public class IndexModel : PageModel
     {
@@ -49,8 +48,9 @@ namespace Techie.Pbx.Web.Pages.Settings
                 IsSet = stored != null,
                 Key = key,
 
-                // A secret is never rendered into the page, even into a password box (D68).
-                Value = SettingsKeys.IsSecret(key) ? "" : stored ?? "",
+                // The stored value is in the form, secret or not (D112): the table keeps its
+                // dots, the edit screen shows what is actually there.
+                Value = stored ?? "",
             });
         }
 
@@ -83,9 +83,8 @@ namespace Techie.Pbx.Web.Pages.Settings
         /// Stores one setting. Validation failures come back as the form again, with the reasons
         /// on it, which htmx swaps into the open modal.
         ///
-        /// Blank clears the setting rather than storing an empty string — except for a secret,
-        /// where blank means the box was simply left alone, because the stored one was never in
-        /// it to begin with (D68).
+        /// Blank clears the setting rather than storing an empty string — the stored value is in
+        /// the box to start with (D112), so clearing it is a deliberate act.
         /// </summary>
         public IActionResult OnPostSave(SettingForm form)
         {
@@ -94,15 +93,11 @@ namespace Techie.Pbx.Web.Pages.Settings
                 return this.NotFound();
 
             var value = Text(form.Value);
-            var isSecret = SettingsKeys.IsSecret(key);
 
             form.Descriptor = SettingsCatalog.For(key);
             form.IsSet = this.settings.Get(key) != null;
             form.Key = key;
-            form.Value = isSecret ? "" : value;
-
-            if (value.Length == 0 && isSecret)
-                return this.Unchanged($"{key} left as it was.");
+            form.Value = value;
 
             try
             {
@@ -160,22 +155,5 @@ namespace Techie.Pbx.Web.Pages.Settings
 
         /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
         private static string Text(string? value) => (value ?? "").Trim();
-
-        /// <summary>
-        /// The answer to a save that stored nothing — a secret's box left blank (D68). The table
-        /// still refreshes, but nothing changed, so there is nothing to apply and nothing to say
-        /// about phones.
-        /// </summary>
-        private IActionResult Unchanged(string message)
-        {
-            var events = new Dictionary<string, object?>
-            {
-                ["settingsChanged"] = null,
-                ["pbxToast"] = new { message },
-            };
-
-            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
-            return new StatusCodeResult(StatusCodes.Status204NoContent);
-        }
     }
 }

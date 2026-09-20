@@ -1,24 +1,9 @@
 // The extensions page. htmx and Bootstrap do the table, the form modal and the status badges
-// between them (D42); what is left here is the two password actions, which answer with data
-// rather than with a piece of the page.
+// between them (D42); what is left here is regenerating the password, which answers with data
+// rather than with a piece of the page. The password itself lives in the form (D112).
 
 window.pbxExtensions = (function () {
     'use strict';
-
-    function showPassword(title, result) {
-        Swal.fire({
-            icon: 'info',
-            title: title,
-            text: 'SIP password for extension ' + result.number + '. Put this into the phone.',
-            input: 'text',
-            inputValue: result.secret,
-            inputAttributes: { readonly: 'readonly', spellcheck: 'false' },
-            confirmButtonText: 'Done',
-
-            // These are opened from the edit modal now (D48); heightAuto would shift it.
-            heightAuto: false
-        });
-    }
 
     return {
         regenerateSecret: async function (extensionID, number) {
@@ -39,17 +24,10 @@ window.pbxExtensions = (function () {
             try {
                 const result = await pbx.send('POST', '/api/extensions/' + extensionID + '/secret');
 
-                // A password change is a config change: let the page catch up with the server.
+                // A password change is a config change: let the page catch up with the server,
+                // and put the new password into the open form, which is the only place it shows (D112).
                 htmx.trigger(document.body, 'extensionsChanged');
-                showPassword('New password', result);
-            } catch (error) {
-                pbx.failed(error);
-            }
-        },
-
-        showSecret: async function (extensionID) {
-            try {
-                showPassword('Password', await pbx.send('GET', '/api/extensions/' + extensionID + '/secret'));
+                document.getElementById('extension-secret').value = result.secret;
             } catch (error) {
                 pbx.failed(error);
             }

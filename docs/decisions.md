@@ -1608,3 +1608,21 @@ Everything per-extension about D110 is gone: `Extensions.MaxContacts` (added by 
 only minutes before, and already run on the lab VM) is dropped by schema `016`, which a fresh
 install runs 015+016 and ends with neither. Per-extension max contacts is a later piece if a
 site ever genuinely needs it.
+
+### D112. Secrets show in the edit form; the table keeps the dots (2026-09-19)
+User request after copying an extension password out of a sweetalert box proved painful.
+Supersedes D68's "a secret's value never reaches the page" for these two screens:
+
+- Extensions: the SIP password is a normal editable field in the edit modal, for new and
+  existing extensions alike. Blank on save keeps the current password; Regenerate still makes
+  a new one and drops it into the open form. The "show password" button and its API endpoint
+  are gone.
+- Settings: the edit form shows the stored value in the clear; the table still shows
+  SettingRow.Mask dots. Blank now clears to the default like every other setting — the value
+  is in the box, so clearing it is deliberate. The "show stored value" button, settings.js and
+  the settings secret API are gone.
+
+Tables still never carry a secret (SettingRow masks), phone config files still never carry one,
+and conf-file secrets are untouched. The threat model shifts from "never in the browser" to
+"behind the admin login" for these two admin-only forms, which is where it belongs for a PBX
+whose passwords have to be readable to be typed into a phone.

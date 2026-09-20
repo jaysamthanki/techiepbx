@@ -99,6 +99,6 @@
 <partial name="_FormModal" />
 
 @section Scripts {
-    @* The Settings edit form reused inside this page's modal needs its own show/hide glue (D88). *@
-    <script src="~/js/settings.js" asp-append-version="true"></script>
+    @* The settings edit form reused inside this page's modal carries everything it needs
+       inline now that secrets show in the clear (D112); no page-specific glue left. *@
 }

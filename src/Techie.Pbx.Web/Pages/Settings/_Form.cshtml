@@ -53,22 +53,18 @@
 
         @if (Model.Descriptor.IsSecret)
         {
-            <div class="input-group">
-                <input class="form-control font-monospace" id="setting-value" name="value" value="" type="password"
-                       maxlength="@SettingsValidation.MaxValueLength" autocomplete="new-password" spellcheck="false"
-                       placeholder="@(Model.IsSet ? "Leave blank to keep the stored value" : "")" />
-                @* Shows what is being typed, not what is stored: the stored one is not here. *@
-                <button type="button" class="btn btn-outline-secondary"
-                        onclick="pbxSettings.toggle('setting-value', this)">Show</button>
-            </div>
+            @* The stored value is right there in the box (D112); the table is where the dots live. *@
+            <input class="form-control font-monospace" id="setting-value" name="value" value="@Model.Value"
+                   maxlength="@SettingsValidation.MaxValueLength" autocomplete="off" spellcheck="false"
+                   placeholder="@Model.Descriptor.Placeholder" />
             <div class="form-text">
                 @if (Model.IsSet)
                 {
-                    <text>A value is stored. Typing here replaces it; leaving the box blank keeps it.</text>
+                    <text>The stored value. Typing replaces it; clearing it goes back to the default.</text>
                 }
                 else
                 {
-                    <text>Nothing is stored yet.</text>
+                    @defaultText
                 }
             </div>
         }
@@ -111,11 +107,6 @@
     *@
     <div class="modal-footer justify-content-between">
         <div class="d-flex gap-2">
-            @if (Model.IsSet && Model.Descriptor.IsSecret)
-            {
-                <button type="button" class="btn btn-outline-secondary"
-                        onclick="pbxSettings.showSecret('@Model.Key')">Show stored value</button>
-            }
             @if (Model.IsSet)
             {
                 <button type="button" class="btn btn-outline-danger"
