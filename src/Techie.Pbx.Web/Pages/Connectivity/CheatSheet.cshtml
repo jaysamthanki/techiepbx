@@ -1,0 +1,79 @@
+@page
+@model CheatSheetModel
+@{
+    ViewData["Title"] = "Cheat sheet";
+}
+
+@*
+    The printable sheet (D120). Everything here is rendered server side in one go — no htmx, no
+    polling, no table plugin — because a sheet that is about to become paper has nothing to
+    refresh. The print styling is two things and no more: Bootstrap's own d-print-none on the
+    button and on the layout's navbar and footer, and the @@media print block in site.css that
+    forces light colours so dark mode does not print white text on white paper.
+*@
+<div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+        <h1 class="h3 mb-1">Phone cheat sheet</h1>
+        <p class="text-body-secondary mb-0">@Model.SiteName &middot; @Model.PrintedOn</p>
+    </div>
+    <button type="button" class="btn btn-primary d-print-none" onclick="window.print()">Print</button>
+</div>
+
+<h2 class="h5 mt-4">Extensions</h2>
+@if (Model.Numbers.Count == 0)
+{
+    <p class="text-body-secondary">No extensions yet.</p>
+}
+else
+{
+    <table class="table table-sm table-bordered align-middle">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 6rem;">Number</th>
+                <th scope="col">Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var extension in Model.Numbers)
+            {
+                <tr>
+                    <td class="fw-bold">@extension.Number</td>
+                    <td>@extension.Name</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h2 class="h5 mt-4">Codes you can dial</h2>
+<table class="table table-sm table-bordered align-middle">
+    <thead>
+        <tr>
+            <th scope="col" style="width: 6rem;">Press</th>
+            <th scope="col" style="width: 14rem;">What it is</th>
+            <th scope="col">What happens</th>
+        </tr>
+    </thead>
+    <tbody>
+        @* Grouped in the order FeatureCodes.All builds them: what works mid-call first, then
+           what you dial instead of a call. A group with nothing in it never appears, because a
+           code that is switched off is never in the list to begin with. *@
+        @* "part" rather than "section" or "group": @@section is a Razor directive and would be
+           parsed as one here. *@
+        @foreach (var part in Model.Codes.GroupBy(c => c.Group))
+        {
+            <tr>
+                <th colspan="3" scope="colgroup">@part.Key</th>
+            </tr>
+
+            @foreach (var entry in part)
+            {
+                <tr>
+                    <td class="fw-bold">@entry.Code</td>
+                    <td>@entry.Name</td>
+                    <td>@entry.Description</td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>

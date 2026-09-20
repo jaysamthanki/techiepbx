@@ -38,6 +38,15 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>The DTMF a user presses to start an attended transfer (D119).</summary>
         public const string AttendedTransferCode = "*2";
 
+        /// <summary>
+        /// The DTMF a user presses to start a blind transfer. Written down here and <b>not</b>
+        /// written into the file: it is Asterisk's own built-in default for <c>blindxfer</c>, and
+        /// what turns it on is the <c>t</c>/<c>T</c> in every generated Dial (D119). It is a
+        /// constant so that the cheat sheet can print the code users actually have without
+        /// inventing it a second time (D120).
+        /// </summary>
+        public const string BlindTransferCode = "#";
+
         public static string Render() => Render(new ParkingSettings());
 
         public static string Render(ParkingSettings parking)

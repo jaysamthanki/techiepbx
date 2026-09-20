@@ -32,7 +32,9 @@
     <link rel="stylesheet" href="~/Techie.Pbx.Web.styles.css" asp-append-version="true" />
 </head>
 <body hx-headers='{"@Techie.Pbx.Web.Program.AntiforgeryHeaderName": "@requestToken"}'>
-    <header>
+    @* d-print-none: nothing in the navigation is any use on paper, and the cheat sheet (D120) is
+       printed often enough for that to matter on every page rather than just on that one. *@
+    <header class="d-print-none">
         @* bg-body-tertiary rather than bg-white, and no navbar-light: both of those pin the bar
            to the light palette instead of letting data-bs-theme decide. *@
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm bg-body-tertiary border-bottom box-shadow mb-3">
@@ -44,28 +46,21 @@
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
-                        @* First, because it is the home page: what this box is doing, and what it
-                           has to say about itself. *@
+                        @* Connectivity: the things a call arrives on or leaves by — the extension, the
+                           handset it rings and the trunk to the outside — as against Call Handling,
+                           which is what happens to a call once it is here (D120). *@
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Status</a>
+                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Connectivity</a>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" asp-area="" asp-page="/Status/Index">Status</a></li>
-                                <li><a class="dropdown-item" asp-area="" asp-page="/Status/Logs">Logs</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Extensions/Index">Extensions</a></li>
+                                @* Next to Extensions: a phone is the hardware an extension lives on. *@
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Phones/Index">Phones</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Trunks/Index">Trunks</a></li>
+                                @* Below the divider because it is not a thing to administer: it is
+                                   the printout of the three above, for people who never log in (D120). *@
+                                <li><hr class="dropdown-divider" /></li>
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Connectivity/CheatSheet">Cheat Sheet</a></li>
                             </ul>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-body" asp-area="" asp-page="/Extensions/Index">Extensions</a>
-                        </li>
-                        @* Next to Extensions: a phone is the hardware an extension lives on. *@
-                        <li class="nav-item">
-                            <a class="nav-link text-body" asp-area="" asp-page="/Phones/Index">Phones</a>
-                        </li>
-                        @* After Phones: certificates are part of how this box presents itself, not call handling. *@
-                        <li class="nav-item">
-                            <a class="nav-link text-body" asp-area="" asp-page="/Certificates/Index">Certificates</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-body" asp-area="" asp-page="/Trunks/Index">Trunks</a>
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Call Handling</a>
@@ -90,8 +85,21 @@
                                 @* The page file is SystemSettings.cshtml; its route is /Settings/System. *@
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/SystemSettings">System</a></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Sip">SIP settings</a></li>
+                                @* Certificates are part of how this box presents itself rather than
+                                   something a call touches, so they sit with the settings (D120).
+                                   Only the menu placement moved; the page is still /Certificates. *@
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Certificates/Index">Certificates</a></li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">All Settings</a></li>
+                            </ul>
+                        </li>
+                        @* Last, and still the home page the logo leads to: what this box is doing
+                           right now is where you go when something is wrong, not where you start. *@
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Status</a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Status/Index">Status</a></li>
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Status/Logs">Logs</a></li>
                             </ul>
                         </li>
                     </ul>
@@ -142,7 +150,7 @@
     @{
         var signedInAs = Techie.Pbx.Web.Security.SignedInUser.DisplayName(User);
     }
-    <footer class="border-top footer text-body-secondary">
+    <footer class="border-top footer text-body-secondary d-print-none">
         <div class="container">
             @(DateTime.Today.Year) (C) Techie Networks Inc - Techie PBX
             @if (signedInAs.Length > 0)

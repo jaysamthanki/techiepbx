@@ -80,3 +80,64 @@ textarea::placeholder {
 [data-bs-theme="dark"] .bootstrap-table .fixed-table-container .fixed-table-body .fixed-table-loading .loading-wrap .animation-wrap::before {
   background: var(--bs-body-color);
 }
+
+/* Printing (D120). The cheat sheet is the page this exists for, but none of it is specific to
+   that page: the navbar and the footer carry d-print-none in the layout, and what is left is
+   making paper look like paper whichever theme the browser is in.
+
+   Dark mode is the part that actually matters. Browsers drop background colours when printing
+   but keep foreground ones, so a dark page prints near-white text on white paper — unreadable.
+   Rather than fight that rule by rule, the handful of Bootstrap variables that decide text and
+   borders are pushed back to their light values for the duration of the print. */
+@page {
+  margin: 15mm;
+}
+
+@media print {
+  html {
+    font-size: 11pt;
+  }
+
+  /* No fixed footer to leave room for, and the container's gutters are the page margin's job. */
+  body {
+    margin-bottom: 0;
+  }
+
+  .container {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+    width: 100%;
+  }
+
+  [data-bs-theme="dark"] {
+    --bs-body-bg: #fff;
+    --bs-body-color: #000;
+    --bs-border-color: #666;
+    --bs-emphasis-color: #000;
+    --bs-heading-color: #000;
+    --bs-secondary-color: #333;
+    --bs-table-bg: transparent;
+    --bs-table-border-color: #666;
+    --bs-table-color: #000;
+    --bs-tertiary-color: #333;
+  }
+
+  [data-bs-theme="dark"] body {
+    background-color: #fff;
+    color: #000;
+  }
+
+  /* Bootstrap's table borders are drawn from a variable the theme sets; state it once here so a
+     printed table has lines round it whatever the screen was showing. */
+  .table,
+  .table > :not(caption) > * > * {
+    border-color: #666;
+    color: #000;
+  }
+
+  /* A table split across a page break loses its heading row, so keep rows whole at least. */
+  tr {
+    page-break-inside: avoid;
+  }
+}

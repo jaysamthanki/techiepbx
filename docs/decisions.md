@@ -1866,3 +1866,58 @@ buttons were already covered by `tT` and `allow_transfer`). The installer also d
 free-licensed asterisk-moh-opsound tracks into `/var/lib/asterisk/moh`, so Parking.Audio = moh
 has something to play before the admin uploads anything — the class scans the directory, so the
 files need no database row.
+
+### D120. "Connectivity" in the navbar, and a printable cheat sheet under it (2026-09-20)
+
+**The top level of the navbar is now four menus: Connectivity, Call Handling, Settings, Status.**
+Extensions, Phones and Trunks used to sit flat beside the two dropdowns, which made the bar a
+mixture of things you click and things that open — and gave no answer to where a new page of that
+kind would go. The word is the user's: **Connectivity** is what a call arrives on or leaves by —
+the extension, the handset it rings, the trunk to the outside — as against **Call Handling**,
+which is what happens to a call once it is here. The two dropdowns now divide on a line an admin
+can state, and nothing had to move on disk to do it.
+
+**Certificates moved into Settings**, as a menu item only; the page is still `/Certificates`. A
+certificate is part of how the box presents itself, not part of a call, and it is touched roughly
+as often as the other settings pages are.
+
+**Status is last.** It is still the home page and still what the logo leads to (D106); it is where
+you go when something is wrong, which is not where a menu bar should start.
+
+**The cheat sheet is `/Connectivity/CheatSheet`**, at the bottom of that menu under a divider. It
+is the one page here written for somebody who will never log in: the extension list and the codes
+a handset can dial, printed and pinned up next to the phones. It sits under Connectivity rather
+than in Status or a menu of its own because it is the printout of the three pages above it — the
+divider says it is not another thing to administer.
+
+- **No new schema, no new settings, no new permission.** The page is read-only and any signed-in
+  user can open it. Everything on it is either a row that already exists or a code derived from
+  what the renderers generate. No secrets: the extension list is projected into a two-field row
+  type rather than handed the `Extension` model, which carries SIP passwords and voicemail PINs.
+- **The codes come from `FeatureCodes.All(parking, voicemailInUse)`**, a pure static function in
+  `Techie.Pbx.Asterisk.Config`, spelled from the same constants the renderers write: `*2` and `#`
+  from `FeaturesConfRenderer`, `*43` and `*97` from `ExtensionsConfRenderer`, the park code and
+  the slot range from `ParkingSettings`. A conditional code is printed only when it is really
+  generated — no park code and no retrieval slots with parking off, no `*97` when nobody has a
+  mailbox — and a test renders both files and asserts that every code on the sheet is in them, so
+  the printout cannot drift away from the dialplan. Unlike a renderer it does not validate what it
+  is given: nothing here is written to a conf file, and one bad settings row must not be able to
+  take a read-only page down.
+- **`#` is printed even though we never write it.** It is Asterisk's own default for `blindxfer`
+  and the `t`/`T` in every generated `Dial` turns it on (D119). It is real, and it is easy to
+  press by accident, which is its own reason for saying so on the wall.
+- **The slots are one row, not nine.** They are consecutive single digits by construction, and the
+  row carries the thing that is otherwise a support call: a slot number is one digit, so press
+  dial or `#` straight after it rather than waiting for the phone to decide you have finished.
+- **Printing is Bootstrap's `d-print-none` plus one `@media print` block in `site.css`.** The
+  layout's navbar and footer carry the class, so nothing but the sheet prints, on this page and on
+  every other. The block is not page-specific either: it sets a 15mm `@page` margin and — the part
+  that matters — pushes the handful of Bootstrap variables that decide text and border colour back
+  to their light values, because browsers drop background colours when printing but keep
+  foreground ones, so a dark-mode page would otherwise print near-white text on white paper.
+- **One column, `table-sm`, no page-splitting cleverness.** Two columns would hold more, but the
+  grid's breakpoints are not reliable in print; a single compact column fits a small office on one
+  sheet and is the same on paper as it is on screen.
+- **Ring group, announcement, IVR and time-condition numbers are deliberately not on it.** They
+  are dialable, but they are not what a wall sheet is for, and the page has to stay one page. Ask
+  before adding them.
