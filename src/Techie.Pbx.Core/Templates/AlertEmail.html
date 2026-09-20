@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>{{Subject}}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f4f5f7; font-family:'Segoe UI', Helvetica, Arial, sans-serif; color:#212529;">
+
+    <!-- Outer wrapper: centers the card on desktop, goes edge-to-edge on phones -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7; padding:24px 12px;">
+        <tr>
+            <td align="center">
+
+                <!-- The card. Fixed width with max-width so it never explodes on Outlook desktop -->
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+                       style="width:600px; max-width:100%; background-color:#ffffff; border-radius:8px; border:1px solid #dee2e6; overflow:hidden;">
+
+                    <!-- Header band -->
+                    <tr>
+                        <td style="background-color:#1f2937; padding:20px 28px;">
+                            <span style="font-size:18px; font-weight:600; color:#ffffff; letter-spacing:0.3px;">
+                                Techie PBX
+                            </span>
+                            <span style="font-size:12px; color:#9ca3af; float:right; padding-top:5px;">
+                                {{Hostname}}
+                            </span>
+                        </td>
+                    </tr>
+
+                    <!-- Title row: the alert's severity shows as a 4px bar on the left of the heading -->
+                    <tr>
+                        <td style="padding:24px 28px 0 28px; border-left:4px solid {{AccentColor}};">
+                            <h1 style="margin:0 0 4px 0; font-size:17px; font-weight:600; line-height:1.4; color:#111827;">
+                                {{Subject}}
+                            </h1>
+                            <p style="margin:0; font-size:12px; color:#6b7280;">
+                                {{Timestamp}}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Body: plain paragraphs. Inline styles only; no classes, no CSS in <head> (email clients strip them) -->
+                    <tr>
+                        <td style="padding:16px 28px 8px 28px; font-size:14px; line-height:1.65; color:#374151;">
+                            {{Body}}
+                        </td>
+                    </tr>
+
+                    <!-- Optional detail table (key/value pairs). {{DetailRows}} emits <tr>s; the whole block is dropped when empty. -->
+                    {{DetailBlockStart}}
+                    <tr>
+                        <td style="padding:8px 28px 4px 28px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                                   style="border-collapse:collapse; font-size:13px;">
+                                {{DetailRows}}
+                            </table>
+                        </td>
+                    </tr>
+                    {{DetailBlockEnd}}
+
+                    <!-- Optional call-to-action button. {{ButtonBlockStart}}..End dropped when empty. -->
+                    {{ButtonBlockStart}}
+                    <tr>
+                        <td style="padding:16px 28px 8px 28px;" align="left">
+                            <a href="{{ButtonUrl}}"
+                               style="display:inline-block; padding:10px 22px; background-color:{{AccentColor}}; color:#ffffff; font-size:14px; font-weight:600; text-decoration:none; border-radius:6px;">
+                                {{ButtonText}}
+                            </a>
+                        </td>
+                    </tr>
+                    {{ButtonBlockEnd}}
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding:20px 28px; border-top:1px solid #e5e7eb;">
+                            <p style="margin:0; font-size:12px; color:#9ca3af; line-height:1.5;">
+                                {{Hostname}} &mdash; sent automatically by Techie PBX.<br />
+                                This is the address system alerts are delivered to; replies are not monitored.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

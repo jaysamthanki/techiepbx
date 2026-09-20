@@ -1647,3 +1647,19 @@ direction: gray-400 on light, gray-600 on dark, so a hint never reads as a typed
 Two libraries needed help. sweetalert2 has themes of its own and follows the operating system by
 default, which is not the same answer as the button, so it is re-mixed with `theme` on each
 toggle; bootstrap-table 1.24 paints its loading overlay white, which one rule in site.css covers.
+
+### D114. Email alert template as an embedded resource (2026-09-19)
+A single generic HTML template, Templates/AlertEmail.html in Techie.Pbx.Core, embedded as
+`templates/AlertEmail.html` alongside the schema scripts' `schema/NNN_name.sql` — so it
+publishes with the build and needs nothing from disk at runtime.
+
+Email-client HTML rules it follows: inline styles only (head CSS is stripped by clients),
+table-based layout, fixed 600px card with max-width for phones, no external images, and a
+plain wrapper background so it renders sanely in dark-mode clients too.
+
+Placeholders are `{{Subject}}`, `{{Timestamp}}`, `{{Body}}`, `{{Hostname}}`,
+`{{AccentColor}}` (severity color for the title bar and button), plus two optional
+drop-blocks: `{{DetailBlockStart}}..{{DetailBlockEnd}}` (key/value table rows via
+`{{DetailRows}}`) and `{{ButtonBlockStart}}..{{ButtonBlockEnd}}` (CTA via `{{ButtonUrl}}` /
+`{{ButtonText}}`). The mail sender removes whole blocks when empty. Tests pin the resource
+and its placeholders.

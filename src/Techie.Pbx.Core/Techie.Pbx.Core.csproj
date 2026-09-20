@@ -9,6 +9,7 @@
   <ItemGroup>
     <None Include="scripts\**" />
     <EmbeddedResource Include="Data\Schema\*.sql" LogicalName="schema/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Templates\*.html" LogicalName="templates/%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
