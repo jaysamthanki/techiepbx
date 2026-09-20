@@ -43,14 +43,10 @@ namespace Techie.Pbx.Asterisk.Config
             // "default" without being asked.
             sb.Append("preferchannelclass = no\n");
 
-            if (tracks.Count == 0)
-            {
-                sb.Append('\n');
-                sb.Append("; No music on hold has been uploaded, so no class is defined. A parked caller\n");
-                sb.Append("; hears silence whatever the parking audio setting says (D119).\n");
-                return sb.ToString();
-            }
-
+            // The class exists even with no uploaded tracks: mode = files scans the directory, so
+            // music the installer dropped there (the opsound set, D119) plays without a database
+            // row, and an empty directory is simply nothing to play — the same silence as no
+            // class at all.
             sb.Append('\n');
             sb.Append($"[{ClassName}]\n");
             sb.Append("mode = files\n");
@@ -60,13 +56,16 @@ namespace Techie.Pbx.Asterisk.Config
             // rather than in whatever order the file system hands the directory over in.
             sb.Append("sort = alpha\n");
 
-            sb.Append('\n');
-            sb.Append("; The tracks the database expects to find in that directory, in the order they\n");
-            sb.Append("; will play. Asterisk reads the directory itself: this list is here to be read\n");
-            sb.Append("; next to it, not obeyed.\n");
+            if (tracks.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append("; The tracks the database expects to find in that directory, in the order they\n");
+                sb.Append("; will play. Asterisk reads the directory itself: this list is here to be read\n");
+                sb.Append("; next to it, not obeyed.\n");
 
-            foreach (var track in tracks)
-                sb.Append($"; {ConfText.Safe(track.File, "music on hold file")} - {ConfText.Safe(track.Name, "music on hold name")}\n");
+                foreach (var track in tracks)
+                    sb.Append($"; {ConfText.Safe(track.File, "music on hold file")} - {ConfText.Safe(track.Name, "music on hold name")}\n");
+            }
 
             return sb.ToString();
         }
