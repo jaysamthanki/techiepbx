@@ -4,7 +4,7 @@ namespace Techie.Pbx.Web.Pages.Settings
 {
     /// <summary>
     /// What the System page's Main tab shows: the settings that say what this server calls itself,
-    /// and the ports it is answering on (D115).
+    /// whether it keeps a web request log (D116), and the ports it is answering on (D115).
     ///
     /// The ports are shown and not edited, because they are not a setting: <see cref="WebBindings"/>
     /// decides them from whether there is a usable certificate, and 80 has to stay open for ACME

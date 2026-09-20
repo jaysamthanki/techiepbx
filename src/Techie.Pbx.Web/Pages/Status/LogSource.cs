@@ -14,6 +14,13 @@ namespace Techie.Pbx.Web.Pages.Status
         public string Name { get; set; } = "";
 
         /// <summary>
+        /// What the page says when <see cref="Resolve"/> finds no file at all. Per source, because
+        /// "there is nothing to read" means something different for each one and the useful part is
+        /// always the reason: an app log with no file appender, a request log that is switched off.
+        /// </summary>
+        public string NoFileMessage { get; set; } = "There is no file to read for this log.";
+
+        /// <summary>
         /// The file this source reads today, worked out at request time from the current settings
         /// — never stored, so a directory changed on the settings page takes effect on the very
         /// next request. Null means there is nothing to read yet, such as no file appender

@@ -2,11 +2,13 @@ using System.Security.Cryptography.X509Certificates;
 using log4net;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Diagnostics;
 using Techie.Pbx.Core.Security;
 using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
@@ -47,6 +49,13 @@ namespace Techie.Pbx.Web
             // Before anything else now: which ports this app listens on is a question only the
             // database can answer, because the certificate lives there (D97, D99).
             PbxDatabase.Open(DatabasePath(builder.Environment, builder.Configuration));
+
+            // Whether there is a web request log, and where it goes, is the other question only the
+            // database can answer before the pipeline is built (D116).
+            PbxRequestLog.Open(builder.Environment.ContentRootPath, new SettingsRepository(PbxDatabase.Current).GetAll());
+
+            if (PbxRequestLog.Enabled)
+                builder.Services.AddW3CLogging(RequestLogOptions);
 
             var (certificate, chain) = ServerCertificate();
             var bindings = WebBindings.For(certificate != null);
@@ -128,6 +137,15 @@ namespace Techie.Pbx.Web
 
             var app = builder.Build();
 
+            // First in the pipeline, so exactly one line is written for every request whatever
+            // becomes of it further in: the HTTPS redirect, a 401 from Entra, an unhandled
+            // exception the error page turns into a 500. It wraps authentication rather than
+            // sitting behind it, which is the whole point for provisioning — a phone has no
+            // session, and "did the phone even reach us, and what did we answer" is the question
+            // this log exists to answer (D116).
+            if (PbxRequestLog.Enabled)
+                app.UseW3CLogging();
+
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Error");
@@ -170,6 +188,13 @@ namespace Techie.Pbx.Web
                 else
                     Log.Warn($"Local sign-in bypass is ENABLED: requests from {bypass.AllowedNetworks} are admins without signing in");
             }
+
+            // Names a provisioning request after the Basic username it carried, for the request
+            // log's benefit only — after authentication, because that middleware replaces the user
+            // whenever a scheme returns one, and before authorization, which is untouched by an
+            // identity that is not authenticated (D116).
+            if (PbxRequestLog.Enabled)
+                app.UseMiddleware<RequestLogUserMiddleware>();
 
             app.UseAuthorization();
 
@@ -231,6 +256,42 @@ namespace Techie.Pbx.Web
 
             if (chain.Count > 0)
                 https.ServerCertificateChain = chain;
+        }
+
+        /// <summary>
+        /// What the W3C request log records, and how it rolls (D116). The columns are as close to
+        /// an Apache combined log as this logger goes: the time, who asked, which port they asked
+        /// on, what they asked for, what they got, how long it took, and the two headers that say
+        /// which client it was and where it came from.
+        ///
+        /// Two deliberate absences. <c>cs(Cookie)</c> is not logged, because our cookie is the Entra
+        /// session itself and a log full of session cookies is a log full of credentials. And there
+        /// is no <c>sc-bytes</c>: ASP.NET Core's W3C logger has no bytes-sent field at all, so it is
+        /// the one Apache column that cannot be had here.
+        /// </summary>
+        private static void RequestLogOptions(W3CLoggerOptions options)
+        {
+            options.LoggingFields =
+                W3CLoggingFields.Date |
+                W3CLoggingFields.Time |
+                W3CLoggingFields.ClientIpAddress |
+                W3CLoggingFields.UserName |
+                W3CLoggingFields.ServerPort |
+                W3CLoggingFields.Method |
+                W3CLoggingFields.UriStem |
+                W3CLoggingFields.UriQuery |
+                W3CLoggingFields.ProtocolStatus |
+                W3CLoggingFields.TimeTaken |
+                W3CLoggingFields.ProtocolVersion |
+                W3CLoggingFields.Host |
+                W3CLoggingFields.UserAgent |
+                W3CLoggingFields.Referer;
+
+            options.FileName = RequestLog.FileNamePrefix;
+            options.FileSizeLimit = RequestLog.FileSizeLimitBytes;
+            options.FlushInterval = TimeSpan.FromSeconds(RequestLog.FlushSeconds);
+            options.LogDirectory = PbxRequestLog.DirectoryPath;
+            options.RetainedFileCountLimit = RequestLog.RetainedFileCount;
         }
 
         /// <summary>

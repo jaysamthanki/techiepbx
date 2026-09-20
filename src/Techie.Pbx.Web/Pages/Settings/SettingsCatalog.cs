@@ -233,6 +233,17 @@ namespace Techie.Pbx.Web.Pages.Settings
                 Key = SettingsKeys.SystemTimezone,
                 Sample = "Europe/London",
             },
+            new SettingDescriptor
+            {
+                Choices = Toggles.All,
+                Default = Toggles.On,
+                Description = "Whether every web request is written to the request log: one line each with the time, " +
+                    "the caller's address, the port, the path, the status and how long it took. It is how you tell " +
+                    "whether a desk phone reached this server at all, and what it was answered with. Read it on the " +
+                    "Logs page. This one is read when the service starts, so restart tnpbx-web after changing it.",
+                Key = SettingsKeys.WebRequestLog,
+                Sample = Toggles.On,
+            },
         }.ToDictionary(descriptor => descriptor.Key, StringComparer.Ordinal);
 
         /// <summary>Every known key, in the order the page lists them.</summary>

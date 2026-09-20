@@ -7,7 +7,7 @@ using Techie.Pbx.Core.Diagnostics;
 namespace Techie.Pbx.Web.Pages.Status
 {
     /// <summary>
-    /// The Logs page: a read-only tail of one of the three named logs in <see cref="LogSources"/>.
+    /// The Logs page: a read-only tail of one of the named logs in <see cref="LogSources"/>.
     /// The browser only ever posts a name from that list, never a path — <see cref="OnGetLines"/>
     /// is the only place a name turns into a file, and a name that is not on the list is a 400,
     /// never a guess at a path.

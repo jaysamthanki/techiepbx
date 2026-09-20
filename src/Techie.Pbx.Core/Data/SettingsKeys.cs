@@ -188,6 +188,14 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         public const string MailSmtpPassword = "Mail.Smtp.Password";
 
+        /// <summary>
+        /// Whether Kestrel writes the W3C request log — one line per web request, with the client
+        /// address, what it asked for and what it got (D116). A <see cref="Models.Toggles"/> value,
+        /// read once at startup: the logger is built into the request pipeline or left out of it,
+        /// so a change to this needs the service restarted.
+        /// </summary>
+        public const string WebRequestLog = "Web.RequestLog";
+
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
             AsteriskConfDirectory,
@@ -223,6 +231,7 @@ namespace Techie.Pbx.Core.Data
             SystemNtpServer,
             SystemHostname,
             SystemTimezone,
+            WebRequestLog,
         };
 
         private static readonly HashSet<string> SecretKeys = new(StringComparer.Ordinal)
@@ -312,6 +321,11 @@ namespace Techie.Pbx.Core.Data
             // Read by both: every GotoIfTime in the generated dialplan names the zone (D74), and a
             // Polycom phone is given its offset. Asterisk wins, because that half needs an apply.
             [SystemTimezone] = SettingScope.Asterisk,
+
+            // Kestrel's own request log, which nothing outside this process reads or is told about
+            // (D116). Not an apply — but not "takes effect straight away" either, which is why the
+            // catalog's description says out loud that the service has to be restarted.
+            [WebRequestLog] = SettingScope.App,
         };
 
         public static IReadOnlyCollection<string> All => KnownKeys;

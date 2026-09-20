@@ -1713,3 +1713,68 @@ so nothing was duplicated. The **listening ports are shown read-only**, because 
 setting and never were: `WebBindings` derives them from whether there is a usable certificate, 80
 has to stay open for ACME and 8080 is the way back in (D99). An editable "listening port" box would
 be a lie, because nothing reads one. Changing them stays a code change with a decision behind it.
+
+### D116. A W3C web request log, for debugging phone provisioning (2026-09-19)
+When a desk phone does not come up, the first question is not an Asterisk question: **did the phone
+even reach us, on what path, and what did we answer?** The app log answers that only for requests
+that got far enough into a controller to log something — a phone that never arrived, or that was
+turned away by the HTTPS redirect, or that asked for a file name we do not generate, leaves either
+nothing or one line with no context around it. So Kestrel keeps a request log of its own.
+
+**W3CLogger, from `Microsoft.AspNetCore.HttpLogging`** (`AddW3CLogging` / `UseW3CLogging`). It is in
+the shared framework, so there is no new package — which is most of the reason to prefer it to
+writing our own middleware. Fields chosen to be as near an Apache combined log as it goes: `date`,
+`time`, `c-ip`, `cs-username`, `s-port`, `cs-method`, `cs-uri-stem`, `cs-uri-query`, `sc-status`,
+`time-taken`, `cs-version`, `cs-host`, `cs(User-Agent)`, `cs(Referer)`.
+
+Two deliberate differences from combined:
+
+- **No `sc-bytes`.** ASP.NET Core's W3C logger has no bytes-sent field at all. It is the one column
+  that cannot be had without writing the middleware ourselves, and response size is not a question
+  this log exists to answer.
+- **No `cs(Cookie)`**, which the logger does offer. Our cookie *is* the Entra session, so a log of
+  cookies is a log of credentials (security.md: never log secrets). `s-port` is logged instead, and
+  earns its place here: it says whether a phone arrived on 80, 443 or 8080.
+
+**Where it goes: `logs/requests/` inside the install**, beside log4net's own `logs/tnpbx-web.log`.
+Not `/var/log` — the hardened unit runs `ProtectSystem=strict` with
+`ReadWritePaths=/opt/tnpbx /etc/asterisk …`, so `/var/log` is read-only to this process and is not
+ours anyway. **No change to `app-deploy.sh` is needed**: `/opt/tnpbx` is already writable, and the
+logs are wiped by a re-deploy exactly as the application log is (only `appsettings.json` and `Data/`
+survive, D95). Ten files of ten megabytes is the ceiling; the logger starts a new file each day and
+whenever the current one fills.
+
+**It is first in the pipeline**, before the exception handler and the HTTPS redirect, so one line is
+written for every request whatever becomes of it — a 307 to HTTPS, a 401 from Entra, a 500 the error
+page produced. That also means it **wraps authentication rather than sitting behind it**, which is
+the whole point for provisioning: `/polycom` and `/yealink` are `[AllowAnonymous]` and a phone has no
+session, so a log that lived behind the cookie would be blind to exactly the traffic this is for.
+
+**`cs-username` for phones.** Provisioning Basic credentials are checked inside the controllers, not
+by an authentication handler, so nothing would otherwise name those requests.
+`RequestLogUserMiddleware` reads the username half of the Basic header — never the password — and
+puts it on `HttpContext.User` for the two provisioning paths only. The identity is built **with no
+authentication type**, so `IsAuthenticated` stays false: it is a label on a log line and can never
+stand in for signing in, and the controllers still do the real check themselves. It runs after
+`UseAuthentication` (which replaces the user whenever a scheme returns one) and before
+`UseAuthorization` (which ignores an unauthenticated identity).
+
+**On or off: the `Web.RequestLog` setting**, `SettingScope.App`, on by default. On by default because
+a request log is only worth having if it was already running when the thing you are trying to explain
+happened — a phone that failed at 3am cannot be asked to fail again. It is read **once, at startup**:
+the logger is middleware, so off means it is never added to the pipeline rather than added and asked
+to do nothing. **Changing it needs `systemctl restart tnpbx-web`**, and the setting's own description,
+the System page's section and the Logs page all say so. The scope stays `App` rather than `Asterisk`
+because no generated conf file carries it and an apply would write nothing.
+
+This is the first **toggle** setting, so `Toggles` (`on` / `off`) joins `MailTransports` and
+`AcmeServers` as a fixed list of values a key may hold — which means the settings form already knows
+how to render it, as a dropdown rather than a new kind of control (D75). Blank still means "not set",
+which for this key means the default: on.
+
+**Reading it: the Logs page**, as a fourth source in the same fixed allowlist (D106, D107) — the
+browser still posts a name, never a path, and `LogSources` is still the only place a name turns into
+a file. The one new wrinkle is that W3CLogger names its own files (`tnpbx-requests-<date>.<n>.txt`),
+so the source resolves to the most recently written file with that prefix rather than to a fixed
+name. Only the newest one, the same bargain the application log makes: the page tails what is being
+written now, and anything older is on the box for whoever wants to go and look.

@@ -72,6 +72,14 @@ namespace Techie.Pbx.Web.Pages.Settings
                     Rows = Rows(stored, SettingsKeys.SystemHostname, SettingsKeys.SystemTimezone),
                     Title = "Identity",
                 },
+                new()
+                {
+                    Help = "The web request log, read on the Logs page under Status. It is the way to tell whether a " +
+                        "desk phone reached this server at all, so it is on by default. This one is read when the " +
+                        "service starts: restart tnpbx-web after changing it (D116).",
+                    Rows = Rows(stored, SettingsKeys.WebRequestLog),
+                    Title = "Request log",
+                },
             };
 
             // The ports actually in force, which is the rule Program.cs ran at startup against the

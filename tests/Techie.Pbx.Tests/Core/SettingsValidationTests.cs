@@ -54,6 +54,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.MailSmtpPort)]
         [InlineData(SettingsKeys.MailSmtpUsername)]
         [InlineData(SettingsKeys.MailSmtpPassword)]
+        [InlineData(SettingsKeys.WebRequestLog)]
         public void A_blank_value_is_always_allowed(string key)
         {
             Assert.Empty(SettingsValidation.Errors(key, ""));
@@ -305,6 +306,28 @@ namespace Techie.Pbx.Tests.Core
         public void A_mail_transport_this_system_cannot_send_with_is_rejected(string value)
         {
             Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailTransport, value), e => e.Contains("mail transport must be"));
+        }
+
+        /// <summary>
+        /// The request log is a toggle (D116), so only the two words a toggle may be. Blank is
+        /// covered by the blank-is-always-allowed theory above, and means the default, which is on.
+        /// </summary>
+        [Theory]
+        [InlineData("on")]
+        [InlineData("off")]
+        public void A_request_log_toggle_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.WebRequestLog, value));
+        }
+
+        [Theory]
+        [InlineData("true")]
+        [InlineData("On")]
+        [InlineData("1")]
+        [InlineData("yes please")]
+        public void Anything_that_is_not_a_toggle_is_rejected_for_the_request_log(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.WebRequestLog, value), e => e.Contains("request log setting must be"));
         }
 
         [Theory]

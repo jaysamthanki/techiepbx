@@ -58,6 +58,11 @@ software.
   without look-alike characters.
 - Never log secrets. Never put real credentials in the repo, docs, tests or commit messages.
   Tests use obviously fake values.
+- The W3C web request log (D116) records the client address, the path, the status and the
+  User-Agent of every request. It deliberately does **not** record `cs(Cookie)`, because our cookie
+  is the Entra session itself, and it never sees the `Authorization` header: the provisioning
+  username reaches `cs-username` through `RequestLogUserMiddleware`, which reads the username half
+  of a Basic header and discards the password without looking at it.
 
 ## Known gaps
 

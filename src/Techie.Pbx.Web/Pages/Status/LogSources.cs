@@ -8,8 +8,9 @@ namespace Techie.Pbx.Web.Pages.Status
 {
     /// <summary>
     /// Exactly the logs the Logs page is allowed to show. The browser never sends a path — only
-    /// one of these three <see cref="LogSource.Name"/>s — and <see cref="Find"/> is the only way
-    /// a name turns into a file, so there is nowhere for a path to sneak in from the request.
+    /// one of these <see cref="LogSource.Name"/>s — and <see cref="Find"/> is the only way a name
+    /// turns into a file, so there is nowhere for a path to sneak in from the request. Adding a
+    /// source means adding an entry here, which is the point: the list is the allowlist.
     /// </summary>
     public static class LogSources
     {
@@ -32,7 +33,17 @@ namespace Techie.Pbx.Web.Pages.Status
             {
                 Name = "app",
                 Label = "TNPBX application",
+                NoFileMessage = "The application is not logging to a file.",
                 Resolve = _ => AppLogFile(),
+            },
+            new LogSource
+            {
+                Name = "requests",
+                Label = "Web requests (W3C)",
+                NoFileMessage = "There is no request log. It is written only while the " +
+                    SettingsKeys.WebRequestLog + " setting is on, and that setting is read when the " +
+                    "service starts — so turn it on, then restart tnpbx-web.",
+                Resolve = _ => PbxRequestLog.Newest(),
             },
         };
 

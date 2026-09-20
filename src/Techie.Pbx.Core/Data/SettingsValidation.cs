@@ -203,6 +203,11 @@ namespace Techie.Pbx.Core.Data
                 case SettingsKeys.SystemTimezone:
                     Timezone(errors, text);
                     break;
+
+                case SettingsKeys.WebRequestLog:
+                    if (!Toggles.IsKnown(text))
+                        errors.Add($"The request log setting must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is on.");
+                    break;
             }
 
             return errors;

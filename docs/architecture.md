@@ -162,7 +162,8 @@ The status page (`/`, `Pages/Status`) is the same shape on two clocks: `?handler
 Asterisk every five seconds over one AMI session for the health tiles and the calls in progress,
 and `?handler=Attention` reads the database on load and on `configChanged` / `configApplied` for
 the findings (`AttentionRules`, a pure function in the Asterisk project) and the counts.
-`/Status/Logs` tails one of three named log files, chosen by name and never by path (D106, D107).
+`/Status/Logs` tails one of four named logs — `messages.log`, `security.log`, the application log
+and the W3C web request log — chosen by name and never by path (D106, D107, D116).
 
 The database itself is opened once at startup by `PbxDatabase` and read from `Database:Path`
 (default `/var/lib/tnpbx/tnpbx.db`); pages and controllers construct their repositories over it
@@ -182,3 +183,18 @@ with `new` rather than taking them from the container (D22).
 log4net everywhere. The Web project bridges ASP.NET Core's logging into log4net
 (`Microsoft.Extensions.Logging.Log4Net.AspNetCore`) and has console + rolling file appenders.
 The Helper logs to the console only, which systemd sends to the journal.
+
+One exception, and it is a different kind of log: **the web request log** (D116). Kestrel writes it
+directly, in W3C format, through `Microsoft.AspNetCore.HttpLogging`'s `W3CLogger` — one line per
+request rather than one line per thing our code decided to say, which is what makes it useful for
+phone provisioning, where the interesting requests never reach our code at all. It is first in the
+pipeline, so it wraps authentication and records anonymous provisioning fetches too.
+
+| | Where | Written by | Switched by |
+|---|---|---|---|
+| Application log | `logs/tnpbx-web.log` | log4net (`log4net.config`) | always on |
+| Web request log | `logs/requests/tnpbx-requests-*.txt` | Kestrel's `W3CLogger` | `Web.RequestLog`, read at startup |
+
+Both live inside the install (`/opt/tnpbx`), which is the only place the hardened unit grants write
+access to — never `/var/log`, which `ProtectSystem=strict` makes read-only to this process. Both are
+therefore cleared by a re-deploy, which keeps only `appsettings.json` and `Data/` (D95).

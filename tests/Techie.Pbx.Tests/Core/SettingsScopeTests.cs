@@ -94,6 +94,12 @@ namespace Techie.Pbx.Tests.Core
         /// its own mail, and voicemail-to-email remains Asterisk's own job through a local MTA —
         /// <c>VoicemailConfRenderer</c> still writes no <c>serveremail</c>, so no generated conf
         /// file carries any of these and there is nothing an apply would write.
+        ///
+        /// <c>Web.RequestLog</c> is here too (D116): it switches on Kestrel's own request log, which
+        /// nothing outside this process reads. It is the one App key that does not take effect
+        /// straight away — the logger is middleware, so it is read when the service starts — and
+        /// the scope is still App, because the alternative would be lighting the apply button for
+        /// an apply that writes no file.
         /// </summary>
         [Fact]
         public void The_app_scope_is_the_keys_nothing_outside_this_process_reads()
@@ -113,6 +119,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.MailSmtpPort,
                     SettingsKeys.MailSmtpUsername,
                     SettingsKeys.MailTransport,
+                    SettingsKeys.WebRequestLog,
                 },
                 KeysIn(SettingScope.App));
         }
@@ -134,6 +141,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.AmiTimeoutSeconds, SettingScope.App)]
         [InlineData(SettingsKeys.AsteriskLogDirectory, SettingScope.App)]
         [InlineData(SettingsKeys.CertEmail, SettingScope.App)]
+        [InlineData(SettingsKeys.WebRequestLog, SettingScope.App)]
         public void Keys_are_scoped_by_what_reads_them(string key, SettingScope expected)
         {
             Assert.Equal(expected, SettingsKeys.ScopeOf(key));

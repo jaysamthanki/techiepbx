@@ -6,7 +6,7 @@
 
 @if (Model.Path == null)
 {
-    <p class="text-secondary">The application is not logging to a file.</p>
+    <p class="text-secondary">@Model.Source.NoFileMessage</p>
 }
 else if (!result.Exists)
 {
