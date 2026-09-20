@@ -1817,10 +1817,14 @@ every one of them lands in a generated conf file.
 - **Slots 1..N**, `Parking.Slots`, 1–9, default 9. Retrieval is dialling the slot number from any
   phone. Safe because extensions are three digits or more and feature codes are star-prefixed;
   the cap of 9 is the whole reason it is safe, so it is a validated bound rather than a guideline.
-- **The slot entries are generated, not Asterisk's.** `res_parking.conf` sets no `parkext`, so
-  Asterisk creates nothing; `extensions.conf` gets one `exten => <n>,1,ParkedCall(default,<n>)`
-  per slot instead. Same rule as everywhere else here: only numbers we wrote can be dialled (D12,
-  D46, D60), and an `include` of a context we do not control is not that.
+- **The slot entries are generated, not Asterisk's.** The slot retrieval routes live in
+  `extensions.conf` as one `exten => <n>,1,ParkedCall(default,<n>)` per slot, per the same rule
+  as everywhere else here: only numbers we wrote can be dialled (D12, D46, D60), and an
+  `include` of a context we do not control is not that. The lot does carry a `parkext` (700),
+  which exists only inside the lot's private `parkedcalls` context so no phone can dial it: the
+  DTMF park feature parks by blind-transferring the peer into that extension, so a lot without
+  one has a feature code that fires and parks nothing — found by E2E on the lab with a real
+  client (baresip) pressing *3 during a live call.
 - **The PBX speaks the slot number to the parker.** No dialplan work: `res_parking` does it with
   `ast_say_digits` on the parker's channel, and the core digit sounds are already installed in
   GSM and G.722 (D117).
