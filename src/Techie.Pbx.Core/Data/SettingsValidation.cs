@@ -153,6 +153,43 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("The certificate contact must be an email address, e.g. admin@example.com.");
                     break;
 
+                case SettingsKeys.MailTransport:
+                    if (!MailTransports.IsKnown(text))
+                        errors.Add($"The mail transport must be one of: {string.Join(", ", MailTransports.All)}. Leave it blank to use Graph when this app has an Entra app credential, and send nothing when it has not.");
+                    break;
+
+                case SettingsKeys.MailFromAddress:
+                    if (!EmailPattern().IsMatch(text))
+                        errors.Add("The from address must be an email address, e.g. pbx@example.com. On Graph it must be a real mailbox in the tenant, because Graph sends as it.");
+                    break;
+
+                case SettingsKeys.MailFromName:
+                    // It goes into a mail header, so the characters that would split one are out.
+                    if (text.Any(c => c is '\r' or '\n' or '"' or '<' or '>'))
+                        errors.Add("The from name goes into a mail header, so it cannot contain quotes, angle brackets or line breaks.");
+                    break;
+
+                case SettingsKeys.MailSmtpHost:
+                    if (!HostPattern().IsMatch(text))
+                        errors.Add("The SMTP host must be a hostname or IP address, e.g. smtp.sendgrid.net — no scheme and no port.");
+                    break;
+
+                case SettingsKeys.MailSmtpPort:
+                    Port(errors, "SMTP port", text);
+                    break;
+
+                case SettingsKeys.MailSmtpUsername:
+                    if (text.Any(c => c is '\r' or '\n'))
+                        errors.Add("The SMTP username cannot contain line breaks.");
+                    break;
+
+                case SettingsKeys.MailSmtpPassword:
+                    // No shape rule: it is whatever the relay issued — a SendGrid API key, a
+                    // Google app password. Only the characters that would break the protocol.
+                    if (text.Any(c => c is '\r' or '\n'))
+                        errors.Add("The SMTP password cannot contain line breaks.");
+                    break;
+
                 case SettingsKeys.SystemNtpServer:
                     if (!HostPattern().IsMatch(text))
                         errors.Add("NTP server must be a hostname or IP address, e.g. pool.ntp.org.");

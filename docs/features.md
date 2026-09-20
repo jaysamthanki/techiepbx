@@ -12,7 +12,7 @@ Status: **Done**, **Partial**, **Planned**.
 | F2a | [Voicemail](#f2a-voicemail) | Partial |
 | F2b | [Follow me](#f2b-follow-me) | Planned |
 | F3 | [Ring groups](#f3-ring-groups) (including hunt groups) | Planned |
-| F4 | [Email notifications](#f4-email-notifications) | Planned |
+| F4 | [Email notifications](#f4-email-notifications) | Partial |
 | F5 | [Call reports](#f5-call-reports) | Planned |
 | F6 | [IVRs](#f6-ivrs) | Partial |
 | F7 | [Announcements](#f7-announcements) | Partial |
@@ -97,14 +97,22 @@ Asterisk queues (`app_queue`, more features, much more surface).
 
 ## F4. Email notifications
 
-- Voicemail to email, with the recording attached (from F2a).
-- System alerts worth considering: trunk registration lost, many failed SIP logins or blocked
-  IPs, disk space low, config apply failed.
-- Missed call emails: to be confirmed.
+**Done (2026-09-19):** how mail leaves the box. The alert template (D114), the `Mail.*` settings
+on the System page's Email tab, both transports, and a "send test mail" button that proves them
+(D115). The old open question is answered: **both** SMTP and Graph, chosen per site by
+`Mail.Transport`, and sent by our app.
 
-Open questions: SMTP relay vs Microsoft Graph (clients are already on Microsoft 365 via Entra),
-and whether Asterisk sends voicemail emails itself (needs a local mail transfer agent) or hands
-them to our app.
+**Still to do:** anything that sends mail on its own. The test button is the only sender today.
+
+- Voicemail to email, with the recording attached (from F2a). **Still Asterisk's own job** through
+  a local MTA, and unchanged by D115: `voicemail.conf` carries no `serveremail`. Routing it
+  through the `Mail.*` settings means either an MTA configured to relay through them, or taking
+  delivery off Asterisk entirely (`externnotify`, or watching the mailbox directories) — a piece
+  of its own, still open.
+- System alerts worth considering: trunk registration lost, many failed SIP logins or blocked
+  IPs, disk space low, config apply failed. The template and the sender are ready for these; what
+  is missing is deciding which are worth an email and what raises them.
+- Missed call emails: to be confirmed.
 
 ## F5. Call reports
 

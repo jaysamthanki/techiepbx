@@ -80,9 +80,15 @@
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle text-body" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Settings</a>
+                            @* The grouped pages first, because they are what an admin is normally
+                               looking for; the flat list of every key stays, as the way to reach a
+                               setting no grouped page has got round to showing (D115). *@
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">Settings</a></li>
+                                @* The page file is SystemSettings.cshtml; its route is /Settings/System. *@
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Settings/SystemSettings">System</a></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Sip">SIP settings</a></li>
+                                <li><hr class="dropdown-divider" /></li>
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">All Settings</a></li>
                             </ul>
                         </li>
                     </ul>

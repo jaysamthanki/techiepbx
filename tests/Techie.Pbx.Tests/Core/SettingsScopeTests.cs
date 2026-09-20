@@ -86,9 +86,14 @@ namespace Techie.Pbx.Tests.Core
 
         /// <summary>
         /// What only this application reads: how long our AMI client waits, the directory the
-        /// Logs page reads Asterisk's own logs from, and the three ACME ordering details. The
-        /// certificate an order produces is a row in Certificates, and that repository raises the
-        /// marker itself, so the file Asterisk reads is still applied (D101).
+        /// Logs page reads Asterisk's own logs from, the three ACME ordering details, and the mail
+        /// settings. The certificate an order produces is a row in Certificates, and that
+        /// repository raises the marker itself, so the file Asterisk reads is still applied (D101).
+        ///
+        /// The Mail keys are here and not in the Asterisk scope on purpose (D115): this app sends
+        /// its own mail, and voicemail-to-email remains Asterisk's own job through a local MTA —
+        /// <c>VoicemailConfRenderer</c> still writes no <c>serveremail</c>, so no generated conf
+        /// file carries any of these and there is nothing an apply would write.
         /// </summary>
         [Fact]
         public void The_app_scope_is_the_keys_nothing_outside_this_process_reads()
@@ -101,6 +106,13 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.CertAcmeAccountKeyPem,
                     SettingsKeys.CertAcmeServer,
                     SettingsKeys.CertEmail,
+                    SettingsKeys.MailFromAddress,
+                    SettingsKeys.MailFromName,
+                    SettingsKeys.MailSmtpHost,
+                    SettingsKeys.MailSmtpPassword,
+                    SettingsKeys.MailSmtpPort,
+                    SettingsKeys.MailSmtpUsername,
+                    SettingsKeys.MailTransport,
                 },
                 KeysIn(SettingScope.App));
         }

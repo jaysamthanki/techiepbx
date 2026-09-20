@@ -1663,3 +1663,53 @@ drop-blocks: `{{DetailBlockStart}}..{{DetailBlockEnd}}` (key/value table rows vi
 `{{DetailRows}}`) and `{{ButtonBlockStart}}..{{ButtonBlockEnd}}` (CTA via `{{ButtonUrl}}` /
 `{{ButtonText}}`). The mail sender removes whole blocks when empty. Tests pin the resource
 and its placeholders.
+
+### D115. Mail settings, and the transports behind them (2026-09-19)
+User request, and the answer to F4's open question: **both**, chosen per site by a `Mail.Transport`
+setting, and sent **by this app** rather than by Asterisk.
+
+- `graph` — Microsoft Graph, using this application's own Entra app registration. Clients are
+  already on Microsoft 365 via Entra, so there is no second credential to create: the client
+  credentials flow gets an app-only token and one POST goes to
+  `/v1.0/users/{Mail.FromAddress}/sendMail`. Two HTTP calls with `HttpClient`, no SDK — half of
+  MSAL for two requests is surface area this project is trying not to have.
+- `smtp` — submission to a relay with `System.Net.Mail.SmtpClient`, STARTTLS always. No new
+  package: it sends one small message to a relay that does the real work, which is the job it is
+  still good at.
+- Blank is a third state meaning "decide for me": Graph where this server has an Entra client
+  secret, and **no mail at all** where it has not. It never falls back to SMTP, because a relay
+  nobody configured is not a fallback.
+
+Seven keys, all `SettingScope.App` — no generated conf file carries any of them, so none of them
+is an apply. `Mail.Smtp.Password` joins the secret list (the table masks it, the edit form shows
+it, D112).
+
+**Graph needs two things no code here can arrange**, and says so plainly when either is missing:
+the app registration needs the `Mail.Send` **application** permission with admin consent, and
+`AzureAd:ClientSecret` has to be configured on the server. That secret is not and will not be in
+this repository, so an unconfigured machine gets `GraphCredential.IsComplete == false` and Graph
+reports itself unconfigured rather than failing somewhere out on the network.
+
+**Voicemail to email is deliberately not wired to any of this.** `app_voicemail` sends its own mail
+through a local MTA, and `VoicemailConfRenderer` still writes no `serveremail`, `fromstring` or
+template — so voicemail email remains exactly as F2a left it. Routing it through these settings
+means either running an MTA configured to relay through them, or taking delivery away from Asterisk
+entirely (`externnotify`, or watching the mailbox directories). That is a piece of its own, and it
+is still open.
+
+The only thing that sends mail today is the **Send test mail** button on the new Email tab. It
+sends one message over whatever the settings resolve to, rendered with the D114 template, so the
+test shows what a real alert will look like when it lands. Nothing else sends anything yet, and the
+transports were deliberately not built out further than that button can honestly exercise.
+
+**Menu and pages.** The Settings dropdown becomes System / SIP settings / *All Settings*, the flat
+list being the way to reach a key no grouped page shows yet. `/Settings/System` has two Bootstrap
+tabs over the shared `_Sections` partial (renamed from `_SipSections`; the SIP page uses it too).
+Rows still open the general settings page's edit form in the shared modal, so a setting is saved,
+validated and logged in exactly one place however an admin got to it.
+
+Main tab: hostname and timezone — both already existed, as `System.Hostname` and `System.Timezone`,
+so nothing was duplicated. The **listening ports are shown read-only**, because they are not a
+setting and never were: `WebBindings` derives them from whether there is a usable certificate, 80
+has to stay open for ACME and 8080 is the way back in (D99). An editable "listening port" box would
+be a lie, because nothing reads one. Changing them stays a code change with a decision behind it.

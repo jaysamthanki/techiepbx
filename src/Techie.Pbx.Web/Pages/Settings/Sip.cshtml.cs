@@ -62,7 +62,7 @@ namespace Techie.Pbx.Web.Pages.Settings
                 },
             };
 
-            return this.Partial("_SipSections", sections);
+            return this.Partial("_Sections", sections);
         }
 
         private static List<SettingRow> Rows(IReadOnlyDictionary<string, string> stored, params string[] keys) =>

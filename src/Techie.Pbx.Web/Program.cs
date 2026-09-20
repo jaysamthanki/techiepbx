@@ -180,6 +180,7 @@ namespace Techie.Pbx.Web
             MapAcmeChallenge(app);
 
             PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
+            PbxEntra.Open(app.Configuration);
 
             Log.Info($"TNPBX web starting on {string.Join(", ", bindings)}");
             app.Run();

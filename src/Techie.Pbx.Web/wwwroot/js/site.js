@@ -110,12 +110,20 @@ window.pbx = (function () {
         },
 
         // A call to one of our own JSON endpoints, with the antiforgery header (D23) and the
-        // session-expiry handling (D20) every one of them needs.
-        send: async function (method, url) {
+        // session-expiry handling (D20) every one of them needs. A body is sent as JSON when one
+        // is given; most of these endpoints need nothing but the URL.
+        send: async function (method, url, body) {
+            // The header name is Program.AntiforgeryHeaderName.
+            const headers = { 'RequestVerificationToken': token, 'Accept': 'application/json' };
+
+            if (body !== undefined) {
+                headers['Content-Type'] = 'application/json';
+            }
+
             const response = await fetch(url, {
                 method: method,
-                // The header name is Program.AntiforgeryHeaderName.
-                headers: { 'RequestVerificationToken': token, 'Accept': 'application/json' }
+                headers: headers,
+                body: body === undefined ? undefined : JSON.stringify(body)
             });
 
             if (response.status === 401) {
@@ -128,6 +136,39 @@ window.pbx = (function () {
             }
 
             return body;
+        },
+
+        // The Email tab's test button (D115). sweetalert2 asks for the address, because a prompt
+        // is an alert-shaped thing and not a form — the settings it tests are edited in the modal
+        // like everything else (D42). The answer is a toast when it worked and an alert when it
+        // did not: a failure here is a sentence about a relay or a tenant, and needs reading.
+        sendTestMail: async function (button) {
+            const answer = await Swal.fire({
+                icon: 'question',
+                title: 'Send a test message',
+                input: 'email',
+                inputLabel: 'Where should it go?',
+                inputPlaceholder: 'you@example.com',
+                showCancelButton: true,
+                confirmButtonText: 'Send',
+                heightAuto: false
+            });
+
+            if (!answer.isConfirmed || !answer.value) {
+                return;
+            }
+
+            button.disabled = true;
+
+            try {
+                const result = await pbx.send('POST', '/api/mail/test', { to: answer.value });
+
+                pbx.toast('success', result.message);
+            } catch (error) {
+                pbx.failed(error);
+            } finally {
+                button.disabled = false;
+            }
         },
 
         toast: function (icon, text) {

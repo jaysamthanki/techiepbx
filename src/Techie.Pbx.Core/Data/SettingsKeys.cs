@@ -153,6 +153,41 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         public const string SystemTimezone = "System.Timezone";
 
+        /// <summary>
+        /// How mail leaves this box: a <see cref="Models.MailTransports"/> value, or blank for
+        /// "decide for me" — Graph where the app has an Entra app credential to send with, and no
+        /// mail at all where it has not (D115).
+        /// </summary>
+        public const string MailTransport = "Mail.Transport";
+
+        /// <summary>
+        /// The address mail is sent from. Graph sends as this mailbox, so on Graph it has to be a
+        /// real mailbox in the tenant (a shared one is the usual choice) rather than any address
+        /// the admin fancies (D115).
+        /// </summary>
+        public const string MailFromAddress = "Mail.FromAddress";
+
+        /// <summary>The display name beside <see cref="MailFromAddress"/>, e.g. "Techie PBX".</summary>
+        public const string MailFromName = "Mail.FromName";
+
+        /// <summary>The submission host, when the transport is SMTP. e.g. smtp.sendgrid.net.</summary>
+        public const string MailSmtpHost = "Mail.Smtp.Host";
+
+        /// <summary>The submission port. Defaults to 587, the submission port with STARTTLS.</summary>
+        public const string MailSmtpPort = "Mail.Smtp.Port";
+
+        /// <summary>
+        /// The SMTP username. Blank means submit without authenticating, which only an internal
+        /// relay that trusts this host by address will accept.
+        /// </summary>
+        public const string MailSmtpUsername = "Mail.Smtp.Username";
+
+        /// <summary>
+        /// The SMTP password, and a secret: treat it exactly like <see cref="AmiSecret"/> — never
+        /// logged, and shown only in the edit form an admin already signed in to open (D112).
+        /// </summary>
+        public const string MailSmtpPassword = "Mail.Smtp.Password";
+
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
             AsteriskConfDirectory,
@@ -178,6 +213,13 @@ namespace Techie.Pbx.Core.Data
             CertAcmeServer,
             CertAcmeAccountKeyPem,
             CertEmail,
+            MailTransport,
+            MailFromAddress,
+            MailFromName,
+            MailSmtpHost,
+            MailSmtpPort,
+            MailSmtpUsername,
+            MailSmtpPassword,
             SystemNtpServer,
             SystemHostname,
             SystemTimezone,
@@ -190,6 +232,7 @@ namespace Techie.Pbx.Core.Data
             ProvisioningAdminPassword,
             ProvisioningUserPassword,
             CertAcmeAccountKeyPem,
+            MailSmtpPassword,
         };
 
         /// <summary>
@@ -247,6 +290,18 @@ namespace Techie.Pbx.Core.Data
             [CertAcmeServer] = SettingScope.App,
             [CertAcmeAccountKeyPem] = SettingScope.App,
             [CertEmail] = SettingScope.App,
+
+            // Mail is sent by this application, over Graph or SMTP, not by Asterisk (D115).
+            // Nothing in a generated conf file names any of these, so none of them is an apply:
+            // voicemail-to-email is still Asterisk's own job through a local MTA, and
+            // VoicemailConfRenderer deliberately writes no serveremail (F4).
+            [MailTransport] = SettingScope.App,
+            [MailFromAddress] = SettingScope.App,
+            [MailFromName] = SettingScope.App,
+            [MailSmtpHost] = SettingScope.App,
+            [MailSmtpPort] = SettingScope.App,
+            [MailSmtpUsername] = SettingScope.App,
+            [MailSmtpPassword] = SettingScope.App,
 
             // Phones are told where to get the time from; nothing else reads it.
             [SystemNtpServer] = SettingScope.Phones,

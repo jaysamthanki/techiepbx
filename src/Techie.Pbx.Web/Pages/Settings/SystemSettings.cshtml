@@ -1,0 +1,53 @@
+@page "/Settings/System"
+@model SystemSettingsModel
+@{
+    ViewData["Title"] = "System settings";
+
+    var emailUrl = Url.Page("SystemSettings", "Email");
+    var mainUrl = Url.Page("SystemSettings", "Main");
+}
+@*
+    The URL is /Settings/System, set by the route above rather than by the file name. A Razor Page
+    called System.cshtml would compile to a class called System inside Techie.Pbx.Web.Pages.Settings,
+    which then shadows the System namespace for everything else in that namespace — so the file is
+    named for its model and the route says what an admin types.
+*@
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">System settings</h1>
+</div>
+
+<p class="text-secondary">
+    The settings about this box rather than about calls (D115). They are the same settings the
+    <a asp-page="/Settings/Index">general settings page</a> lists, and they are edited the same way:
+    click a row. None of them is written into Asterisk's config, so none of them needs an apply.
+</p>
+
+@*
+    Bootstrap's own tabs. Each pane fetches its own contents and refreshes on settingsChanged, the
+    same way the SIP page's single table does — so saving a setting in the modal updates the tab
+    behind it, whichever tab that was.
+*@
+<ul class="nav nav-tabs" id="system-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="main-tab" data-bs-toggle="tab" data-bs-target="#main-pane"
+                type="button" role="tab" aria-controls="main-pane" aria-selected="true">Main</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="email-tab" data-bs-toggle="tab" data-bs-target="#email-pane"
+                type="button" role="tab" aria-controls="email-pane" aria-selected="false">Email</button>
+    </li>
+</ul>
+
+<div class="tab-content pt-3">
+    <div class="tab-pane fade show active" id="main-pane" role="tabpanel" aria-labelledby="main-tab"
+         hx-get="@mainUrl" hx-trigger="load, settingsChanged from:body">
+        <p class="text-secondary">Loading…</p>
+    </div>
+    <div class="tab-pane fade" id="email-pane" role="tabpanel" aria-labelledby="email-tab"
+         hx-get="@emailUrl" hx-trigger="load, settingsChanged from:body">
+        <p class="text-secondary">Loading…</p>
+    </div>
+</div>
+
+<partial name="_FormModal" />

@@ -3,6 +3,7 @@ using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Diagnostics;
+using Techie.Pbx.Core.Mail;
 using Techie.Pbx.Core.Models;
 using Techie.Pbx.Core.Security;
 
@@ -167,6 +168,49 @@ namespace Techie.Pbx.Web.Pages.Settings
                 Description = "The contact address the Let's Encrypt account is registered with. Required before a certificate can be ordered: it is where expiry warnings go if renewal ever stops working.",
                 Key = SettingsKeys.CertEmail,
                 Sample = "admin@example.com",
+            },
+            new SettingDescriptor
+            {
+                Choices = MailTransports.All,
+                Description = "How this system sends mail. Graph uses this app's own Entra registration to send as a mailbox in your tenant; SMTP submits to a relay. Reset it to default to leave the choice open, which means Graph where this server has an Entra client secret and no mail at all where it has not.",
+                Key = SettingsKeys.MailTransport,
+                Sample = MailTransports.Graph,
+            },
+            new SettingDescriptor
+            {
+                Description = "The address mail is sent from. On Graph this has to be a real mailbox in the tenant, because Graph sends as it — a shared mailbox such as pbx@example.com is the usual choice. On SMTP it is whatever address your relay lets this server send as.",
+                Key = SettingsKeys.MailFromAddress,
+                Sample = "pbx@example.com",
+            },
+            new SettingDescriptor
+            {
+                Description = "The display name beside the from address. Used on SMTP; on Graph the sending mailbox's own display name is what recipients see, so this has no effect there.",
+                Key = SettingsKeys.MailFromName,
+                Sample = "Techie PBX",
+            },
+            new SettingDescriptor
+            {
+                Description = "The relay this server submits mail to, when the transport is SMTP. A hostname or IP address on its own — no scheme and no port.",
+                Key = SettingsKeys.MailSmtpHost,
+                Sample = "smtp.sendgrid.net",
+            },
+            new SettingDescriptor
+            {
+                Default = Number(MailSettings.DefaultSmtpPort),
+                Description = "The relay's submission port. 587 with STARTTLS is what every hosted relay uses; submission is always encrypted, so a relay that only offers plain text on 25 will not work.",
+                Key = SettingsKeys.MailSmtpPort,
+                Sample = "587",
+            },
+            new SettingDescriptor
+            {
+                Description = "The username this server authenticates to the relay with. On SendGrid it is literally the word apikey. Blank submits without authenticating, which only an internal relay that trusts this server by address will accept.",
+                Key = SettingsKeys.MailSmtpUsername,
+                Sample = "apikey",
+            },
+            new SettingDescriptor
+            {
+                Description = "The password for that relay account — a SendGrid API key, a Google app password, or whatever your own relay issued. Stored here; the table shows dots, the edit form shows it.",
+                Key = SettingsKeys.MailSmtpPassword,
             },
             new SettingDescriptor
             {

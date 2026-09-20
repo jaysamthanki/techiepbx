@@ -47,6 +47,13 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.SystemNtpServer)]
         [InlineData(SettingsKeys.ProvisioningAdminPassword)]
         [InlineData(SettingsKeys.ProvisioningUserPassword)]
+        [InlineData(SettingsKeys.MailTransport)]
+        [InlineData(SettingsKeys.MailFromAddress)]
+        [InlineData(SettingsKeys.MailFromName)]
+        [InlineData(SettingsKeys.MailSmtpHost)]
+        [InlineData(SettingsKeys.MailSmtpPort)]
+        [InlineData(SettingsKeys.MailSmtpUsername)]
+        [InlineData(SettingsKeys.MailSmtpPassword)]
         public void A_blank_value_is_always_allowed(string key)
         {
             Assert.Empty(SettingsValidation.Errors(key, ""));
@@ -277,6 +284,103 @@ namespace Techie.Pbx.Tests.Core
             Assert.False(SettingsKeys.IsSecret(SettingsKeys.ProvisioningUsername));
             Assert.True(SettingsKeys.IsKnown(SettingsKeys.ProvisioningUsername));
             Assert.True(SettingsKeys.IsKnown(SettingsKeys.ProvisioningPassword));
+        }
+
+        /// <summary>
+        /// The mail transport is one of two named values (D115). Blank is the third state and is
+        /// covered by the blank-is-always-allowed theory above: it means "decide for me".
+        /// </summary>
+        [Theory]
+        [InlineData("graph")]
+        [InlineData("smtp")]
+        public void A_known_mail_transport_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.MailTransport, value));
+        }
+
+        [Theory]
+        [InlineData("Graph")]
+        [InlineData("sendmail")]
+        [InlineData("exchange")]
+        public void A_mail_transport_this_system_cannot_send_with_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailTransport, value), e => e.Contains("mail transport must be"));
+        }
+
+        [Theory]
+        [InlineData("pbx@example.com")]
+        [InlineData("no-reply@example.com")]
+        public void A_mail_from_address_that_is_an_address_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.MailFromAddress, value));
+        }
+
+        [Theory]
+        [InlineData("pbx")]
+        [InlineData("pbx at example.com")]
+        public void A_mail_from_address_that_is_not_an_address_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailFromAddress, value), e => e.Contains("from address must be"));
+        }
+
+        /// <summary>
+        /// The from name goes into a mail header, so the characters that would end the header or
+        /// start a second one are out — the same reasoning ConfText applies to a conf file.
+        /// </summary>
+        [Theory]
+        [InlineData("Techie PBX\r\nBcc: someone@example.com")]
+        [InlineData("Techie \"PBX\"")]
+        [InlineData("Techie <pbx@example.com>")]
+        public void A_mail_from_name_that_could_forge_a_header_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailFromName, value), e => e.Contains("mail header"));
+        }
+
+        [Fact]
+        public void An_ordinary_mail_from_name_is_accepted()
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.MailFromName, "Techie PBX"));
+        }
+
+        [Theory]
+        [InlineData("smtp.sendgrid.net")]
+        [InlineData("smtp-relay.gmail.com")]
+        [InlineData("10.8.20.9")]
+        public void An_smtp_host_that_is_a_host_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.MailSmtpHost, value));
+        }
+
+        [Theory]
+        [InlineData("smtp://smtp.sendgrid.net")]
+        [InlineData("smtp.sendgrid.net:587")]
+        [InlineData("smtp.sendgrid.net/submit")]
+        public void An_smtp_host_with_a_scheme_or_a_port_on_it_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailSmtpHost, value), e => e.Contains("SMTP host must be"));
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("65536")]
+        [InlineData("submission")]
+        public void An_smtp_port_that_is_not_a_port_is_rejected(string value)
+        {
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailSmtpPort, value), e => e.Contains("SMTP port must be"));
+        }
+
+        /// <summary>
+        /// The relay password is a secret like the others, so the table masks it and nothing logs
+        /// it (D112). Its only shape rule is the one that would break the protocol: it is whatever
+        /// the relay issued — a SendGrid API key, a Google app password.
+        /// </summary>
+        [Fact]
+        public void The_smtp_password_is_a_secret_and_the_username_is_not()
+        {
+            Assert.True(SettingsKeys.IsSecret(SettingsKeys.MailSmtpPassword));
+            Assert.False(SettingsKeys.IsSecret(SettingsKeys.MailSmtpUsername));
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.MailSmtpPassword, "SG.a-long-api-key_with.punctuation"));
+            Assert.Contains(SettingsValidation.Errors(SettingsKeys.MailSmtpPassword, "key\r\nQUIT"), e => e.Contains("line breaks"));
         }
 
         /// <summary>

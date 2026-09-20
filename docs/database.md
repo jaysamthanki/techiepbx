@@ -170,6 +170,12 @@ Also `Sip.TcpPort`, `Sip.TlsPort`, `Sip.StunServer`, `Sip.Codecs`, `System.Timez
 `Provisioning.Username` and `Provisioning.Password` — the last two being the user:pass a phone
 sends to fetch its configuration, i.e. the credentials embedded in the DHCP option 160 URL (D77).
 
-`Ami.Secret` and `Provisioning.Password` are credentials (D14, D77): `SettingsKeys.IsSecret` marks
-them, they are never logged and never shown. Defaults are not seeded as rows — they live on `AmiSettings` and `PjsipTransport`,
+And the mail settings (D115), which this application reads and no generated conf file carries:
+`Mail.Transport` (`graph`, `smtp`, or blank for "decide for me"), `Mail.FromAddress`,
+`Mail.FromName`, `Mail.Smtp.Host`, `Mail.Smtp.Port`, `Mail.Smtp.Username` and
+`Mail.Smtp.Password`.
+
+`Ami.Secret`, `Provisioning.Password` and `Mail.Smtp.Password` are credentials (D14, D77, D115):
+`SettingsKeys.IsSecret` marks them, they are never logged, and the table masks them — the edit
+form shows the stored value (D112). Defaults are not seeded as rows — they live on `AmiSettings` and `PjsipTransport`,
 and `AsteriskSettings` applies a row on top only when there is one.

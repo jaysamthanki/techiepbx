@@ -1,0 +1,52 @@
+@using Techie.Pbx.Web.Certificates
+@model MainTab
+@*
+    What this server is: the settings that name it, then the ports it answers on. The ports are
+    read-only on purpose — they are decided by WebBindings from whether there is a certificate,
+    not stored anywhere (D99), so there is no setting here to offer.
+*@
+<partial name="_Sections" model="Model.Sections" />
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Listening on</h2>
+        <p class="card-text text-secondary">
+            The ports this web application is answering on, decided when it started. They are not a
+            setting: port 80 has to stay open so a certificate renewal's challenge can be fetched,
+            443 is added once there is a certificate to present, and 8080 is always kept as the way
+            back in if either of the others is taken (D99). Everything on 80 except that challenge
+            and phone provisioning redirects to HTTPS once a certificate exists.
+        </p>
+
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Address</th>
+                    <th>Why</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var binding in Model.Bindings)
+                {
+                    <tr>
+                        <td class="font-monospace">@binding.ToString()</td>
+                        <td class="text-secondary">
+                            @switch (binding.Port)
+                            {
+                                case WebBindings.HttpPort:
+                                    <text>Certificate renewal challenges and phone provisioning; everything else redirects to HTTPS.</text>
+                                    break;
+                                case WebBindings.HttpsPort:
+                                    <text>The admin interface, with the certificate this server loaded at startup.</text>
+                                    break;
+                                default:
+                                    <text>The way back in: reachable by IP address or by a name the certificate does not cover.</text>
+                                    break;
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

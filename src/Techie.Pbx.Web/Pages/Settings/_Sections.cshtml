@@ -1,10 +1,11 @@
 @model List<SettingSection>
 @*
-    The SIP settings, four small tables instead of one long one (D74). Clicking anywhere on a row
-    opens its edit form (D48) — the general settings page's form, in the shared modal, so a
-    setting is saved in exactly one place however an admin got to it.
+    A grouped view of settings: small tables instead of one long one, used by the SIP page (D74)
+    and by each tab of the System page (D115). Clicking anywhere on a row opens its edit form
+    (D48) — the general settings page's form, in the shared modal, so a setting is saved in
+    exactly one place however an admin got to it.
 
-    These tables are deliberately not bootstrap-table: they are four or fewer rows each, already
+    These tables are deliberately not bootstrap-table: they are a handful of rows each, already
     in the order they are meant to be read, and a search box per section would be noise.
 *@
 @* "section" is a Razor directive, so the loop variable cannot be called that. *@
