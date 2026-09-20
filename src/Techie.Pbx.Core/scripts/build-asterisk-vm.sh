@@ -129,6 +129,14 @@ else
     "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-core-sounds-en-g722-1.6.1.tar.gz"
   tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
   rm -f /tmp/core-sounds-g722.tar.gz
+
+  # Music on hold (D119): the free-licensed opsound set, so moh mode has something to play.
+  log "installing music on hold"
+  mkdir -p /var/lib/asterisk/moh
+  curl -sSfL -o /tmp/moh.tar.gz \
+    "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-moh-opsound-g722-2.03.tar.gz"
+  tar -xzf /tmp/moh.tar.gz -C /var/lib/asterisk/moh
+  rm -f /tmp/moh.tar.gz
 fi
 
 # --- ownership ---------------------------------------------------------------

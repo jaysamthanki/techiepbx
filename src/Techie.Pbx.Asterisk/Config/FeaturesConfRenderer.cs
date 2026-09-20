@@ -3,10 +3,10 @@ using System.Text;
 namespace Techie.Pbx.Asterisk.Config
 {
     /// <summary>
-    /// Renders features.conf: the DTMF a user can press during a call. There is exactly one entry
-    /// in it — <c>parkcall</c>, the park feature code (D119) — because every other feature in this
-    /// file is one we have not agreed to offer, and an unmapped feature is a feature nobody can
-    /// trigger.
+    /// Renders features.conf: the DTMF a user can press during a call. The entries are
+    /// <c>atxfer</c> (attended transfer, always) and, when parking is on, <c>parkcall</c> — every
+    /// other feature in this file is one we have not agreed to offer, and an unmapped feature is
+    /// a feature nobody can trigger.
     ///
     /// Two things have to line up for it to work, and neither is in this file. The featuremap is
     /// only consulted for a channel whose Dial() asked for it, which is why every generated Dial
@@ -27,6 +27,17 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string ParkFeature = "parkcall";
 
+        /// <summary>
+        /// Attended transfer, in the DTMF form a phone without a transfer button needs. Asterisk's
+        /// own default is empty — nothing triggers it unless it is written here. *2 is the
+        /// convention FreePBX users already know, and star-prefixed codes are this system's rule.
+        /// The blind form (#) needs no entry: it is Asterisk's default and tT turns it on.
+        /// </summary>
+        public const string AttendedTransferFeature = "atxfer";
+
+        /// <summary>The DTMF a user presses to start an attended transfer (D119).</summary>
+        public const string AttendedTransferCode = "*2";
+
         public static string Render() => Render(new ParkingSettings());
 
         public static string Render(ParkingSettings parking)
@@ -39,10 +50,14 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append('\n');
             sb.Append("[featuremap]\n");
 
+            sb.Append("; Attended transfer: press the code, dial the target, then complete the\n");
+            sb.Append("; transfer. The t/T Dial() options are what let a channel use this at all (D119).\n");
+            sb.Append($"{AttendedTransferFeature} => {ConfText.Safe(AttendedTransferCode, "attended transfer code")}\n");
+
             if (!parking.Enabled)
             {
-                sb.Append("; Nothing is mapped: call parking is switched off, and it is the only\n");
-                sb.Append("; mid-call feature code this system offers (D119).\n");
+                sb.Append("; Nothing further: call parking is switched off, so the park feature\n");
+                sb.Append("; code below stays out of the file (D119).\n");
                 return sb.ToString();
             }
 

@@ -269,6 +269,16 @@ else
       "${CORE_SOUNDS_URL}/asterisk-core-sounds-en-g722-${CORE_SOUNDS_VERSION}.tar.gz"
     run tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
     run rm -f /tmp/core-sounds-g722.tar.gz
+
+    # Music on hold: the opsound set, free-licensed and what FreePBX ships, so Parking.Audio=moh
+    # has something to play before the admin uploads anything (D119). The class scans the
+    # directory, so files here play without a database row.
+    log "installing music on hold"
+    run mkdir -p /var/lib/asterisk/moh
+    run curl -sSfL -o /tmp/moh.tar.gz \
+      "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-moh-opsound-g722-2.03.tar.gz"
+    run tar -xzf /tmp/moh.tar.gz -C /var/lib/asterisk/moh
+    run rm -f /tmp/moh.tar.gz
   fi
 
   # make install creates its own directories; re-assert the layout over the top of them.

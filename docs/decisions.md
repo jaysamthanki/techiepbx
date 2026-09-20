@@ -1859,3 +1859,10 @@ every one of them lands in a generated conf file.
 - **A dedicated `/Parking` page** carries the settings and the music on hold table, rather than
   five more rows on the flat settings list. `_Sections.cshtml` moved to `Pages/Shared` so a page
   that is not one of the settings pages can use it.
+
+### D119 additions: attended transfer code, and starter music (2026-09-20)
+`features.conf` now maps `atxfer => *2` (always; blind transfer `#` and the phone transfer
+buttons were already covered by `tT` and `allow_transfer`). The installer also drops the
+free-licensed asterisk-moh-opsound tracks into `/var/lib/asterisk/moh`, so Parking.Audio = moh
+has something to play before the admin uploads anything — the class scans the directory, so the
+files need no database row.
