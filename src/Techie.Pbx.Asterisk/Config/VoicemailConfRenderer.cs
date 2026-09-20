@@ -31,7 +31,10 @@ namespace Techie.Pbx.Asterisk.Config
 
             sb.Append('\n');
             sb.Append("[general]\n");
-            sb.Append("format = wav49\n");
+            // Two formats: g722 keeps wideband messages wideband for the phones that speak it
+            // (D117), and wav49 stays as the narrowband copy every player and future email
+            // attachment can open. Playback picks the best the caller supports.
+            sb.Append("format = g722|wav49\n");
             sb.Append($"maxmsg = {MaxMessages}\n");
             sb.Append($"maxsecs = {MaxSeconds}\n");
             sb.Append($"minsecs = {MinSeconds}\n");
