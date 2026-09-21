@@ -1207,6 +1207,11 @@ Polycom's firmware fixes the username on both of a phone's built-in web accounts
 admin, "User" for the other — so only the password is ours to set. `Provisioning.AdminPassword` and
 `Provisioning.UserPassword` are written into every generated config as
 `device.auth.localAdminPassword` and `device.auth.localUserPassword`. Either one left unset is left
+out rather than written blank, and all three flags are needed for a value to apply: `device.set="1"`
+on the device element (the Edge E admin guide's master switch, without which the phone stores but
+never uses provisioned passwords) plus `<c>.set="1"` on each parameter. The phone also refuses
+`456` for the admin password outright — SB-327: once a non-default admin password exists the
+default is never accepted again — and each application happens at boot, not at config parse.
 out of the file rather than written blank: a phone with a blank web password is worse off than one
 with no opinion from us at all, and the two are independent so setting one does not blank the other.
 
