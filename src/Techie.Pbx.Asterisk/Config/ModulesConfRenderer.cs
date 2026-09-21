@@ -54,6 +54,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_mwi.so",                      // answer a phone's SUBSCRIBE: the message-waiting light (D108)
                 "res_pjsip_mwi_body_generator.so",       // writes the message-summary body those NOTIFYs carry (D108)
                 "res_pjsip_exten_state.so",              // answer a phone's SUBSCRIBE for a hint: the BLF lamp (D121)
+                "res_pjsip_outbound_publish.so",      // res_pjsip_exten_state's load-time dependency; publishing itself is never configured (D121)
                 "res_pjsip_dialog_info_body_generator.so", // the dialog-info+xml body a BLF key asks for (D121)
             }),
 
