@@ -1991,9 +1991,18 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
   numbered 1..n in key order rather than by the key's own position, because a phone reads the
   list until the first index it cannot find: a gap left by an unassigned key would hide every key
   after it. The consequence worth knowing is that clearing key 1 moves the rest up a key.
-- **Yealink renders nothing for this yet.** The model, the table and the UI are brand-neutral;
-  only `PolycomConfigRenderer` knows what a key looks like. A Yealink phone keeps the keys it is
-  given in the database and ignores them until its renderer learns the same trick.
+- **Yealink renders the same keys as line keys of type 15**, the BLF: `linekey.N.line="1"`,
+  `linekey.N.value`, `linekey.N.type="15"` and `linekey.N.label` per assigned key. Type 15 is the
+  direct counterpart of Polycom's `automata` — the phone SUBSCRIBEs for the value so the lamp
+  follows its hint, and pressing the key dials it — and both kinds of key get it, for the same
+  reason Polycom gives both `automata`: retrieving a parked call is dialling the slot. All eight
+  keys are rendered; a handset with fewer line keys than that silently ignores the rest. Unlike
+  Polycom's resource list, the keys keep their own numbers — key 4 is `linekey.4` — because a
+  Yealink line key is addressed by the key itself rather than read until the first missing index,
+  so an unassigned key is written as nothing and keeps its default behaviour. The consequence
+  worth knowing here is the other one: key 1 is a phone's default line appearance, so assigning
+  key 1 replaces it. Keys are written only for a phone that has a registration, because
+  `linekey.N.line="1"` names account 1 and there is nothing to subscribe on without it.
 - **A key that cannot work is dropped rather than written.** `PhoneButton.Usable` is what the
   provisioning endpoint filters through: an extension that has been deleted or switched off has
   no endpoint to watch, and a slot outside the configured lot — parking off, or fewer slots than

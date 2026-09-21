@@ -22,6 +22,23 @@ namespace Techie.Pbx.Tests.Asterisk
             Secret = "AAAAbbbbCCCCdddd1111",
         };
 
+        /// <summary>The extensions a key can name, which is where the label on it comes from.</summary>
+        private static List<Extension> SampleButtonExtensions() => new()
+        {
+            SampleExtension(),
+            new Extension { ExtensionID = 8, Number = "1002", Name = "Sales", Secret = "EEEEffffGGGGhhhh2222" },
+        };
+
+        /// <summary>
+        /// Two keys assigned out of eight — one extension, one parking slot — and the other six
+        /// left alone, which is what a real phone looks like (D121).
+        /// </summary>
+        private static List<PhoneButton> SampleButtons() => new()
+        {
+            new PhoneButton { Position = 1, TargetType = PhoneButtonTarget.Extension, TargetValue = "1002" },
+            new PhoneButton { Position = 4, TargetType = PhoneButtonTarget.ParkingSlot, TargetValue = "3" },
+        };
+
         private static YealinkConfig SampleConfig() => new()
         {
             Codecs = new List<string> { "ulaw", "alaw", "gsm" },
@@ -101,6 +118,65 @@ namespace Techie.Pbx.Tests.Asterisk
             config.Extension = null;
 
             Assert.Equal(Expected("yealink-phone-unassigned.cfg"), YealinkConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// A phone with keys on it (D121). Unlike Polycom's resource list, the keys keep their own
+        /// numbers — key 4 is <c>linekey.4</c> — because a Yealink line key is addressed by the key
+        /// itself, so the gap left by keys 2 and 3 hides nothing.
+        /// </summary>
+        [Fact]
+        public void A_phone_with_keys_matches_expected_file()
+        {
+            var config = SampleConfig();
+            config.ButtonExtensions = SampleButtonExtensions();
+            config.Buttons = SampleButtons();
+
+            Assert.Equal(Expected("yealink-phone-buttons.cfg"), YealinkConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// A phone nobody has assigned a key on gets no linekey parameters at all, so every key
+        /// keeps the default behaviour the handset gives it.
+        /// </summary>
+        [Fact]
+        public void A_phone_with_no_keys_is_given_no_line_keys()
+        {
+            Assert.DoesNotContain("linekey.", YealinkConfigRenderer.Render(SampleConfig()));
+        }
+
+        /// <summary>
+        /// The label on an extension key is the extension's own name, so renaming an extension
+        /// relabels every key that watches it at the next poll. An extension the renderer was not
+        /// given falls back to the number rather than an empty key.
+        /// </summary>
+        [Fact]
+        public void An_extension_key_is_labelled_with_the_extensions_name()
+        {
+            var config = SampleConfig();
+            config.ButtonExtensions = SampleButtonExtensions();
+            config.Buttons = SampleButtons();
+
+            Assert.Contains("linekey.1.label = Sales", YealinkConfigRenderer.Render(config));
+
+            config.ButtonExtensions = new List<Extension>();
+            Assert.Contains("linekey.1.label = 1002", YealinkConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// The renderer re-validates the keys it is given, as it does the phone and the extension:
+        /// a row that reached it another way must not become a key that dials somewhere else.
+        /// </summary>
+        [Fact]
+        public void An_invalid_key_is_refused_rather_than_rendered()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>
+            {
+                new() { Position = 1, TargetType = PhoneButtonTarget.Extension, TargetValue = "not-a-number" },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => YealinkConfigRenderer.Render(config));
         }
 
         /// <summary>The thing that must never be in an unassigned phone's file: a credential.</summary>

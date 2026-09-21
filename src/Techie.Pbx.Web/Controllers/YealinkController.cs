@@ -50,12 +50,14 @@ namespace Techie.Pbx.Web.Controllers
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(YealinkController));
 
+        private readonly PhoneButtonRepository buttons;
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
         public YealinkController()
         {
+            this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -136,8 +138,17 @@ namespace Techie.Pbx.Web.Controllers
             stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var provisioningUsername);
             stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var provisioningPassword);
 
+            // The assigned keys, and the extensions they name so each one has a label (D121). A
+            // key whose extension has gone or whose parking slot the lot no longer has is dropped
+            // rather than written as a lamp that can never light.
+            var assigned = this.buttons.GetForPhone(phone.PhoneID);
+            var buttonExtensions = assigned.Count > 0 ? this.extensions.GetAll() : new List<Extension>();
+            var usable = PhoneButton.Usable(assigned, buttonExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
+
             var config = new YealinkConfig
             {
+                ButtonExtensions = buttonExtensions,
+                Buttons = usable,
                 Codecs = transport.Codecs,
                 Extension = extension,
                 NtpServer = AsteriskSettings.NtpServer(stored),
@@ -150,7 +161,7 @@ namespace Techie.Pbx.Web.Controllers
                 TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
             };
 
-            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}");
+            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}, {usable.Count} keys");
 
             return this.Text(YealinkConfigRenderer.Render(config));
         }

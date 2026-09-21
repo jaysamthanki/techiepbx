@@ -38,6 +38,21 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// <summary>The last account slot: accounts 2 through this are disabled (D88).</summary>
         private const int LastUnusedAccount = 6;
 
+        /// <summary>
+        /// The registration a line key subscribes and dials on. Account 1 is the only registration
+        /// this system gives a phone, so it is the only line a key can be on.
+        /// </summary>
+        private const int LineKeyAccount = 1;
+
+        /// <summary>
+        /// Yealink's own line key type for a BLF: the phone SUBSCRIBEs for the key's value so the
+        /// lamp follows its hint, and pressing the key dials that same value. It is the direct
+        /// counterpart of Polycom's <c>automata</c> attendant resource, and like that one it suits
+        /// both kinds of key we render — a parking slot is dialled to retrieve the call sitting in
+        /// it, the same gesture as dialling a colleague (D121).
+        /// </summary>
+        private const int LineKeyBlf = 15;
+
         public static string Render(YealinkConfig config)
         {
             var phone = config.Phone;
@@ -112,6 +127,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
             sb.Append('\n');
             WriteCodecs(sb, config.Codecs);
 
+            WriteLineKeys(sb, config);
+
             return sb.ToString();
         }
 
@@ -150,6 +167,49 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 Line(sb, $"account.1.codec.{slot}.name", name);
                 Line(sb, $"account.1.codec.{slot}.payload_type", Number(payloadType));
                 Line(sb, $"account.1.codec.{slot}.priority", Number(slot));
+            }
+        }
+
+        /// <summary>
+        /// The assignable keys, written as Yealink line keys (D121). Each one is a lamp and a quick
+        /// dial: the phone SUBSCRIBEs for the key's value on account 1 and dials the same value when
+        /// the key is pressed. An extension's lamp follows the <c>PJSIP/&lt;number&gt;</c> hint and a
+        /// parking slot's follows <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the dialplan's
+        /// doing — from here both are a number in the internal context, which is why this writes
+        /// both the same way, exactly as Polycom writes both as an <c>automata</c> resource.
+        ///
+        /// Unlike Polycom's resource list, which a phone reads until the first index it cannot find
+        /// and so has to be numbered 1..n, a Yealink line key is addressed by the key itself: key 4
+        /// is <c>linekey.4</c>, and an unassigned key is not written at all, so it keeps whatever
+        /// the phone does with it by default. All eight keys are offered; a handset with fewer line
+        /// keys than that silently ignores the ones it does not have. The consequence worth
+        /// knowing: key 1 is a phone's default line appearance, so assigning it replaces that.
+        /// </summary>
+        private static void WriteLineKeys(StringBuilder sb, YealinkConfig config)
+        {
+            var buttons = config.Buttons.OrderBy(b => b.Position).ToList();
+            if (buttons.Count == 0)
+                return;
+
+            foreach (var button in buttons)
+            {
+                var errors = button.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
+            }
+
+            sb.Append('\n');
+            sb.Append("# Line keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp\n");
+            sb.Append("# follows its hint; a parking slot's is lit while a call is sitting in it.\n");
+
+            foreach (var button in buttons)
+            {
+                var key = $"linekey.{Number(button.Position)}";
+
+                Line(sb, $"{key}.line", Number(LineKeyAccount));
+                Line(sb, $"{key}.value", ConfText.Safe(button.TargetValue, "line key value"));
+                Line(sb, $"{key}.type", Number(LineKeyBlf));
+                Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.ButtonExtensions), "line key label"));
             }
         }
     }
