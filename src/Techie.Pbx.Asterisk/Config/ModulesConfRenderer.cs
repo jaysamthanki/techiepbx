@@ -79,7 +79,9 @@ namespace Techie.Pbx.Asterisk.Config
                 "app_playback.so",          // Playback(): prompts, and the announcements (D55)
                 "app_echo.so",              // Echo(), the *43 test
                 "app_voicemail.so",         // VoiceMail() and VoiceMailMain()
+                "app_exec.so",              // ExecIf(): name the hold class only if nobody already did (D122 amended)
                 "func_callerid.so",         // ${CALLERID(num)}, which *97 needs
+                "func_channel.so",          // CHANNEL(musicclass): what a caller hears while they are held (D122 amended)
                 "func_timeout.so",          // TIMEOUT(digit), the gap an IVR allows between keys (D61)
             }),
 

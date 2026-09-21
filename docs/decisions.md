@@ -2120,6 +2120,67 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
 > - **`preferchannelclass = no` stays** and does not get in the way: with it off, Asterisk consults
 >   the channel's own class after the hold payload and the endpoint's `moh_interpret`, and we set
 >   neither of those, so the route's class is what plays. Not yet verified on the lab VM.
+>
+> **Amended again 2026-09-21: an internal call backfills the class that ships.** The amendment
+> above only reached calls that came in over a trunk. A call that started on a phone here never
+> passes a trunk context, so nobody had ever set a class on that caller's channel, and Asterisk's
+> fallback is a class called `default` that this system deliberately never defines (D119) — so a
+> receptionist putting a colleague on hold gave them *silence*. Every extension in `[internal]`
+> now carries one line ahead of its `Dial`, which makes the `Dial` priority 2:
+>
+> ```
+> exten => 1001,1,ExecIf($["${CHANNEL(musicclass)}" = "" | "${CHANNEL(musicclass)}" = "default"]?Set(CHANNEL(musicclass)=Standard))
+>  same => n,Dial(PJSIP/1001,30,tTkK)
+> ```
+>
+> - **The guard is the point, not the `Set`.** An inbound route's class is the *caller's* — the
+>   site chose what people who rang the support line hear — and the call then `Goto`s into
+>   `[internal]` on the extension it was routed to, where this line runs on the same channel. So
+>   internal only fills in where nobody chose: it sets the class when, and only when, Asterisk
+>   still has its own default sitting there. The route's choice is never clobbered.
+> - **Two values count as "still the default", and the literal `default` is the one that fires.**
+>   The channel is not empty on the calls this actually runs on: `chan_pjsip` puts the endpoint's
+>   `moh_suggest` on every channel it creates and res_pjsip's default for that is `default`.
+>   Testing for empty as well costs nothing and covers a channel that arrived any other way.
+>   Neither value names a class this system ever writes, so both mean silence and both are ours.
+> - **The class is the one flagged `IsDefault`** — `MohClassRepository.Default()`, read off the
+>   list `ExtensionsConfRenderer` is already handed for the routes. **No default class, no line**:
+>   the old silence, not a reference to a class that does not exist. Which is why most of the
+>   renderer's golden files are unchanged — they are rendered with no classes at all.
+> - **Two modules join the allowlist** (D31), and they are the cost of this line: `app_exec.so`
+>   for `ExecIf` and `func_channel.so` for `CHANNEL`. D57 turned down a `${CHANNEL(state)}` guard
+>   for exactly this price when it bought nothing; here it buys the difference between hold music
+>   and silence. **`func_channel` was already needed and was not there**: the trunk-context
+>   `Set(CHANNEL(musicclass)=...)` of the amendment above cannot have worked on the lab VM —
+>   `autoload = no` means an unlisted function is not registered, and Asterisk answers a `Set` on
+>   one with a warning and no music. That is the first thing to check when this is verified.
+>   The alternative that would have cost one module instead of two is a labelled `GotoIf` chain,
+>   which is three lines and a label per extension; not taken, because the file is read by people.
+> - **Two consequences worth knowing, both the user's call to change.** *Inbound routes left on
+>   "Default"* no longer get silence when they lead to an extension — the caller lands in
+>   `[internal]` with `default` on the channel and is backfilled with `Standard`. That is the
+>   thing the amendment above deliberately did not do; it is done here for calls that reach a
+>   phone, and not for one that reaches an announcement or a menu, because only extensions carry
+>   the line. And *a parked caller whose lot is set to silence* now hears the shipped class if
+>   their call started on a phone here: `res_parking` writes no `parkedmusicclass` for silence and
+>   Asterisk then falls through to the channel's own class, which is no longer empty. Silence on
+>   hold is not a thing this system can offer a channel *and* music on hold at the same time.
+> - **Ring groups are not covered.** A caller who dialled a group rather than an extension still
+>   has nothing on their channel, because the line is written per extension. It is the same one
+>   line in `AppendRingGroup` whenever that is wanted; it was not taken here because it was not
+>   asked for.
+> - **Neither is the other direction, and that is worth a decision of its own.** This sets the
+>   class on the channel that is *executing the dialplan*, which is the caller's. The extension
+>   they dialled answers on a channel chan_pjsip made, carrying `default` from its own
+>   `moh_suggest` — so when the caller holds *them*, they are the ones in silence. The tidy fix
+>   is probably not another dialplan line: `moh_suggest =` (empty) on every endpoint would leave
+>   the class blank on every channel, and app_dial copies the caller's onto an outgoing channel
+>   that has none — read off `app_dial.c` and **not confirmed on the lab**, which is what would
+>   have to happen first. This line's empty test already covers that case if it is ever taken.
+>   Writing `moh_suggest = Standard` instead would be the wrong
+>   way round — with `preferchannelclass = no` the hold payload is consulted *before* the
+>   channel's own class, and that payload is the holder's `moh_suggest`, so every route's class
+>   would be overridden by the extension that held the call. Neither was changed here.
 
 D119 built one music on hold class, called `parking`, on one flat directory, because the only
 thing in this system that played hold music was a parked call. A class is a *directory* as far as

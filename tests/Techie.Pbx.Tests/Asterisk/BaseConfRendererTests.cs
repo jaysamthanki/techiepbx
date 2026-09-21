@@ -135,12 +135,18 @@ namespace Techie.Pbx.Tests.Asterisk
         /// it: Playback for the prompts and TIMEOUT(digit) for the gap between keys (D61).
         /// Answer, Background, WaitExten, Set, Goto and GotoIf are Asterisk builtins and need no
         /// module, which is why none is listed for them.
+        ///
+        /// ExecIf and CHANNEL are not builtins, and they are what the hold music lines are made of
+        /// (D122 amended): without them the extensions are left in the silence the whole amendment
+        /// is about, and Asterisk says so once per call in a warning nobody reads.
         /// </summary>
         [Theory]
         [InlineData("pbx_config.so")]
         [InlineData("app_dial.so")]
         [InlineData("app_playback.so")]
         [InlineData("app_voicemail.so")]
+        [InlineData("app_exec.so")]
+        [InlineData("func_channel.so")]
         [InlineData("func_timeout.so")]
         public void The_allowlist_carries_what_the_dialplan_calls(string module)
         {

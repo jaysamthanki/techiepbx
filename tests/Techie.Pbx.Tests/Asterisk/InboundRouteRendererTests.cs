@@ -429,17 +429,74 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// A route that names no class writes no line, which leaves the channel exactly as every
-        /// route left it before the column existed. That is what makes this change nothing at all
-        /// for a system nobody has configured it on.
+        /// A route that names no class writes no line in the trunk's context, which leaves the
+        /// channel exactly as every route left it before the column existed. The whole file is no
+        /// longer identical to one rendered with no classes at all — the internal context backfills
+        /// the class that ships now (D122 amended) — so what is compared is the trunk's context,
+        /// which is where a route's own choice is written.
         /// </summary>
         [Fact]
         public void A_route_with_no_class_of_its_own_sets_nothing()
         {
-            Assert.DoesNotContain("musicclass", RenderWithMusic(SampleRoutes(), SampleMohClasses()));
-            Assert.Equal(
-                Expected("extensions-inbound.conf"),
-                RenderWithMusic(SampleRoutes(), SampleMohClasses()));
+            var actual = Context(RenderWithMusic(SampleRoutes(), SampleMohClasses()), "from-trunk-callcentric");
+
+            Assert.DoesNotContain("musicclass", actual);
+            Assert.Equal(Context(Expected("extensions-inbound.conf"), "from-trunk-callcentric"), actual);
+        }
+
+        /// <summary>
+        /// The other half of the amendment: a call that started on a phone here has no route to
+        /// have chosen a class for it, so the extension it dials backfills the one that ships.
+        /// </summary>
+        [Fact]
+        public void An_extension_names_the_class_that_ships_before_it_dials()
+        {
+            var internalContext = Context(RenderWithMusic(MohRoutes(), SampleMohClasses()), "internal");
+
+            Assert.Contains(
+                "exten => 1001,1,ExecIf($[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]" +
+                "?Set(CHANNEL(musicclass)=Standard))\n" +
+                " same => n,Dial(PJSIP/1001,30,tTkK)\n",
+                internalContext);
+        }
+
+        /// <summary>
+        /// And it only backfills. A caller routed in on 17771234567 arrives at extension 1001 with
+        /// "Front Desk" already on their channel, and the guard is what keeps it there: the ExecIf
+        /// fires on an empty class and on Asterisk's own <c>default</c>, which is what chan_pjsip
+        /// leaves on a channel nobody has set one on, and on nothing else. The route's choice is
+        /// the caller's; internal only fills in where nobody chose.
+        /// </summary>
+        [Fact]
+        public void A_class_an_inbound_route_chose_survives_the_extension_it_lands_on()
+        {
+            var actual = RenderWithMusic(MohRoutes(), SampleMohClasses());
+
+            Assert.Contains(
+                " same => n,Set(CHANNEL(musicclass)=Front Desk)\n same => n,Goto(internal,1001,1)\n",
+                Context(actual, "from-trunk-callcentric"));
+
+            // The guard, written out in full: nothing else is a condition for setting the class.
+            Assert.Contains(
+                "$[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]",
+                Context(actual, "internal"));
+            Assert.DoesNotContain("exten => 1001,1,Set(CHANNEL(musicclass)", actual);
+        }
+
+        /// <summary>
+        /// No class ships, nothing is written: the old silence rather than a line naming a class
+        /// that does not exist. It is also every render this renderer's other tests do, since most
+        /// of them hand it no classes at all.
+        /// </summary>
+        [Fact]
+        public void No_default_class_means_no_line_at_all()
+        {
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 3, Name = "Front Desk", Directory = "front-desk" },
+            };
+
+            Assert.DoesNotContain("musicclass", Context(RenderWithMusic(SampleRoutes(), classes), "internal"));
         }
 
         /// <summary>

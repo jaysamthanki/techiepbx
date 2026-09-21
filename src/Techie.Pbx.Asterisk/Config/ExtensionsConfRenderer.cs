@@ -196,6 +196,8 @@ namespace Techie.Pbx.Asterisk.Config
         /// The music on hold classes, so that an inbound route naming one can be written as the
         /// class's name rather than its ID (D122 amended). A route naming a class that is not in
         /// this list is refused rather than written, the way every other dangling reference is.
+        /// The one flagged <see cref="MohClass.IsDefault"/> is also what an internal call falls
+        /// back to, which is the other half of the same amendment.
         /// </param>
         public static string Render(
             IEnumerable<Extension> extensions,
@@ -254,6 +256,20 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($"exten => _{PickupCode}.,1,Pickup(${{EXTEN:{PickupCode.Length}}}@{InternalContext})\n");
             sb.Append(" same => n,Hangup()\n");
 
+            // What a caller whose call started on a phone here hears while they are held, written
+            // ahead of every Dial below (D122 amended). Empty when there is no class that ships,
+            // and then nothing at all is written.
+            var internalMusic = InternalMusicOnHoldLine(DefaultOf(mohClassList));
+
+            if (internalMusic.Length > 0 && enabled.Count > 0)
+            {
+                sb.Append('\n');
+                sb.Append("; Hold music for a call that started on a phone here. Each extension below names\n");
+                sb.Append("; the class that ships on the caller's channel before it dials, and only when\n");
+                sb.Append("; Asterisk still has its own default sitting there: a class an inbound route\n");
+                sb.Append("; already chose for this caller is theirs, and is left alone (D122 amended).\n");
+            }
+
             foreach (var extension in enabled)
             {
                 var number = ConfText.Safe(extension.Number, "number");
@@ -267,7 +283,20 @@ namespace Techie.Pbx.Asterisk.Config
                 // not any phone is watching it — a hint costs a dialplan line and nothing else,
                 // and a key assigned later must not need an apply to light up.
                 sb.Append($"exten => {number},hint,PJSIP/{number}\n");
-                sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{DialOptions})\n");
+
+                // The hold music takes priority 1 when there is a class to name, which makes the
+                // Dial priority 2. Everything that arrives here still arrives at priority 1: a
+                // Goto from a route, a menu or another extension lands on the ExecIf and falls
+                // through to the Dial, which is why it is a priority of its own and not a label.
+                if (internalMusic.Length > 0)
+                {
+                    sb.Append($"exten => {number},1,{internalMusic}\n");
+                    sb.Append($" same => n,Dial(PJSIP/{number},30,{DialOptions})\n");
+                }
+                else
+                {
+                    sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{DialOptions})\n");
+                }
 
                 if (extension.VoicemailEnabled)
                 {
@@ -918,6 +947,49 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append(MusicOnHoldLine(route, mohClasses));
                 sb.Append(DestinationDialplan.Lines(destination));
             }
+        }
+
+        /// <summary>
+        /// The class that ships, or null when the renderer was given no classes at all. The same
+        /// one <c>MohClassRepository.Default()</c> picks — flagged, lowest ID first — read off the
+        /// list this renderer is already handed rather than the database, because a renderer is a
+        /// pure function of what it is given.
+        /// </summary>
+        private static MohClass? DefaultOf(List<MohClass> mohClasses) =>
+            mohClasses.Where(c => c.IsDefault).OrderBy(c => c.MohClassID).FirstOrDefault();
+
+        /// <summary>
+        /// What a caller whose call started on a phone here hears while they are held, as the one
+        /// application that says it (D122 amended). Empty when there is no class that ships, which
+        /// leaves those calls in the silence they were in before this existed.
+        ///
+        /// The guard is the whole point. The class is named <b>only when Asterisk still has its own
+        /// default on the channel</b>, so a class an inbound route already chose for this caller
+        /// survives the <c>Goto</c> into the extension they were routed to: the route's choice is
+        /// the caller's, and internal only backfills where nobody chose. Two values count as "still
+        /// the default" and both are tested, because <c>CHANNEL(musicclass)</c> is not empty on the
+        /// channels this actually runs on: chan_pjsip puts the endpoint's <c>moh_suggest</c> on
+        /// every channel it creates and res_pjsip's default for that is the literal
+        /// <c>default</c> — so that is the test that fires, and the empty one is for a channel that
+        /// arrived any other way. Neither names a class this system ever writes (D119), so both
+        /// mean silence and both are ours to fill in.
+        ///
+        /// <c>ExecIf</c> rather than a plain <c>Set</c>, and one priority of its own ahead of the
+        /// Dial: the alternative is a labelled <c>GotoIf</c> chain, which is three lines and a
+        /// label per extension to save one module on the allowlist (D31).
+        /// </summary>
+        private static string InternalMusicOnHoldLine(MohClass? mohClass)
+        {
+            if (mohClass == null)
+                return "";
+
+            if (!MohClass.IsValidName(mohClass.Name))
+                throw new InvalidOperationException($"The music on hold class that ships, '{mohClass.Name}', is not a name Asterisk could match.");
+
+            var name = ConfText.Safe(mohClass.Name.Trim(), "music on hold class");
+            var current = "${CHANNEL(musicclass)}";
+
+            return $"ExecIf($[\"{current}\" = \"\" | \"{current}\" = \"{MohClass.ReservedName}\"]?Set(CHANNEL(musicclass)={name}))";
         }
 
         /// <summary>

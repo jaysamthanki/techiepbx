@@ -99,7 +99,34 @@ namespace Techie.Pbx.Tests.Asterisk
                 files.Select(f => f.Module));
 
             Assert.Contains("[1001]", files.Single(f => f.FileName == "pjsip.conf").Content);
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30,tTkK)", files.Single(f => f.FileName == "extensions.conf").Content);
+
+            // The Dial is priority 2 on a real database: priority 1 is the hold music backfill,
+            // and every database has the class that ships to backfill with (D122 amended).
+            Assert.Contains(" same => n,Dial(PJSIP/1001,30,tTkK)", files.Single(f => f.FileName == "extensions.conf").Content);
+        }
+
+        /// <summary>
+        /// The class that ships reaches the internal context, so a caller who dialled from a phone
+        /// here has something to hear when the other side holds them (D122 amended). It is read
+        /// from the database, not baked into the renderer: renaming the class changes this line.
+        /// </summary>
+        [Fact]
+        public void The_class_that_ships_is_what_an_internal_call_falls_back_to()
+        {
+            AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
+
+            var dialplan = Content(this.applier.Render(), "extensions.conf");
+
+            Assert.Contains(
+                "exten => 1001,1,ExecIf($[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]" +
+                $"?Set(CHANNEL(musicclass)={MohClass.DefaultName}))\n",
+                dialplan);
+
+            var shipped = this.mohClasses.Default()!;
+            shipped.Name = "Lobby";
+            this.mohClasses.Update(shipped);
+
+            Assert.Contains("?Set(CHANNEL(musicclass)=Lobby))\n", Content(this.applier.Render(), "extensions.conf"));
         }
 
         /// <summary>
