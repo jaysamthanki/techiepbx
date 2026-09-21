@@ -2181,6 +2181,62 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
 >   way round — with `preferchannelclass = no` the hold payload is consulted *before* the
 >   channel's own class, and that payload is the holder's `moh_suggest`, so every route's class
 >   would be overridden by the extension that held the call. Neither was changed here.
+>
+> **Amended a third time 2026-09-21: the called channel gets the class from a Gosub.** The
+> amendment above was half the fix, and it says so in its own last bullet: it sets the class on the
+> channel *executing dialplan*, which is the caller's. The phone they dialled answers on a channel
+> `chan_pjsip` created, which never runs dialplan at all — so when the **caller** is the one who
+> presses hold, the channel Asterisk asks for music on is that one, it asks for the class named on
+> it, and that is the literal `default` its `moh_suggest` put there. This system deliberately
+> defines no `default` class (D119, and parked-caller silence depends on it), so what the lab got
+> was one line of log per hold and no music:
+>
+> ```
+> WARNING res_musiconhold.c _get_mohbyname: Music on Hold class 'default' not found in memory.
+> ```
+>
+> `Dial`'s **`U(<context>)`** option is Asterisk's own hook for this: it Gosubs into `<context>,s,1`
+> on the channel the Dial created, as that channel answers. Every internal Dial the renderer writes
+> now carries `U(sub-setmoh)`, and one small context is written once:
+>
+> ```
+> exten => 1001,1,ExecIf($["${CHANNEL(musicclass)}" = "" | "${CHANNEL(musicclass)}" = "default"]?Set(CHANNEL(musicclass)=Standard))
+>  same => n,Dial(PJSIP/1001,30,tTkKU(sub-setmoh))
+>
+> [sub-setmoh]
+> exten => s,1,ExecIf($["${CHANNEL(musicclass)}" = "" | "${CHANNEL(musicclass)}" = "default"]?Set(CHANNEL(musicclass)=Standard))
+>  same => n,Return()
+> ```
+>
+> - **A `[default]` section was the fix that was not taken**, and it is worth writing down why it
+>   never will be. Defining one would silence the warning and give every channel music — including
+>   a parked caller whose lot is set to silence, because "silence" here *is* the absence of a class
+>   for Asterisk to fall back to (D119, `ParkingConfRenderer`, `MohConfRenderer`). `default`
+>   staying undefined is load-bearing; the fix has to name a real class on the channel instead.
+> - **The same guard, from the same code.** The subroutine's `ExecIf` is
+>   `ExtensionsConfRenderer.InternalMusicOnHoldLine` — the identical string the caller's own line is
+>   built from, not a second copy of it — so the two sides of a call cannot end up guarded
+>   differently. It fills in only where Asterisk still has its own default sitting there, which on
+>   a freshly created channel is always, and leaves a class anybody chose alone.
+> - **The option and the context stand or fall together.** No class flagged as the default means no
+>   `[sub-setmoh]` and no `U()` naming it — the old silence, as before. This is not tidiness: a
+>   `U()` pointing at a context Asterisk cannot find fails the Gosub, and a failed Gosub in a Dial
+>   ends the call. One value decides both, in `InternalDialOptions`.
+> - **Ring groups are covered this time**, which the caller-side line still is not. A member who
+>   answers a group call is a Dial-created channel like any other, so `AppendRingGroup` writes the
+>   same options an extension does. What is still missing is the *caller* who dialled a group
+>   rather than an extension; that remains the one line in `AppendRingGroup` it always was.
+> - **Outbound is deliberately left alone.** A Dial out over a trunk keeps the bare `tTkK`. The
+>   channel it creates belongs to the provider, and what the far end of an outbound call hears
+>   while we hold them is their carrier's business, not ours to name a class for. **Worth knowing,
+>   and the user's call:** that means an internal caller who holds an *outbound* call is still the
+>   silent case, and still logs the warning.
+> - **One module joins the allowlist** (D31): `app_stack.so`, for the `Gosub` the `U()` performs
+>   and the `Return` that ends it. It was not there — nothing in this dialplan had used a
+>   subroutine before.
+> - **Not verified on the lab.** What has to be seen: a colleague put on hold by the person who
+>   called them hearing the shipped tracks, the warning gone from the Asterisk log, and a ring
+>   group member answering behaving the same way.
 
 D119 built one music on hold class, called `parking`, on one flat directory, because the only
 thing in this system that played hold music was a parked call. A class is a *directory* as far as

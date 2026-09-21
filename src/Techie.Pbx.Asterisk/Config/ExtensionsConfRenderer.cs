@@ -24,8 +24,25 @@ namespace Techie.Pbx.Asterisk.Config
         ///
         /// The cost, and it is worth knowing: <c>t</c>/<c>T</c> also turn on blind transfer, whose
         /// Asterisk default is <c>#</c>. Pressing # mid-call now starts one.
+        ///
+        /// A Dial to a phone in this building adds one more on top of these — see
+        /// <see cref="InternalDialOptions"/>.
         /// </summary>
         public const string DialOptions = "tTkK";
+
+        /// <summary>
+        /// The context <c>Dial</c>'s <c>U()</c> option names, which is the only way this system has
+        /// of running anything on the channel a <c>Dial</c> creates (D122 amended). A called phone's
+        /// channel never executes dialplan of its own, so nothing here had ever named a hold class
+        /// on it; <c>U(sub-setmoh)</c> Gosubs into the context below on that channel as it answers,
+        /// and the subroutine backfills the class exactly as the caller's side does.
+        ///
+        /// The name is the context, and <c>U()</c> always enters it at <c>s,1</c>. It is written
+        /// only when there is a class that ships to name, and the option is only added to a Dial
+        /// when the context is there to reach — an empty <c>U()</c> target is a failed Gosub and a
+        /// dropped call, not a quiet no-op.
+        /// </summary>
+        public const string SetMohContext = "sub-setmoh";
 
         /// <summary>
         /// Where a number that matched no outbound route ends up: its own context, included last,
@@ -261,6 +278,11 @@ namespace Techie.Pbx.Asterisk.Config
             // and then nothing at all is written.
             var internalMusic = InternalMusicOnHoldLine(DefaultOf(mohClassList));
 
+            // The same backfill for the other end of the call, which needs the Gosub because a
+            // Dial-created channel runs no dialplan of its own. Both halves stand or fall together:
+            // no class that ships, no [sub-setmoh] context, and so no U() naming one.
+            var internalDialOptions = InternalDialOptions(internalMusic.Length > 0);
+
             if (internalMusic.Length > 0 && enabled.Count > 0)
             {
                 sb.Append('\n');
@@ -268,6 +290,8 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("; the class that ships on the caller's channel before it dials, and only when\n");
                 sb.Append("; Asterisk still has its own default sitting there: a class an inbound route\n");
                 sb.Append("; already chose for this caller is theirs, and is left alone (D122 amended).\n");
+                sb.Append($"; The U({SetMohContext}) on each Dial does the same for the channel it creates,\n");
+                sb.Append("; which is the one that is held when the caller is the one pressing hold.\n");
             }
 
             foreach (var extension in enabled)
@@ -291,11 +315,11 @@ namespace Techie.Pbx.Asterisk.Config
                 if (internalMusic.Length > 0)
                 {
                     sb.Append($"exten => {number},1,{internalMusic}\n");
-                    sb.Append($" same => n,Dial(PJSIP/{number},30,{DialOptions})\n");
+                    sb.Append($" same => n,Dial(PJSIP/{number},30,{internalDialOptions})\n");
                 }
                 else
                 {
-                    sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{DialOptions})\n");
+                    sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{internalDialOptions})\n");
                 }
 
                 if (extension.VoicemailEnabled)
@@ -316,7 +340,7 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             foreach (var group in groupList)
-                AppendRingGroup(sb, group, enabled);
+                AppendRingGroup(sb, group, enabled, internalDialOptions);
 
             foreach (var announcement in announcementList)
                 AppendAnnouncement(sb, announcement);
@@ -335,6 +359,8 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append("; Calls to the outside world, tried in the order the routes are listed\n");
                 sb.Append($"include => {OutboundContext}\n");
             }
+
+            AppendSetMohContext(sb, internalMusic);
 
             foreach (var ivr in ivrList)
                 AppendIvrContext(sb, ivr, ivr.GreetingIn(announcementRows)!, enabled);
@@ -704,7 +730,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// Dial only carries on to the next priority when nobody answered, so an answered call
         /// ends where it was answered rather than ringing the next member afterwards.
         /// </summary>
-        private static void AppendRingGroup(StringBuilder sb, RingGroup group, List<Extension> enabledExtensions)
+        /// <param name="dialOptions">
+        /// The same options an extension's own Dial carries, so that a member answering a group
+        /// call gets the hold class on their channel exactly as they would have if the caller had
+        /// dialled them directly (D122 amended).
+        /// </param>
+        private static void AppendRingGroup(StringBuilder sb, RingGroup group, List<Extension> enabledExtensions, string dialOptions)
         {
             var number = ConfText.Safe(group.Number, "ring group number");
             var name = ConfText.Safe(group.Name, "ring group name");
@@ -726,12 +757,12 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (group.ToStrategy() == RingStrategy.All)
             {
-                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds},{DialOptions})\n");
+                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds},{dialOptions})\n");
             }
             else
             {
                 foreach (var member in members)
-                    sb.Append($" same => n,Dial({member},{group.RingSeconds},{DialOptions})\n");
+                    sb.Append($" same => n,Dial({member},{group.RingSeconds},{dialOptions})\n");
             }
 
             sb.Append(DestinationDialplan.Lines(group.ToDestination()));
@@ -746,6 +777,44 @@ namespace Techie.Pbx.Asterisk.Config
             group.MemberList()
                 .Where(m => enabledExtensions.Any(e => string.Equals(e.Number, m, StringComparison.Ordinal)))
                 .ToList();
+
+        /// <summary>
+        /// The subroutine every internal Dial above Gosubs into on the channel it created, which
+        /// is the other half of the hold music backfill (D122 amended).
+        ///
+        /// The caller's side is a line in their own extension, because their channel is the one
+        /// executing dialplan. The channel the Dial creates executes none: chan_pjsip makes it,
+        /// puts the endpoint's <c>moh_suggest</c> on it — res_pjsip's default for which is the
+        /// literal <c>default</c> — and connects it. So when the caller is the one who presses
+        /// hold, the channel Asterisk asks for music on is that one, it asks for a class called
+        /// <c>default</c>, and this system deliberately defines no such class (D119): a warning in
+        /// the log and silence on the line.
+        ///
+        /// <c>Dial</c>'s <c>U()</c> option is the hook Asterisk provides for this — it runs a
+        /// Gosub on the called channel as it answers — and the subroutine does nothing the caller's
+        /// line does not, guard included: it fills in only where Asterisk still has its own default
+        /// sitting there. The <see cref="InternalMusicOnHoldLine"/> is shared, so the two sides
+        /// cannot drift.
+        ///
+        /// Nothing at all when there is no class that ships, which is also why
+        /// <see cref="InternalDialOptions"/> leaves the <c>U()</c> off the Dials then: a Gosub into
+        /// a context that is not there fails the call rather than being ignored.
+        /// </summary>
+        private static void AppendSetMohContext(StringBuilder sb, string internalMusic)
+        {
+            if (internalMusic.Length == 0)
+                return;
+
+            sb.Append('\n');
+            sb.Append($"[{SetMohContext}]\n");
+            sb.Append("; Run by the U() option on every Dial above, on the channel that Dial creates, as\n");
+            sb.Append("; it answers. That channel never executes dialplan of its own, so this is the only\n");
+            sb.Append("; place a hold class can be named on it - and it is the channel that gets held when\n");
+            sb.Append("; the caller is the one pressing hold. Same guard as the caller's own line: fill in\n");
+            sb.Append("; only where Asterisk still has its own default sitting there (D122 amended).\n");
+            sb.Append($"exten => s,1,{internalMusic}\n");
+            sb.Append(" same => n,Return()\n");
+        }
 
         /// <summary>
         /// One time condition's checks, in a context of its own (D63).
@@ -959,8 +1028,25 @@ namespace Techie.Pbx.Asterisk.Config
             mohClasses.Where(c => c.IsDefault).OrderBy(c => c.MohClassID).FirstOrDefault();
 
         /// <summary>
+        /// The options a Dial to a phone in this building carries. The shared
+        /// <see cref="DialOptions"/> plus the Gosub that names the hold class on the channel the
+        /// Dial creates (D122 amended) — and that one only when there is a
+        /// <see cref="SetMohContext"/> to Gosub into, because Asterisk fails a call whose
+        /// <c>U()</c> names a context it cannot find rather than carrying on without it.
+        ///
+        /// A Dial out over a trunk keeps the bare <see cref="DialOptions"/>: the channel it creates
+        /// belongs to the provider, and what the far end of an outbound call hears on hold is not
+        /// this system's to choose.
+        /// </summary>
+        private static string InternalDialOptions(bool hasSetMohContext) =>
+            hasSetMohContext ? $"{DialOptions}U({SetMohContext})" : DialOptions;
+
+        /// <summary>
         /// What a caller whose call started on a phone here hears while they are held, as the one
-        /// application that says it (D122 amended). Empty when there is no class that ships, which
+        /// application that says it (D122 amended). Written both on the caller's own channel, one
+        /// priority ahead of their Dial, and on the channel that Dial creates, through the
+        /// <see cref="SetMohContext"/> subroutine — the same text in both places, so the two sides
+        /// of a call cannot end up guarded differently. Empty when there is no class that ships, which
         /// leaves those calls in the silence they were in before this existed.
         ///
         /// The guard is the whole point. The class is named <b>only when Asterisk still has its own

@@ -138,7 +138,10 @@ namespace Techie.Pbx.Tests.Asterisk
         ///
         /// ExecIf and CHANNEL are not builtins, and they are what the hold music lines are made of
         /// (D122 amended): without them the extensions are left in the silence the whole amendment
-        /// is about, and Asterisk says so once per call in a warning nobody reads.
+        /// is about, and Asterisk says so once per call in a warning nobody reads. Gosub and Return
+        /// are not builtins either, and they are what Dial's U() option runs on the channel it
+        /// created to carry the same class to the phone that answers — and a Gosub that cannot run
+        /// does not leave a call quietly musicless, it ends it.
         /// </summary>
         [Theory]
         [InlineData("pbx_config.so")]
@@ -146,6 +149,7 @@ namespace Techie.Pbx.Tests.Asterisk
         [InlineData("app_playback.so")]
         [InlineData("app_voicemail.so")]
         [InlineData("app_exec.so")]
+        [InlineData("app_stack.so")]
         [InlineData("func_channel.so")]
         [InlineData("func_timeout.so")]
         public void The_allowlist_carries_what_the_dialplan_calls(string module)

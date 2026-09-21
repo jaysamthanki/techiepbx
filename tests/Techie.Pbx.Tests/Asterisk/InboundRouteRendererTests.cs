@@ -456,8 +456,67 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains(
                 "exten => 1001,1,ExecIf($[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]" +
                 "?Set(CHANNEL(musicclass)=Standard))\n" +
-                " same => n,Dial(PJSIP/1001,30,tTkK)\n",
+                " same => n,Dial(PJSIP/1001,30,tTkKU(sub-setmoh))\n",
                 internalContext);
+        }
+
+        /// <summary>
+        /// The half of the backfill the caller's own line cannot reach: the channel the Dial
+        /// creates, which runs no dialplan and so asks for a class called <c>default</c> that this
+        /// system never defines. Every Dial to a phone here carries the Gosub, ring groups
+        /// included, and the subroutine it names is guarded exactly as the caller's line is —
+        /// compared character for character, because the two drifting apart is the bug.
+        /// </summary>
+        [Fact]
+        public void The_channel_a_dial_creates_gosubs_into_the_same_guard()
+        {
+            var groups = new List<RingGroup>
+            {
+                new() { RingGroupID = 1, Number = "600", Name = "Support", Members = "1001,1002", RingSeconds = 20 },
+            };
+
+            var actual = ExtensionsConfRenderer.Render(
+                SampleExtensions(), SampleTrunks(), new List<OutboundRoute>(), MohRoutes(), groups,
+                new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
+                AsteriskSettings.DefaultTimezone, new ParkingSettings(), SampleMohClasses());
+
+            var option = $"U({ExtensionsConfRenderer.SetMohContext})";
+            var dials = actual.Split('\n').Where(line => line.Contains("Dial(", StringComparison.Ordinal)).ToList();
+
+            Assert.NotEmpty(dials);
+            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions}{option})", line, StringComparison.Ordinal));
+            Assert.Contains(" same => n,Dial(PJSIP/1001&PJSIP/1002,20,tTkK" + option + ")\n", actual);
+
+            // The subroutine itself: the caller-side guard verbatim, and a Return so the call
+            // carries on being connected rather than ending in the subroutine.
+            var guard =
+                "$[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]" +
+                "?Set(CHANNEL(musicclass)=Standard)";
+
+            Assert.Contains($"exten => 1001,1,ExecIf({guard})\n", actual);
+            Assert.Contains($"[{ExtensionsConfRenderer.SetMohContext}]\n", actual);
+            Assert.Contains($"exten => s,1,ExecIf({guard})\n same => n,Return()\n", actual);
+        }
+
+        /// <summary>
+        /// And no class that ships means neither half: no subroutine, and no <c>U()</c> naming one.
+        /// A Gosub into a context Asterisk cannot find fails the call, so the option must never
+        /// outlive the context — which is also why the two are decided by the same value.
+        /// </summary>
+        [Fact]
+        public void No_default_class_means_no_subroutine_and_no_gosub()
+        {
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 3, Name = "Front Desk", Directory = "front-desk" },
+            };
+
+            var actual = RenderWithMusic(SampleRoutes(), classes);
+            var dials = actual.Split('\n').Where(line => line.Contains("Dial(", StringComparison.Ordinal)).ToList();
+
+            Assert.NotEmpty(dials);
+            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions})", line, StringComparison.Ordinal));
+            Assert.DoesNotContain(ExtensionsConfRenderer.SetMohContext, actual);
         }
 
         /// <summary>

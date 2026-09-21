@@ -101,8 +101,11 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains("[1001]", files.Single(f => f.FileName == "pjsip.conf").Content);
 
             // The Dial is priority 2 on a real database: priority 1 is the hold music backfill,
-            // and every database has the class that ships to backfill with (D122 amended).
-            Assert.Contains(" same => n,Dial(PJSIP/1001,30,tTkK)", files.Single(f => f.FileName == "extensions.conf").Content);
+            // and every database has the class that ships to backfill with (D122 amended). The
+            // U() carries the same backfill to the channel the Dial creates.
+            Assert.Contains(
+                $" same => n,Dial(PJSIP/1001,30,tTkKU({ExtensionsConfRenderer.SetMohContext}))",
+                files.Single(f => f.FileName == "extensions.conf").Content);
         }
 
         /// <summary>
