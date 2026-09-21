@@ -87,9 +87,17 @@ namespace Techie.Pbx.Asterisk.Provisioning
             // worse than no opinion at all (D84).
             var deviceAuth = new List<(string Name, string Value)>();
             if (config.AdminPassword.Length > 0)
+            {
+                // The .set flag is what makes the phone apply the password: without it the value
+                // is stored and the login stays on the factory default (D84).
                 deviceAuth.Add(PolycomXml.Attribute("device.auth.localAdminPassword", config.AdminPassword, "device admin password"));
+                deviceAuth.Add(PolycomXml.Constant("device.auth.localAdminPassword.set", "1"));
+            }
             if (config.UserPassword.Length > 0)
+            {
                 deviceAuth.Add(PolycomXml.Attribute("device.auth.localUserPassword", config.UserPassword, "device user password"));
+                deviceAuth.Add(PolycomXml.Constant("device.auth.localUserPassword.set", "1"));
+            }
 
             if (deviceAuth.Count > 0)
                 PolycomXml.Element(sb, "  ", "device", deviceAuth);
