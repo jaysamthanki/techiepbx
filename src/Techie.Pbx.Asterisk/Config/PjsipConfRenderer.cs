@@ -143,6 +143,12 @@ namespace Techie.Pbx.Asterisk.Config
                 else
                     sb.Append("remove_existing = yes\n");
 
+                // One OPTIONS per contact each minute: without it every contact shows NonQual
+                // and a latency of nan, so "which of a phone's NAT paths is alive" — the thing
+                // an admin with two VPN paths actually needs to know — is invisible, and a
+                // dead contact looks the same as a live one (D111).
+                sb.Append("qualify_frequency = 60\n");
+
             }
 
             foreach (var trunk in TrunkRenderOrder(trunks))
