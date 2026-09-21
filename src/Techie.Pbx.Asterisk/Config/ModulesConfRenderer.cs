@@ -86,7 +86,6 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 "codec_alaw.so",
                 "codec_g722.so",             // wideband HD voice, offered to endpoints that ask (D117)
-                "format_g722.so",            // reads the .g722 music on hold tracks (D122)
                 "codec_ulaw.so",             // slin is core in Asterisk 22 - it has no module to load (D117)
                 "codec_gsm.so",             // prompts ship as GSM, voicemail records wav49
                 "format_gsm.so",

@@ -152,16 +152,30 @@ one. Nothing here is rendered into `/etc/asterisk` — a phone's config is gener
 | `ExtensionID` | INTEGER FK → `Extensions`, nullable | `ON DELETE SET NULL`: deleting an extension unassigns the phone rather than being refused (D80) |
 | `Enabled` | INTEGER | 0/1, default 1. A disabled phone is refused its config at the next poll |
 
-### MohFiles (017)
+### MohClasses (019)
 
-The music on hold tracks (D119). One class, one directory, one row per file in it — there is no
-per-class UI, so a track has no options of its own and nothing points at it.
+The music on hold classes (D122). A class is a name Asterisk knows and a directory it plays, so
+this is what `musiconhold.conf` writes a section each for. The class that ships is seeded by the
+schema script; its audio is put there by the installer.
 
 | Column | Type | Notes |
 |---|---|---|
-| `MohFileID` | INTEGER PK | Also the first part of the stored file name, which is what makes it unique |
+| `MohClassID` | INTEGER PK | |
+| `Name` | TEXT, unique `COLLATE NOCASE` | What Asterisk calls the class and what a setting names. Case-insensitive because Asterisk matches class names with `strcasecmp`; never `default`, which is Asterisk's own fallback (D119) |
+| `Directory` | TEXT, unique | One subdirectory of `/var/lib/asterisk/moh`: lower-case letters, digits and dashes, up to 24 chars. Separate from `Name` so renaming a class need not move files |
+| `IsDefault` | INTEGER | 0/1. The class that ships with the product, seeded as `Standard` / `default`. Cannot be deleted: it is where the installer writes |
+
+### MohFiles (017, 019)
+
+The music on hold tracks (D119, D122). One row per file in a class's directory; a track has no
+options of its own and nothing points at it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `MohFileID` | INTEGER PK | Also the first part of an uploaded file's name, which is what keeps two tracks apart |
+| `MohClassID` | INTEGER FK → `MohClasses` | `ON DELETE CASCADE`: a track outside a class is a file nothing would play (019) |
 | `Name` | TEXT | Up to 64 chars. **Not** unique: nothing refers to a track by name |
-| `File` | TEXT, unique | Stored file name, `<MohFileID>-<slug>.wav`, under `/var/lib/asterisk/moh`. Unique because one flat directory is what `res_musiconhold` plays |
+| `File` | TEXT, unique per class | Stored file name under `/var/lib/asterisk/moh/<class directory>`. `<MohFileID>-<slug>.wav` for an upload, `default-N.wav` for the tracks the installer writes. Unique per class because a class plays its own directory whole |
 | `CreatedUnix` | INTEGER | When it was uploaded. Shown, nothing else |
 
 ### PhoneButtons (018)
@@ -196,10 +210,11 @@ Also `Sip.TcpPort`, `Sip.TlsPort`, `Sip.StunServer`, `Sip.Codecs`, `System.Timez
 `Provisioning.Username` and `Provisioning.Password` — the last two being the user:pass a phone
 sends to fetch its configuration, i.e. the credentials embedded in the DHCP option 160 URL (D77).
 
-And call parking (D119), all five of which a generated conf file carries: `Parking.Enabled`
+And call parking (D119, D122), all six of which a generated conf file carries: `Parking.Enabled`
 (`on`/`off`, default off), `Parking.DtmfCode` (a star and one or two digits, default `*3`),
-`Parking.Slots` (1–9, default 9), `Parking.Timeout` (30–600 seconds, default 60) and
-`Parking.Audio` (`silence` or `moh`, default silence).
+`Parking.Slots` (1–9, default 9), `Parking.Timeout` (30–600 seconds, default 60),
+`Parking.Audio` (`silence` or `moh`, default silence) and `Parking.MusicClass` (the name of a
+music on hold class, default `Standard`, written as `parkedmusicclass`).
 
 And the mail settings (D115), which this application reads and no generated conf file carries:
 `Mail.Transport` (`graph`, `smtp`, or blank for "decide for me"), `Mail.FromAddress`,

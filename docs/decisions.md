@@ -2055,9 +2055,10 @@ Music on hold is now its own feature with its own page, and parking is one of it
   into the class's directory, and the format changed after the user asked for better than
   telephone-quality music: hold music now converts to 16 kHz mono **G.722**, the same wideband
   the voice path carries (D117), so a G.722 call plays it with no transcoding at all.
-  `format_g722.so` joins the module allowlist to read the files. Announcements stay 8 kHz PCM
-  WAV (D55): they play through the narrowband voicemail path, and one format per feature is
-  the bargain both make. 
+  `.g722` files are read by `format_pcm.so` — already loaded for the announcement WAVs, because
+  in Asterisk 22 one module covers raw pcm/alaw/ulaw/g722 files and there is no separate
+  format_g722 to add. Announcements stay 8 kHz PCM WAV (D55): they play through the narrowband
+  voicemail path, and one format per feature is the bargain both make. 
 - **A track does not move between classes.** The class is chosen when the track is added and is
   read-only afterwards: moving one is moving a file on disk to make a dropdown true, and deleting
   it and uploading it again says the same thing with no new failure mode to explain.
