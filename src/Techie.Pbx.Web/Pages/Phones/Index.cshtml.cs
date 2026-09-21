@@ -8,6 +8,7 @@ using Techie.Pbx.Asterisk.Provisioning;
 using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Web.Controllers;
 using Techie.Pbx.Web.Pages.Settings;
 
 namespace Techie.Pbx.Web.Pages.Phones
@@ -155,7 +156,79 @@ namespace Techie.Pbx.Web.Pages.Phones
             return this.Changed($"Phone {phone.Mac} deleted.");
         }
 
-        /// <summary>
+                /// <summary>
+        /// The configuration the phone would be served if it asked for it right now: what the
+        /// View config button in the edit modal opens (D121). Read-only — it builds exactly what
+        /// the provisioning controller would build from the same rows, without updating anything
+        /// the phone owns, so looking cannot change what a later real request records. The one
+        /// difference from the phone's own request: a preview needs the phone to already exist,
+        /// which on this page it always does.
+        /// </summary>
+        public IActionResult OnGetConfig(long phoneID)
+        {
+            var phone = this.phones.GetByID(phoneID);
+            if (phone == null)
+                return this.NotFound();
+
+            var stored = this.settings.GetAll();
+            var transport = AsteriskSettings.Transport(stored);
+            var allExtensions = this.extensions.GetAll();
+            var usable = PhoneButton.Usable(
+                this.buttons.GetForPhone(phoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
+
+            if (phone.MatchesBrand(PhoneBrand.Polycom))
+            {
+                stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
+                stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
+
+                var config = new PolycomConfig
+                {
+                    AdminPassword = (adminPassword ?? "").Trim(),
+                    Buttons = usable,
+                    Extensions = allExtensions,
+                    GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
+                    Phone = phone,
+                    ServerAddress = this.ServerAddress(transport.BindAddress),
+                    SipPort = transport.Port,
+                    SntpAddress = AsteriskSettings.NtpServer(stored),
+                    UserPassword = (userPassword ?? "").Trim(),
+                };
+
+                return this.Content(PolycomConfigRenderer.Render(config), "text/plain");
+            }
+
+            stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var username);
+            stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var password);
+
+            var yealink = new YealinkConfig
+            {
+                Buttons = usable,
+                Codecs = transport.Codecs,
+                Extensions = allExtensions,
+                NtpServer = AsteriskSettings.NtpServer(stored),
+                Phone = phone,
+                ProvisioningPassword = (password ?? "").Trim(),
+                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + "yealink",
+                ProvisioningUsername = (username ?? "").Trim(),
+                ServerAddress = this.ServerAddress(transport.BindAddress),
+                SipPort = transport.Port,
+                TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
+            };
+
+            return this.Content(YealinkConfigRenderer.Render(yealink), "text/plain");
+        }
+
+        /// <summary>The host a phone should be told to reach us at: the configured one, else ours.</summary>
+        private string RequestHost()
+        {
+            var hostname = (this.settings.Get(SettingsKeys.SystemHostname) ?? "").Trim();
+            return hostname.Length > 0 ? hostname : this.Request.Host.Host;
+        }
+
+        private string ServerAddress(string bindAddress) =>
+            bindAddress.Length == 0 || bindAddress == "0.0.0.0" ? this.RequestHost() : bindAddress;
+
+/// <summary>
         /// Reboots the phone, for when the daily poll (D79) is too slow to wait for. Confirmed with
         /// sweetalert2 before htmx ever calls this (D42).
         ///

@@ -205,7 +205,12 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
                 if (button == null)
                 {
+                    // The FreePBX module's generated configs write all three attributes, empty,
+                    // for a blank slot: a lone empty address is skipped by the phone and every
+                    // key after the gap shuffles up one (D121).
                     attributes.Add(PolycomXml.Constant($"{resource}.address", ""));
+                    attributes.Add(PolycomXml.Constant($"{resource}.label", ""));
+                    attributes.Add(PolycomXml.Constant($"{resource}.type", ""));
                     continue;
                 }
 

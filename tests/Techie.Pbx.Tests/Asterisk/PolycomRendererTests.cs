@@ -154,9 +154,10 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains("attendant.resourceList.3.address=\"1002\"\n", actual);
             Assert.Contains("attendant.resourceList.3.label=\"Sales\"\n", actual);
 
-            // A blank key is blank: no label and no type to make the phone show something there.
-            Assert.DoesNotContain("attendant.resourceList.1.label", actual);
-            Assert.DoesNotContain("attendant.resourceList.2.type", actual);
+            // A blank key is blank all three ways, the FreePBX module's shape: the phone leaves
+            // the key unassigned instead of skipping it and shuffling the rest up (D121).
+            Assert.Contains("attendant.resourceList.1.label=\"\"\n", actual);
+            Assert.Contains("attendant.resourceList.2.type=\"\"\n", actual);
             Assert.DoesNotContain("attendant.resourceList.4", actual);
         }
 
