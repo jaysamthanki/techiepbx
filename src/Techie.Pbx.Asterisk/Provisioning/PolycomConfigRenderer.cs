@@ -99,8 +99,15 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 deviceAuth.Add(PolycomXml.Constant("device.auth.localUserPassword.set", "1"));
             }
 
+            // device.set is the master flag the Edge E admin guide requires before any of the
+            // device.auth password parameters take effect — the per-parameter .set alone is not
+            // enough, and a half-applied password leaves the phone's login on a value nobody
+            // remembers (D84).
             if (deviceAuth.Count > 0)
+            {
+                deviceAuth.Insert(0, PolycomXml.Constant("device.set", "1"));
                 PolycomXml.Element(sb, "  ", "device", deviceAuth);
+            }
 
             // Opt the phone out of Poly Lens data collection so it stops asking at every boot
             // (PVOS 8.4's da.optIn; Undecided is what makes it prompt). One line, no choice
