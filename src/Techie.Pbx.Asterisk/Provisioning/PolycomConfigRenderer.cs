@@ -102,6 +102,14 @@ namespace Techie.Pbx.Asterisk.Provisioning
             if (deviceAuth.Count > 0)
                 PolycomXml.Element(sb, "  ", "device", deviceAuth);
 
+            // Opt the phone out of Poly Lens data collection so it stops asking at every boot
+            // (PVOS 8.4's da.optIn; Undecided is what makes it prompt). One line, no choice
+            // offered: a TNPBX phone has no business phoning Lens.
+            PolycomXml.Element(sb, "  ", "da", new List<(string Name, string Value)>
+            {
+                PolycomXml.Constant("da.optIn", "OptedOut"),
+            });
+
             var buttons = Validated(config.Buttons);
             var lines = PhoneButton.Lines(buttons);
 
