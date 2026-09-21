@@ -81,8 +81,8 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new[]
                 {
-                    "asterisk.conf", "modules.conf", "rtp.conf", "logger.conf",
-                    "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf", "pjsip_notify.conf",
+                    "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf", "logger.conf",
+                    "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
                     "extensions.conf", "voicemail.conf",
                     "features.conf", "musiconhold.conf", "res_parking.conf",
                 },
@@ -91,8 +91,8 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new string?[]
                 {
-                    null, null, null, ConfigApplier.LoggerModule,
-                    ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
+                    null, null, null, null, ConfigApplier.LoggerModule,
+                    ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
                 },
@@ -103,7 +103,7 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// Asterisk reads these three once, at startup, so no reload can apply them (D33).
+        /// Asterisk reads these once, at startup, so no reload can apply them (D33).
         /// </summary>
         [Fact]
         public void The_files_asterisk_only_reads_at_startup_carry_no_module()
@@ -112,8 +112,14 @@ namespace Techie.Pbx.Tests.Asterisk
 
             // tnpbx-cert.pem joins the restart set (D101): a transport reads its certificate
             // when it is built, so a renewed one reaches SIP only at the next Asterisk start.
+            // pjsip_notify.conf joins it too (D123): res_pjsip_notify reads it when the module
+            // loads, and nothing re-reads it.
             Assert.Equal(
-                new[] { "asterisk.conf", "modules.conf", "rtp.conf", PjsipConfRenderer.TlsCertificateFileName },
+                new[]
+                {
+                    "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf",
+                    PjsipConfRenderer.TlsCertificateFileName,
+                },
                 restart);
         }
 
@@ -261,7 +267,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new[]
                 {
-                    ConfigApplier.LoggerModule, ConfigApplier.PjsipModule, ConfigApplier.NotifyModule,
+                    ConfigApplier.LoggerModule, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
                     ConfigApplier.ManagerModule,

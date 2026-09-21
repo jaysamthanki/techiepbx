@@ -29,6 +29,13 @@ namespace Techie.Pbx.Asterisk.Status
         public List<InboundRoute> InboundRoutes { get; set; } = new();
         public List<Ivr> Ivrs { get; set; } = new();
         public List<OutboundRoute> OutboundRoutes { get; set; } = new();
+
+        /// <summary>
+        /// The keys on every phone, which is where a phone's registration lives since schema 020:
+        /// each row carries its own PhoneID, so the rules match them back to their phone.
+        /// </summary>
+        public List<PhoneButton> PhoneButtons { get; set; } = new();
+
         public List<Phone> Phones { get; set; } = new();
 
         /// <summary>Asterisk is still running config an apply has replaced on disk (D104).</summary>

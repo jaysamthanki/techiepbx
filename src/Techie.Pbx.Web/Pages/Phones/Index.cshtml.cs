@@ -2,6 +2,7 @@ using System.Text.Json;
 using log4net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Asterisk.Provisioning;
 using Techie.Pbx.Core;
@@ -16,7 +17,8 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// extension each one registers as (D77, D78, D88). Built like the other list pages — a shell
     /// htmx fills, the form in the shared Bootstrap modal (D42), rows that open their own edit
     /// form (D48). Two brands share this one page: Polycom and Yealink provision themselves
-    /// differently, but an admin manages both the same way — name it, assign an extension.
+    /// differently, but an admin manages both the same way — name it, and put an extension on
+    /// key 1, which is what the phone registers as (schema 020).
     ///
     /// Two things it deliberately does not have. There is **no Add button**: a phone appears here
     /// by asking for its config, not by an admin typing a MAC address, because the MAC has to be
@@ -64,14 +66,15 @@ namespace Techie.Pbx.Web.Pages.Phones
             if (phone == null)
                 return this.NotFound();
 
+            var assigned = this.buttons.GetForPhone(phone.PhoneID);
+
             return this.Partial("_Form", this.Fill(new PhoneForm
             {
                 Brand = phone.Brand,
-                Buttons = this.buttons.GetForPhone(phone.PhoneID)
+                Buttons = assigned
                     .Select(button => new PhoneButtonForm { Position = button.Position, Target = button.Key })
                     .ToList(),
                 Enabled = phone.Enabled,
-                ExtensionID = phone.ExtensionID,
                 Firmware = phone.Firmware,
                 LastConfig = phone.LastConfig,
                 LastIP = phone.LastIP,
@@ -80,6 +83,7 @@ namespace Techie.Pbx.Web.Pages.Phones
                 Model = phone.Model,
                 Name = phone.Name,
                 PhoneID = phone.PhoneID,
+                RebootHint = this.RebootHint(phone, assigned),
             }));
         }
 
@@ -102,17 +106,24 @@ namespace Techie.Pbx.Web.Pages.Phones
         public PartialViewResult OnGetTable()
         {
             var allExtensions = this.extensions.GetAll();
+            var lines = this.buttons.GetLines();
 
             var rows = this.phones.GetAll()
                 .Select(phone =>
                 {
-                    var extension = allExtensions.FirstOrDefault(e => e.ExtensionID == phone.ExtensionID);
+                    // What a phone registers as is its line key now, not a column on its row
+                    // (schema 020), so the table asks the keys.
+                    var number = PhoneButton.LineNumber(lines.Where(line => line.PhoneID == phone.PhoneID));
+                    var extension = allExtensions.FirstOrDefault(e =>
+                        string.Equals(e.Number, number, StringComparison.Ordinal));
 
                     return new PhoneRow
                     {
                         Brand = phone.Brand,
                         Enabled = phone.Enabled,
-                        Extension = extension == null ? "" : $"{extension.Number} {extension.Name}",
+                        // The number on its own when the extension has been deleted out from under
+                        // the key: "registers as 1001, which is gone" beats "unassigned".
+                        Extension = extension != null ? $"{extension.Number} {extension.Name}" : number ?? "",
                         Firmware = phone.Firmware,
                         LastConfig = phone.LastConfig,
                         LastIP = phone.LastIP,
@@ -145,50 +156,41 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// Pushes a reboot to the phone, for when the daily poll (D79) is too slow to wait for.
-        /// Confirmed with sweetalert2 before htmx ever calls this (D84). A Polycom phone is
-        /// pushed over its own web UI; a Yealink phone has none, so it gets a SIP NOTIFY through
-        /// Asterisk instead, addressed to the extension it is linked to (D91). Best-effort either
-        /// way: a phone that cannot be reached is named in the toast, but nothing here is a config
-        /// change, so there is no undo and no apply.
+        /// Reboots the phone, for when the daily poll (D79) is too slow to wait for. Confirmed with
+        /// sweetalert2 before htmx ever calls this (D42).
+        ///
+        /// A SIP NOTIFY through Asterisk, addressed to the extension the phone's line key names
+        /// (D123). It goes to whatever contact the phone registered from, so unlike the HTTP push
+        /// to a Polycom phone's own web UI it reaches a phone behind NAT — which is every phone on
+        /// a hosted PBX (D118). Best-effort: a NOTIFY that cannot be sent is named in the toast,
+        /// but nothing here is a config change, so there is no undo and no apply.
         /// </summary>
-        public async Task<IActionResult> OnPostReboot(long phoneID)
+        public IActionResult OnPostReboot(long phoneID)
         {
             var phone = this.phones.GetByID(phoneID);
             if (phone == null)
                 return this.NotFound();
 
-            if (phone.MatchesBrand(PhoneBrand.Yealink))
-            {
-                var sentTo = this.NotifyYealink(phone, reboot: true);
+            var number = PhoneButton.LineNumber(this.buttons.GetForPhone(phoneID));
+            if (number == null)
+                return this.Changed($"Phone {phone.Mac} has no line key, so it registers as nothing and there is nowhere to send a reboot.");
 
-                Log.Info($"Reboot NOTIFY sent for phone {phone.Mac} by {this.User.Identity?.Name}: {(sentTo != null ? "sent" : "skipped, no usable extension")}");
+            var sent = PhoneNotifier.NotifyReboot(AsteriskSettings.Ami(this.settings.GetAll()), phone.Brand, number);
 
-                return this.Changed(sentTo != null
-                    ? $"Reboot sent to {phone.Mac} via extension {sentTo}."
-                    : $"Phone {phone.Mac} has no extension able to receive a reboot notify.");
-            }
-
-            if (phone.LastIP.Length == 0)
-                return this.Changed($"Phone {phone.Mac} has never provisioned, so there is no address to reboot it at.");
-
-            var stored = this.settings.GetAll();
-            if (!stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword) || adminPassword.Length == 0)
-                return this.Changed("Set Provisioning.AdminPassword on the Settings page before rebooting a phone.");
-
-            var sent = await PolycomPusher.PushReboot(phone.LastIP, adminPassword);
-
-            Log.Info($"Reboot pushed to phone {phone.Mac} at {phone.LastIP} by {this.User.Identity?.Name}: {(sent ? "accepted" : "not confirmed")}");
+            Log.Info($"Reboot NOTIFY for phone {phone.Mac} to extension {number} by {this.User.Identity?.Name}: {(sent ? "sent" : "failed")}");
 
             return this.Changed(sent
-                ? $"Reboot sent to {phone.Mac}."
-                : $"Could not reach {phone.Mac} at {phone.LastIP}; it will pick up any change at its next poll.");
+                ? $"Reboot sent to {phone.Mac} as a NOTIFY to extension {number}."
+                : $"Could not send a reboot to {phone.Mac}. If it is not registered there is nothing to send it to; it will pick up any change at its next poll.");
         }
 
         /// <summary>
-        /// Saves what an admin owns: the keys on the Buttons tab (D121) and the three fields on
+        /// Saves what an admin owns: the keys on the Buttons tab (D121) and the two fields on
         /// Details. Everything else on the row was written by the phone and is left alone, so a
         /// save cannot overwrite what the last provisioning request recorded.
+        ///
+        /// Assigning the phone to somebody is now one of the keys — key 1, the line it registers
+        /// as (schema 020) — so this saves the keys and the rest follows from them.
         ///
         /// A key left on "Nothing" posts an empty target and is simply not among the rows saved,
         /// which is how a key is cleared: the whole set is replaced every time.
@@ -200,7 +202,6 @@ namespace Techie.Pbx.Web.Pages.Phones
                 return this.NotFound();
 
             phone.Enabled = form.Enabled;
-            phone.ExtensionID = form.ExtensionID is > 0 ? form.ExtensionID : null;
             phone.Name = (form.Name ?? "").Trim();
 
             var assigned = new List<PhoneButton>();
@@ -227,7 +228,7 @@ namespace Techie.Pbx.Web.Pages.Phones
                 return this.Partial("_Form", this.Refill(form, phone, ex.Errors));
             }
 
-            this.PushConfigReload(phone);
+            this.PushConfigReload(phone, assigned);
 
             Log.Info($"Phone {phone.Mac} updated by {this.User.Identity?.Name}");
             return this.Changed($"Phone {phone.Mac} saved.");
@@ -253,10 +254,10 @@ namespace Techie.Pbx.Web.Pages.Phones
         /// <summary>
         /// The lists the form cannot know for itself.
         ///
-        /// The extensions this phone could register as, or put a key on: a disabled extension has
-        /// no PJSIP endpoint, so it is not offered — except when it is the one already chosen or
-        /// one a key already names, which have to stay visible or saving the form would silently
-        /// unassign the phone or clear the key.
+        /// The extensions a key could name, whether as the line this phone registers as or as a
+        /// lamp on somebody else's: a disabled extension has no PJSIP endpoint, so it is not
+        /// offered — except when a key already names it, which has to stay visible or saving the
+        /// form would silently clear that key.
         ///
         /// The parking slots, which exist only when parking is switched on (D119), and one row per
         /// assignable key whatever arrived: a posted form carries them all, a GET carries only the
@@ -279,12 +280,12 @@ namespace Techie.Pbx.Web.Pages.Phones
 
             var named = form.Buttons
                 .Select(b => PhoneButton.TryParse(b.Target, b.Position, out var button) ? button : null)
-                .Where(b => b is { TargetType: PhoneButtonTarget.Extension })
+                .Where(b => b != null && PhoneButtonTarget.IsExtension(b.TargetType))
                 .Select(b => b!.TargetValue)
                 .ToList();
 
             form.Extensions = this.extensions.GetAll()
-                .Where(e => e.Enabled || e.ExtensionID == form.ExtensionID || named.Contains(e.Number))
+                .Where(e => e.Enabled || named.Contains(e.Number))
                 .ToList();
 
             form.ParkingSlots = AsteriskSettings.Parking(this.settings.GetAll()).SlotNumbers.ToList();
@@ -293,41 +294,28 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// The Yealink half of a push: a SIP NOTIFY sent through Asterisk over AMI, because a
-        /// Yealink phone has no web endpoint to push to the way a Polycom one does (D91). Needs
-        /// the extension the phone is linked to — the NOTIFY is addressed to its registered
-        /// contacts, so a phone with nobody assigned has nowhere to send it.
-        /// </summary>
-        private string? NotifyYealink(Phone phone, bool reboot)
-        {
-            var extension = phone.ExtensionID is > 0 ? this.extensions.GetByID(phone.ExtensionID.Value) : null;
-            if (extension is not { Enabled: true })
-            {
-                Log.Info($"Phone {phone.Mac} has no usable extension, so no notify was sent");
-                return null;
-            }
-
-            var ami = AsteriskSettings.Ami(this.settings.GetAll());
-            var sent = reboot
-                ? YealinkNotifier.NotifyReboot(ami, extension.Number)
-                : YealinkNotifier.NotifyCheckConfig(ami, extension.Number);
-
-            return sent ? extension.Number : null;
-        }
-
-        /// <summary>
         /// Tells the phone to fetch its new config right away rather than waiting for the daily
-        /// poll (D79). A Polycom phone is pushed over its own web UI (D84); a Yealink phone gets
-        /// the same SIP NOTIFY <see cref="NotifyYealink"/> sends for a reboot, with a different
-        /// category (D91). Fire-and-forget either way: not awaited for Polycom and the return
-        /// value ignored for Yealink, because a phone that cannot be reached still gets there at
-        /// its next poll, so nothing here can turn a successful save into a failed one.
+        /// poll (D79). A Yealink phone gets a SIP NOTIFY through Asterisk, addressed to the
+        /// extension its line key names, which asks it to re-read its config without rebooting
+        /// (D91). A Polycom phone is pushed over its own web UI instead (D86), because the only
+        /// NOTIFY that reaches a Polycom phone reboots it, and rebooting a handset because
+        /// somebody renamed it would be worse than waiting.
+        ///
+        /// Fire-and-forget either way: not awaited for Polycom and the return value ignored for
+        /// Yealink, because a phone that cannot be reached still gets there at its next poll, so
+        /// nothing here can turn a successful save into a failed one.
         /// </summary>
-        private void PushConfigReload(Phone phone)
+        private void PushConfigReload(Phone phone, IEnumerable<PhoneButton> assigned)
         {
             if (phone.MatchesBrand(PhoneBrand.Yealink))
             {
-                this.NotifyYealink(phone, reboot: false);
+                var number = PhoneButton.LineNumber(assigned);
+
+                if (number == null)
+                    Log.Info($"Phone {phone.Mac} registers as nothing, so no notify was sent");
+                else
+                    PhoneNotifier.NotifyCheckConfig(AsteriskSettings.Ami(this.settings.GetAll()), number);
+
                 return;
             }
 
@@ -339,6 +327,29 @@ namespace Techie.Pbx.Web.Pages.Phones
                 return;
 
             _ = PolycomPusher.PushUpdateConfig(phone.LastIP, adminPassword);
+        }
+
+        /// <summary>
+        /// Why the Reboot button is disabled, or empty when it is not (D123). A reboot is a NOTIFY
+        /// to the contact the phone registered, so it needs a line key to address and a phone that
+        /// has actually registered on it. An AMI we could not ask answers Unknown for every
+        /// extension, and not knowing is no reason to take the button away — the toast says so if
+        /// the send then fails.
+        /// </summary>
+        private string RebootHint(Phone phone, IEnumerable<PhoneButton> assigned)
+        {
+            if (!phone.MatchesBrand(PhoneBrand.Polycom))
+                return "Rebooting a Yealink phone from here is not built yet.";
+
+            var number = PhoneButton.LineNumber(assigned);
+            if (number == null)
+                return "This phone registers as nothing, so there is no contact to send a reboot to. Put an extension on key 1.";
+
+            var states = RegistrationStatus.Read(AsteriskSettings.Ami(this.settings.GetAll()), new[] { number });
+
+            return states[number] == RegistrationState.NotRegistered
+                ? $"Extension {number} is not registered, so the phone has no contact to send a reboot to."
+                : "";
         }
 
         /// <summary>
@@ -355,6 +366,10 @@ namespace Techie.Pbx.Web.Pages.Phones
             form.LocalSipPort = phone.LocalSipPort;
             form.Mac = phone.Mac;
             form.Model = phone.Model;
+
+            // The keys as they are stored rather than as the failed post left them: what can be
+            // rebooted is a question about the phone, not about the edit that did not save.
+            form.RebootHint = this.RebootHint(phone, this.buttons.GetForPhone(phone.PhoneID));
 
             return this.Fill(form);
         }

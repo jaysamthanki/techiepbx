@@ -240,15 +240,19 @@ namespace Techie.Pbx.Asterisk.Status
         private static string PhoneLabel(Phone phone) => phone.Name.Length > 0 ? phone.Name : phone.Mac;
 
         /// <summary>
-        /// Phones that cannot register: one pointed at an extension that has been switched off,
-        /// and one nobody has assigned an extension to at all. The second is only a note — a phone
-        /// waiting on a desk for somebody to start is an ordinary thing for a site to have.
+        /// Phones that cannot register, which since schema 020 is a question about their line key:
+        /// one whose line is an extension that has been switched off, one whose line names an
+        /// extension that has since been deleted — the key holds the number, so nothing stops that
+        /// — and one nobody has put a line on at all. The last is only a note: a phone waiting on a
+        /// desk for somebody to start is an ordinary thing for a site to have.
         /// </summary>
         private static void Phones(StatusSnapshot snapshot, List<Finding> findings)
         {
             foreach (var phone in snapshot.Phones.Where(phone => phone.Enabled))
             {
-                if (phone.ExtensionID == null)
+                var number = PhoneButton.LineNumber(snapshot.PhoneButtons.Where(b => b.PhoneID == phone.PhoneID));
+
+                if (number == null)
                 {
                     findings.Add(Note(
                         FindingSeverity.Info,
@@ -258,9 +262,17 @@ namespace Techie.Pbx.Asterisk.Status
                     continue;
                 }
 
-                var extension = snapshot.Extensions.FirstOrDefault(e => e.ExtensionID == phone.ExtensionID.Value);
+                var extension = snapshot.Extensions.FirstOrDefault(e =>
+                    string.Equals(e.Number, number, StringComparison.Ordinal));
 
-                if (extension is { Enabled: false })
+                if (extension == null)
+                {
+                    findings.Add(Note(
+                        FindingSeverity.Warning,
+                        FindingSubject.Phones,
+                        $"Phone {PhoneLabel(phone)} registers as extension {number}, which no longer exists."));
+                }
+                else if (!extension.Enabled)
                 {
                     findings.Add(Note(
                         FindingSeverity.Warning,

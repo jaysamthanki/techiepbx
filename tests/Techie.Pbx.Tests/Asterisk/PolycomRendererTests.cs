@@ -21,27 +21,34 @@ namespace Techie.Pbx.Tests.Asterisk
             Secret = "AAAAbbbbCCCCdddd1111",
         };
 
-        /// <summary>The extensions a key can name, which is where the label on it comes from.</summary>
-        private static List<Extension> SampleButtonExtensions() => new()
+        /// <summary>The extensions a key can name: the one it registers as, and one to watch.</summary>
+        private static List<Extension> SampleExtensions() => new()
         {
             SampleExtension(),
             new Extension { ExtensionID = 8, Number = "1002", Name = "Sales", Secret = "EEEEffffGGGGhhhh2222" },
         };
 
         /// <summary>
-        /// Two keys assigned out of eight — one extension, one parking slot — and the other six
-        /// left alone, which is what a real phone looks like (D121).
+        /// The line, and two lamps out of the remaining seven keys — one extension, one parking
+        /// slot — with the rest left alone, which is what a real phone looks like (D121).
         /// </summary>
         private static List<PhoneButton> SampleButtons() => new()
         {
-            new PhoneButton { Position = 1, TargetType = PhoneButtonTarget.Extension, TargetValue = "1002" },
+            SampleLine(),
+            new PhoneButton { Position = 2, TargetType = PhoneButtonTarget.Blf, TargetValue = "1002" },
             new PhoneButton { Position = 4, TargetType = PhoneButtonTarget.ParkingSlot, TargetValue = "3" },
         };
 
+        /// <summary>Key 1: the extension this phone registers as (schema 020).</summary>
+        private static PhoneButton SampleLine() =>
+            new() { Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" };
+
+        /// <summary>A phone that registers and has no other key on it.</summary>
         private static PolycomConfig SampleConfig() => new()
         {
             AdminPassword = "AdminPass123",
-            Extension = SampleExtension(),
+            Buttons = new List<PhoneButton> { SampleLine() },
+            Extensions = SampleExtensions(),
             GmtOffsetSeconds = -25200,
             Phone = SamplePhone(),
             ServerAddress = "10.8.20.4",
@@ -94,13 +101,14 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// A phone nobody has assigned yet still gets a valid file — the time and a poll — so it
-        /// can sit on a desk and start working when an extension is given to it (D78).
+        /// can sit on a desk and start working when an extension is given to it (D78). No keys is
+        /// what "nobody has assigned it" means now (schema 020).
         /// </summary>
         [Fact]
         public void A_phone_with_no_extension_matches_expected_file()
         {
             var config = SampleConfig();
-            config.Extension = null;
+            config.Buttons = new List<PhoneButton>();
             config.Phone.Name = "";
             config.Phone.PhoneID = 2;
 
@@ -108,46 +116,86 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// A phone with keys on it (D121). The resources are numbered 1 and 2 although the keys
-        /// are 1 and 4: a phone reads the resource list until the first index it cannot find, so a
+        /// A phone with keys on it (D121). Key 1 is the registration and does not appear in the
+        /// resource list at all; the two lamps are resources 1 and 2 although they are keys 2 and
+        /// 4, because a phone reads the resource list until the first index it cannot find, so a
         /// gap left by an unassigned key would hide everything after it.
         /// </summary>
         [Fact]
         public void A_phone_with_keys_matches_expected_file()
         {
             var config = SampleConfig();
-            config.ButtonExtensions = SampleButtonExtensions();
             config.Buttons = SampleButtons();
 
             Assert.Equal(Expected("polycom-phone-buttons.cfg"), PolycomConfigRenderer.Render(config));
         }
 
         /// <summary>
-        /// A phone nobody has assigned a key on gets no attendant element at all, so its line keys
-        /// stay the line appearances they were.
+        /// A phone whose only key is its line gets no attendant element at all, so the rest of its
+        /// line keys stay whatever the handset does with them.
         /// </summary>
         [Fact]
-        public void A_phone_with_no_keys_is_given_no_attendant_list()
+        public void A_phone_with_no_lamps_is_given_no_attendant_list()
         {
             Assert.DoesNotContain("attendant", PolycomConfigRenderer.Render(SampleConfig()));
         }
 
         /// <summary>
-        /// The label on an extension key is the extension's own name, so renaming an extension
-        /// relabels every key that watches it at the next poll. An extension the renderer was not
-        /// given falls back to the number rather than an empty key.
+        /// Two lines, which is a phone registering twice: reg.1 and reg.2, each taking a line key,
+        /// and the lamps then land on the keys left over.
+        /// </summary>
+        [Fact]
+        public void A_second_line_is_a_second_registration()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>
+            {
+                SampleLine(),
+                new() { Position = 2, TargetType = PhoneButtonTarget.Line, TargetValue = "1002" },
+            };
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("reg.1.address=\"1001\"", actual);
+            Assert.Contains("reg.2.address=\"1002\"", actual);
+            Assert.Contains("reg.2.auth.password=\"EEEEffffGGGGhhhh2222\"", actual);
+
+            // The message waiting lamp follows the phone's own extension, not the second line's.
+            Assert.Contains("msg.mwi.1.subscribe=\"1001\"", actual);
+            Assert.DoesNotContain("attendant", actual);
+        }
+
+        /// <summary>
+        /// The label on a lamp is the extension's own name, so renaming an extension relabels every
+        /// key that watches it at the next poll. An extension the renderer was not given falls back
+        /// to the number rather than an empty key.
         /// </summary>
         [Fact]
         public void An_extension_key_is_labelled_with_the_extensions_name()
         {
             var config = SampleConfig();
-            config.ButtonExtensions = SampleButtonExtensions();
             config.Buttons = SampleButtons();
 
             Assert.Contains("attendant.resourceList.1.label=\"Sales\"", PolycomConfigRenderer.Render(config));
 
-            config.ButtonExtensions = new List<Extension>();
+            // The line still has to be there, or there would be nothing to register with; only the
+            // extension the lamp names is taken away.
+            config.Extensions = new List<Extension> { SampleExtension() };
             Assert.Contains("attendant.resourceList.1.label=\"1002\"", PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// A line naming an extension the renderer was not given is refused rather than written as
+        /// a registration with no password: the caller filters the keys before it gets here
+        /// (<c>PhoneButton.Usable</c>), so this can only be a bug on our side.
+        /// </summary>
+        [Fact]
+        public void A_line_whose_extension_is_missing_is_refused()
+        {
+            var config = SampleConfig();
+            config.Extensions = new List<Extension>();
+
+            Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
         }
 
         /// <summary>
@@ -160,7 +208,8 @@ namespace Techie.Pbx.Tests.Asterisk
             var config = SampleConfig();
             config.Buttons = new List<PhoneButton>
             {
-                new() { Position = 1, TargetType = PhoneButtonTarget.Extension, TargetValue = "not-a-number" },
+                SampleLine(),
+                new() { Position = 2, TargetType = PhoneButtonTarget.Blf, TargetValue = "not-a-number" },
             };
 
             Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
@@ -171,7 +220,7 @@ namespace Techie.Pbx.Tests.Asterisk
         public void A_phone_with_no_extension_is_given_no_registration()
         {
             var config = SampleConfig();
-            config.Extension = null;
+            config.Buttons = new List<PhoneButton>();
 
             var actual = PolycomConfigRenderer.Render(config);
 
@@ -203,7 +252,7 @@ namespace Techie.Pbx.Tests.Asterisk
         public void A_name_is_escaped_for_xml()
         {
             var config = SampleConfig();
-            config.Extension!.Name = "Sales & Support";
+            config.Extensions[0].Name = "Sales & Support";
 
             var actual = PolycomConfigRenderer.Render(config);
 
@@ -270,7 +319,7 @@ namespace Techie.Pbx.Tests.Asterisk
         public void An_invalid_extension_is_refused_rather_than_rendered()
         {
             var config = SampleConfig();
-            config.Extension!.Secret = "short";
+            config.Extensions[0].Secret = "short";
 
             Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
         }

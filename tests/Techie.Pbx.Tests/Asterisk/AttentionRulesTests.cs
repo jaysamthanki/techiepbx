@@ -313,12 +313,31 @@ namespace Techie.Pbx.Tests.Asterisk
         public void A_phone_with_no_extension_is_only_a_note()
         {
             var snapshot = Healthy();
-            snapshot.Phones[0].ExtensionID = null;
+            snapshot.PhoneButtons.Clear();
             snapshot.Phones[0].Name = "";
 
             var finding = Assert.Single(AttentionRules.Evaluate(snapshot, Now));
             Assert.Equal(FindingSeverity.Info, finding.Severity);
             Assert.Equal("Phone 0004f2aabbcc has no extension assigned.", finding.Text);
+        }
+
+        /// <summary>
+        /// A line key holds the extension's number, not a foreign key, so deleting the extension
+        /// leaves a phone registering as a number that is not there any more (schema 020). Nothing
+        /// else would say so: the phones table would just show the number.
+        /// </summary>
+        [Fact]
+        public void A_phone_registering_as_an_extension_that_has_gone_is_a_warning()
+        {
+            var snapshot = Healthy();
+            snapshot.Extensions.Clear();
+            snapshot.InboundRoutes[0].DestinationType = "Hangup";
+            snapshot.InboundRoutes[0].DestinationValue = "";
+
+            var finding = Assert.Single(AttentionRules.Evaluate(snapshot, Now));
+            Assert.Equal(FindingSeverity.Warning, finding.Severity);
+            Assert.Equal(FindingSubject.Phones, finding.Subject);
+            Assert.Equal("Phone Reception registers as extension 1001, which no longer exists.", finding.Text);
         }
 
         [Fact]
@@ -474,9 +493,15 @@ namespace Techie.Pbx.Tests.Asterisk
                     TrunkID = 1,
                 },
             },
+            // A phone registers as whatever its line key says, not as a column on its own row
+            // (schema 020), so a healthy phone is one with a line on extension 1001.
+            PhoneButtons = new List<PhoneButton>
+            {
+                new() { PhoneButtonID = 1, PhoneID = 1, Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" },
+            },
             Phones = new List<Phone>
             {
-                new() { Enabled = true, ExtensionID = 1, Mac = "0004f2aabbcc", Name = "Reception", PhoneID = 1 },
+                new() { Enabled = true, Mac = "0004f2aabbcc", Name = "Reception", PhoneID = 1 },
             },
             Timezone = "Europe/London",
             TrunkStates = new Dictionary<string, RegistrationState>(StringComparer.Ordinal)

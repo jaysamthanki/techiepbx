@@ -132,14 +132,31 @@ namespace Techie.Pbx.Asterisk.Ami
         }
 
         /// <summary>
-        /// Sends a PJSIP NOTIFY of a named type to an endpoint's registered contacts — the
-        /// mechanism Yealink phones use in place of Polycom's HTTP push (D91), because a Yealink
-        /// phone has no web endpoint to push to. The type names a category in pjsip_notify.conf.
+        /// Sends a PJSIP NOTIFY to an endpoint's registered contacts — how a desk phone is told to
+        /// reboot or to re-read its configuration (D91, D123). It goes wherever the phone
+        /// registered from, so unlike an HTTP push to the phone's own web UI it works through NAT.
+        ///
+        /// The headers are spelled out rather than naming a type from pjsip_notify.conf, because
+        /// the action takes them either way and one of the two is a round trip through a file
+        /// Asterisk only reads when the module loads. The file still carries the same two messages
+        /// for the CLI (<c>NotifyConfRenderer</c>).
+        ///
+        /// A typed action, not Action:Command, so the AMI account needs no "command" permission —
+        /// the same reasoning as <see cref="Reload"/>.
         /// </summary>
-        public void SendNotify(string endpoint, string notificationName)
+        public void SendNotify(string endpoint, IEnumerable<(string Name, string Value)> headers)
         {
-            Send(new AmiAction("PJSIPSendNotify").Add("Endpoint", endpoint).Add("NotificationName", notificationName));
-            Log.Info($"Sent NOTIFY '{notificationName}' to endpoint '{endpoint}'");
+            var action = new AmiAction("PJSIPNotify").Add("Endpoint", endpoint);
+            var written = new List<string>();
+
+            foreach (var (name, value) in headers)
+            {
+                action.Add("Variable", $"{name}={value}");
+                written.Add($"{name}: {value}");
+            }
+
+            Send(action);
+            Log.Info($"Sent NOTIFY to endpoint '{endpoint}' ({string.Join(", ", written)})");
         }
 
         /// <summary>

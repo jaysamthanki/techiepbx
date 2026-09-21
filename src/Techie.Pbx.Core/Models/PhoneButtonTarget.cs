@@ -12,8 +12,17 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public static class PhoneButtonTarget
     {
-        /// <summary>A BLF / quick-dial key for an extension: lamp, press to dial, long-press pickup.</summary>
-        public const string Extension = "Extension";
+        /// <summary>
+        /// A lamp on somebody else's extension, and press to dial them: shows whether that phone
+        /// is free, ringing or busy. Called 'Extension' until schema 020 (D121).
+        /// </summary>
+        public const string Blf = "Blf";
+
+        /// <summary>
+        /// The extension <em>this</em> phone registers as. Every phone has at least one, and they
+        /// are the leading keys, because that is where a handset puts its own line appearances.
+        /// </summary>
+        public const string Line = "Line";
 
         /// <summary>A key nobody has assigned. Stored as no row at all, never as this string.</summary>
         public const string None = "";
@@ -21,7 +30,16 @@ namespace Techie.Pbx.Core.Models
         /// <summary>A parking slot: the lamp is lit while a call is parked there, press to take it.</summary>
         public const string ParkingSlot = "ParkingSlot";
 
-        private static readonly HashSet<string> Known = new(StringComparer.Ordinal) { Extension, ParkingSlot };
+        private static readonly HashSet<string> Known = new(StringComparer.Ordinal) { Blf, Line, ParkingSlot };
+
+        /// <summary>
+        /// Whether this kind names an extension number. Both do: a line is the extension the phone
+        /// signs in as and a BLF is one it watches, so everything that asks "does that extension
+        /// still exist?" asks it of both.
+        /// </summary>
+        public static bool IsExtension(string targetType) =>
+            string.Equals(targetType, Blf, StringComparison.Ordinal) ||
+            string.Equals(targetType, Line, StringComparison.Ordinal);
 
         public static bool IsKnown(string targetType) => Known.Contains(targetType);
     }

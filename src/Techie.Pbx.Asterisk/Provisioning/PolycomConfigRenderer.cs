@@ -1,14 +1,20 @@
 using System.Globalization;
 using System.Text;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
-    /// One phone's configuration, generated from its row and the extension it is linked to. Pure
+    /// One phone's configuration, generated from its row and the keys assigned to it. Pure
     /// function: data in, text out, no lookups and no I/O — the file is never written to disk, it
     /// is generated for each request and handed straight to the phone (D79).
     ///
-    /// A phone with no extension still gets a valid file: the time and a provisioning poll, and no
+    /// The keys are the whole of it (schema 020): the line keys become the <c>reg.N</c>
+    /// registrations, in key order, and every other key becomes an attendant resource. So the keys
+    /// the Buttons tab shows are the keys the handset has, in the same order, with no ninth line
+    /// appearing from somewhere else.
+    ///
+    /// A phone with no line key still gets a valid file: the time and a provisioning poll, and no
     /// registration. That is what lets a phone auto-register itself, sit on a desk showing the
     /// right time, and start working the moment an admin assigns it an extension and it polls
     /// again (D78).
@@ -96,19 +102,16 @@ namespace Techie.Pbx.Asterisk.Provisioning
             if (deviceAuth.Count > 0)
                 PolycomXml.Element(sb, "  ", "device", deviceAuth);
 
-            if (config.Extension == null)
+            var buttons = Validated(config.Buttons);
+            var lines = PhoneButton.Lines(buttons);
+
+            if (lines.Count == 0)
             {
                 PolycomXml.Comment(sb, "  ", "No extension is assigned to this phone yet, so it is given no registration.");
                 sb.Append("</polycomConfig>\n");
 
                 return sb.ToString();
             }
-
-            var extension = config.Extension;
-
-            var extensionErrors = extension.Validate();
-            if (extensionErrors.Count > 0)
-                throw new InvalidOperationException($"Extension '{extension.Number}' is invalid: {string.Join(" ", extensionErrors)}");
 
             PolycomXml.Element(sb, "  ", "dialplan", new[]
             {
@@ -122,23 +125,33 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("voIpProt.SIP.local.port", Number(phone.LocalSipPort)),
             });
 
-            PolycomXml.Element(sb, "  ", "reg", new[]
-            {
-                PolycomXml.Attribute("reg.1.displayName", extension.Name, "display name"),
-                PolycomXml.Attribute("reg.1.address", extension.Number, "address"),
-                PolycomXml.Attribute("reg.1.auth.userId", extension.Number, "auth user"),
-                PolycomXml.Attribute("reg.1.auth.password", extension.Secret, "auth password"),
-                PolycomXml.Attribute("reg.1.server.1.address", config.ServerAddress, "server address"),
-                PolycomXml.Constant("reg.1.server.1.port", Number(config.SipPort)),
-                PolycomXml.Constant("reg.1.server.1.transport", Transport),
-                PolycomXml.Constant("reg.1.server.1.expires", Number(RegistrationExpiration)),
-                PolycomXml.Constant("reg.1.lineKeys", "1"),
-            });
+            // One registration per line key, in key order, each taking one line key on the handset.
+            var registrations = new List<(string Name, string Value)>();
 
-            // The message waiting light, and a missed call list on the phone itself.
+            for (var index = 0; index < lines.Count; index++)
+            {
+                var extension = LineExtension(config, lines[index]);
+                var reg = $"reg.{Number(index + 1)}";
+
+                registrations.Add(PolycomXml.Attribute($"{reg}.displayName", extension.Name, "display name"));
+                registrations.Add(PolycomXml.Attribute($"{reg}.address", extension.Number, "address"));
+                registrations.Add(PolycomXml.Attribute($"{reg}.auth.userId", extension.Number, "auth user"));
+                registrations.Add(PolycomXml.Attribute($"{reg}.auth.password", extension.Secret, "auth password"));
+                registrations.Add(PolycomXml.Attribute($"{reg}.server.1.address", config.ServerAddress, "server address"));
+                registrations.Add(PolycomXml.Constant($"{reg}.server.1.port", Number(config.SipPort)));
+                registrations.Add(PolycomXml.Constant($"{reg}.server.1.transport", Transport));
+                registrations.Add(PolycomXml.Constant($"{reg}.server.1.expires", Number(RegistrationExpiration)));
+                registrations.Add(PolycomXml.Constant($"{reg}.lineKeys", "1"));
+            }
+
+            PolycomXml.Element(sb, "  ", "reg", registrations);
+
+            // The message waiting light, and a missed call list on the phone itself. The first
+            // registration only: a second line is a second person's extension, and their messages
+            // are not this phone's to light a lamp about.
             PolycomXml.Element(sb, "  ", "msg", new[]
             {
-                PolycomXml.Attribute("msg.mwi.1.subscribe", extension.Number, "mwi subscribe"),
+                PolycomXml.Attribute("msg.mwi.1.subscribe", lines[0].TargetValue, "mwi subscribe"),
             });
 
             PolycomXml.Element(sb, "  ", "call", new[]
@@ -146,7 +159,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("call.missedCallTracking.1.enabled", "1"),
             });
 
-            AppendAttendant(sb, config);
+            AppendAttendant(sb, config, buttons.Where(b => !b.IsLine).ToList());
 
             sb.Append("</polycomConfig>\n");
 
@@ -154,38 +167,31 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         /// <summary>
-        /// The assignable keys, written as Polycom's attendant resource list (D121). Each resource
-        /// is a lamp and a quick dial: the phone SUBSCRIBEs for the address in its own dialplan
-        /// context and dials the same address when the key is pressed. An extension's lamp follows
-        /// the <c>PJSIP/&lt;number&gt;</c> hint and a parking slot's follows
-        /// <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the dialplan's doing — from here both
-        /// are a number in the internal context, which is why this writes both the same way.
+        /// The keys that are not registrations, written as Polycom's attendant resource list
+        /// (D121). Each resource is a lamp and a quick dial: the phone SUBSCRIBEs for the address
+        /// in its own dialplan context and dials the same address when the key is pressed. An
+        /// extension's lamp follows the <c>PJSIP/&lt;number&gt;</c> hint and a parking slot's
+        /// follows <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the dialplan's doing — from
+        /// here both are a number in the internal context, which is why this writes both the same
+        /// way.
         ///
         /// There is no <c>attendant.uri</c>: that names a server-side resource list, and the list
-        /// here is the one this file carries. Nothing is written at all for a phone with no keys
-        /// assigned, so its line keys stay the line appearances they were.
+        /// here is the one this file carries. Nothing is written at all for a phone whose only keys
+        /// are its lines, so the rest of its line keys stay whatever the handset does with them.
         ///
         /// The resources are numbered 1..n in key order rather than by the key's own position,
         /// because a phone reads the list until the first index it does not find: a gap left by an
         /// unassigned key would hide every key after it. The consequence, and it is the one to
-        /// know: the keys land on the handset's free line keys in order, so clearing key 1 moves
-        /// the rest up a key.
+        /// know: the resources land on the line keys left over after the registrations, in order,
+        /// so clearing one moves the rest up a key.
         /// </summary>
-        private static void AppendAttendant(StringBuilder sb, PolycomConfig config)
+        private static void AppendAttendant(StringBuilder sb, PolycomConfig config, List<PhoneButton> buttons)
         {
-            var buttons = config.Buttons.OrderBy(b => b.Position).ToList();
             if (buttons.Count == 0)
                 return;
 
-            foreach (var button in buttons)
-            {
-                var errors = button.Validate();
-                if (errors.Count > 0)
-                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
-            }
-
-            // Which registration the subscriptions and the calls go out on. Line 1 is the only
-            // registration this system gives a phone.
+            // Which registration the subscriptions and the calls go out on: the first line, which
+            // is the extension this phone's own user answers as.
             var attributes = new List<(string Name, string Value)>
             {
                 PolycomXml.Constant("attendant.reg", "1"),
@@ -197,15 +203,54 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 var resource = $"attendant.resourceList.{Number(index + 1)}";
 
                 attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
-                attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.ButtonExtensions), "attendant label"));
+                attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions), "attendant label"));
                 attributes.Add(PolycomXml.Constant($"{resource}.type", AttendantType));
             }
 
-            PolycomXml.Comment(sb, "  ", "Line keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
+            PolycomXml.Comment(sb, "  ", "Keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
             PolycomXml.Comment(sb, "  ", "follows its hint; a parking slot's is lit while a call is sitting in it.");
             PolycomXml.Element(sb, "  ", "attendant", attributes);
         }
 
+        /// <summary>
+        /// The extension a line key registers as. The caller has already reduced the keys to the
+        /// ones that can work (<see cref="PhoneButton.Usable"/>), so a line naming an extension
+        /// this renderer was not given is the caller's mistake and is refused rather than written
+        /// as a registration with no password behind it.
+        /// </summary>
+        private static Extension LineExtension(PolycomConfig config, PhoneButton line)
+        {
+            var extension = config.Extensions.FirstOrDefault(e =>
+                string.Equals(e.Number, line.TargetValue, StringComparison.Ordinal));
+
+            if (extension == null)
+                throw new InvalidOperationException($"Phone key {line.Position} registers as extension '{line.TargetValue}', which the renderer was not given.");
+
+            var errors = extension.Validate();
+            if (errors.Count > 0)
+                throw new InvalidOperationException($"Extension '{extension.Number}' is invalid: {string.Join(" ", errors)}");
+
+            return extension;
+        }
+
         private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// The keys in key order, re-validated as the phone and the extensions are: a row that
+        /// reached us another way must not become a key that dials somewhere else.
+        /// </summary>
+        private static List<PhoneButton> Validated(IEnumerable<PhoneButton> buttons)
+        {
+            var ordered = buttons.OrderBy(b => b.Position).ToList();
+
+            foreach (var button in ordered)
+            {
+                var errors = button.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
+            }
+
+            return ordered;
+        }
     }
 }

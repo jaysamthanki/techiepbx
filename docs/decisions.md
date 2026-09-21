@@ -1240,6 +1240,10 @@ push as D86 with `Action:Reboot` in place of `Action:UpdateConfig`, confirmed wi
 cannot be reached is named in the toast rather than failing the request, because nothing here is a
 config change — there is no apply and no config-pending marker either way.
 
+> **Superseded by D123**: the button sends a SIP NOTIFY instead, which reaches a phone behind NAT.
+> The confirm, the toast and the best-effort handling are unchanged; `PolycomPusher.PushReboot` is
+> gone. The config-reload push of D86 stays as it is.
+
 ### D88. Yealink is a second brand on the same trust path (2026-09-21)
 The /yealink endpoint shares the Polycom provisioning gate: the same Provisioning.Username /
 Provisioning.Password Basic auth, the same auto-registration rules, and the same Phones table
@@ -1270,6 +1274,11 @@ are generated into **pjsip_notify.conf** — the file Asterisk 22's res_pjsip_no
 declined to load) — and res_pjsip_notify.so joins the modules.conf allowlist to load it.
 Per D33, pjsip_notify.conf is written but never live-reloaded: an apply that changes it reports
 a restart, which is rare since the categories are fixed.
+
+> **Superseded in part by D123.** The two types are now `polycom-reboot` and `yealink-reboot`,
+> each carrying `Content-Length: 0`, and the file has no `[general]` section. The code sends the
+> NOTIFY with `Action: PJSIPNotify` and the headers spelled out as `Variable:` lines —
+> `PJSIPSendNotify`, named here, is not an action Asterisk has.
 
 ### D92. The installer ships everything except the application; deploying the app is a separate step (2026-09-22)
 User decision. `install.sh` prepares a fresh Debian server completely — clock, packages, users,
@@ -1800,6 +1809,10 @@ are expected to be cloud PBXes where phones are never IP-reachable from the serv
 Remote phones pick up changes at their next poll; the reboot's SIP NOTIFY path remains the
 LAN-capable alternative. The 500 on a mapped-form address is a known cosmetic edge, not fixed.
 
+> **Amended by D123**: rebooting no longer goes this way at all — it is the SIP NOTIFY named here
+> as the alternative, which rides the registration and so reaches a remote phone. Only the config
+> reload on save is still an HTTP push, only for Polycom, and it is still same-LAN only.
+
 ### D119. Call parking, and music on hold with it (2026-09-19)
 
 Call parking is one lot, off by default, and five settings — all `SettingScope.Asterisk`, because
@@ -1959,6 +1972,41 @@ A phone's edit modal now has two tabs — **Buttons** first, because it is what 
 to, and **Details** second with everything the form had before. The Buttons tab is eight
 dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parking slot.
 
+> **Amended 2026-09-21 (schema 020): a phone's registration is one of its keys.** The user
+> configured all eight keys on a Poly Edge 450 and the handset showed **nine** lines: the Details
+> tab's Extension dropdown took line key 1 on top of whatever the Buttons tab said. Two places
+> decided what was on the handset and neither knew about the other. So:
+>
+> - **`Phones.ExtensionID` is gone.** What a phone registers as is its **line key**, and
+>   `PhoneButton.LineNumber` is what asks. `PhoneButtonRepository.GetLines` answers it for every
+>   phone at once, which is what the phones table and the status page use.
+> - **The kinds are now `Line`, `Blf` and `ParkingSlot`**, with `CallFlowControl` still the
+>   reserved fourth. `Line` is this phone's own registration; `Blf` is what `Extension` was, a lamp
+>   on somebody else's extension — the Buttons tab calls that group **User list**. The migration
+>   renames every `Extension` row to `Blf`, inserts the phone's old extension as a `Line` at key 1
+>   and shifts the rest down one. **A phone with all eight keys full loses its last key**: eight
+>   keys with a line on one of them is seven lamps, which is the fact about the handset this whole
+>   change is about.
+> - **A phone must have a line, and lines lead.** `PhoneButton.ValidateSet` refuses a set with no
+>   line, a set whose first key is not one, and a line sitting after a lamp — a handset puts its
+>   own lines on its leading keys whatever we store, so a set that disagrees would not be the set
+>   the admin saved. Several lines are allowed and become `reg.2`, `account.2` and so on. There is
+>   no "unassign" any more: a phone nobody needs is disabled or deleted.
+> - **Two phones still cannot register as one extension.** The old rule about `ExtensionID`
+>   followed the registration onto the key. A *lamp* on an extension another phone registers as is
+>   fine, and common — that is what a BLF is for.
+> - **No line, no keys.** `PhoneButton.Usable` returns nothing at all once the line has been
+>   switched off or deleted: the lamps subscribe and dial on the registration, so without one there
+>   is nothing for them to be on.
+> - **Polycom** writes one `reg.N` per line key in key order, each with `lineKeys="1"`, and the
+>   remaining keys as the attendant resource list exactly as below. **Yealink** writes one
+>   `account.N` per line key and a `linekey.N.type = 15` (Line) for each, with the lamps as
+>   `linekey.N.type = 16` (BLF) on account 1. **This changes the BLF type from the 15 recorded
+>   below**: Yealink's own line-key table has 15 = Line and 16 = BLF, and the two must differ now
+>   that both are written, or a phone would show a row of lines where it was meant to show one line
+>   and some lamps. Unverified on a real handset (D92) — if a Yealink says otherwise it is one
+>   constant in `YealinkConfigRenderer`.
+
 - **Eight keys, and eight is ours rather than the handset's.** A VVX 310 has six line keys and a
   VVX 410 has twelve; the form offers eight because it is a number an admin can fill in without
   scrolling, not because any phone has exactly that many. A key beyond what the handset has is
@@ -2082,3 +2130,40 @@ Music on hold is now its own feature with its own page, and parking is one of it
   loose in `/var/lib/asterisk/moh` into the class that ships, which is where its rows now point —
   in `app-deploy.sh` as well as `install.sh`, because a deploy is what brings the schema script
   that repoints them.
+
+### D123. A phone is rebooted by SIP NOTIFY, not by an HTTP push (2026-09-21)
+
+D118 accepted that the reboot push reaches a phone's web UI only on the server's own network, and
+that deployments are hosted PBXes where no phone is ever IP-reachable from the server. That made
+the "Reboot phone" button a button that worked in the lab and nowhere else. It now sends a SIP
+NOTIFY instead, which **rides the registration**: the phone told us where it is when it registered,
+so the NOTIFY reaches it behind a home router, a hotspot or a corporate NAT — anywhere it can make
+a call from.
+
+- **`pjsip_notify.conf` is rendered with two types**, `polycom-reboot` (`Event: check-sync`) and
+  `yealink-reboot` (`Event: check-sync;reboot=false`), each with `Content-Length: 0` because the
+  NOTIFY has no body and a phone sent one without that header may sit waiting for a body that never
+  comes. The two differ because `check-sync` does: a Polycom phone reboots on a bare one, and a
+  Yealink phone reads the `reboot=` parameter. **No `[general]` section** — Asterisk 22's
+  res_pjsip_notify refuses the file outright with one, found on the lab VM, and that is what the
+  test for the absence of something is there for.
+- **The app sends it over AMI with the headers spelled out**, `Action: PJSIPNotify`, `Endpoint:
+  <extension>`, `Variable: Event=...`, `Variable: Content-Length=0`, rather than naming a type from
+  the file. A typed action, so the AMI account still needs no `command` permission (D32), and no
+  round trip through a file Asterisk only reads at module load. The file carries the same two
+  messages for the equivalent `pjsip send notify polycom-reboot endpoint 1001` at the CLI. The old
+  `PJSIPSendNotify` action this code sent is not an action Asterisk has.
+- **pjsip_notify.conf joins the startup set** (D33): res_pjsip_notify reads it when the module
+  loads and no reload re-reads it, so an apply that changes it reports a restart. In practice it is
+  written once and never again — its contents are fixed.
+- **The button is disabled with the reason on it** when the phone has no line key, or when its
+  extension has no registered contact: there is nothing to send a NOTIFY to, and a disabled button
+  saying why beats a button that is not there. An AMI we could not ask answers "unknown" for every
+  extension, and not knowing is not a reason to take the button away — the toast says so if the
+  send then fails.
+- **Yealink's reboot button is not built.** The Yealink NOTIFY in the file is the config re-read,
+  which is what saving a Yealink phone sends; whether its reboot button should send
+  `reboot=true` is the user's call when that piece comes.
+- **The HTTP push stays for the config reload only** (D86). The only NOTIFY a Polycom phone
+  understands reboots it, and rebooting a handset because somebody renamed it would be worse than
+  waiting for the poll. `PolycomPusher.PushReboot` is gone with the button that called it.

@@ -12,7 +12,7 @@ namespace Techie.Pbx.Web.Pages.Phones
         public int Position { get; set; }
 
         /// <summary>
-        /// What is on the key, as <c>PhoneButton.Key</c> writes it: "Extension:1001",
+        /// What is on the key, as <c>PhoneButton.Key</c> writes it: "Line:1001", "Blf:1002",
         /// "ParkingSlot:3", or empty for a key nobody has assigned.
         /// </summary>
         public string? Target { get; set; } = "";

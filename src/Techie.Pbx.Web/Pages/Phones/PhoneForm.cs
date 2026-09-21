@@ -7,10 +7,13 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// Buttons, which is what an admin comes here to change most often and so is the one that opens,
     /// and Details.
     ///
-    /// Four things are posted — the keys, the name, the extension and the enabled flag — because
-    /// everything else about a phone was written by the phone, and an admin editing it would only be
-    /// editing a record of what happened (D78). The rest is shown, read-only, so the person
-    /// assigning an extension can see which handset they are looking at.
+    /// Three things are posted — the keys, the name and the enabled flag — because everything else
+    /// about a phone was written by the phone, and an admin editing it would only be editing a
+    /// record of what happened (D78). The rest is shown, read-only, so the person assigning a phone
+    /// can see which handset they are looking at.
+    ///
+    /// <b>There is no extension field.</b> Key 1 is the extension the phone registers as, so the
+    /// Details tab does not ask a second time (schema 020).
     /// </summary>
     public class PhoneForm
     {
@@ -25,10 +28,7 @@ namespace Techie.Pbx.Web.Pages.Phones
         public bool Enabled { get; set; } = true;
         public List<string> Errors { get; set; } = new();
 
-        /// <summary>The extension to register as. Null or 0 is "unassigned".</summary>
-        public long? ExtensionID { get; set; }
-
-        /// <summary>Every extension this phone could be given. Not posted back.</summary>
+        /// <summary>Every extension a key on this phone could name. Not posted back.</summary>
         public List<Extension> Extensions { get; set; } = new();
 
         public string Firmware { get; set; } = "";
@@ -53,5 +53,13 @@ namespace Techie.Pbx.Web.Pages.Phones
         public List<int> ParkingSlots { get; set; } = new();
 
         public long PhoneID { get; set; }
+
+        /// <summary>
+        /// Why this phone cannot be rebooted, or empty when it can (D123). A reboot is a SIP NOTIFY
+        /// to whatever contact the phone registered, so it needs a line key to address and a phone
+        /// actually registered on it; the footer shows the button disabled with this as its tooltip
+        /// rather than hiding it, so that the reason is readable rather than guessed at.
+        /// </summary>
+        public string RebootHint { get; set; } = "";
     }
 }

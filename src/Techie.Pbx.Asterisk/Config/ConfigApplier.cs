@@ -14,9 +14,6 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Owns pjsip.conf. Reloading it re-reads every PJSIP object.</summary>
         public const string PjsipModule = "res_pjsip";
 
-        /// <summary>Owns pjsip_notify.conf, the categories a Yealink phone is sent a NOTIFY of (D91).</summary>
-        public const string NotifyModule = "res_pjsip_notify";
-
         /// <summary>Owns extensions.conf, i.e. what "dialplan reload" reloads.</summary>
         public const string DialplanModule = "pbx_config";
 
@@ -232,10 +229,14 @@ namespace Techie.Pbx.Asterisk.Config
 
             var files = new List<GeneratedFile>
             {
-                // Read once at startup: written here, applied by a restart (D33).
+                // Read once at startup: written here, applied by a restart (D33). pjsip_notify.conf
+                // is one of them — res_pjsip_notify reads it when the module loads and no reload
+                // re-reads it (D123) — which costs nothing in practice, since its two messages are
+                // fixed and it is therefore written once and never again.
                 new("asterisk.conf", null, AsteriskConfRenderer.Render()),
                 new("modules.conf", null, ModulesConfRenderer.Render()),
                 new("rtp.conf", null, RtpConfRenderer.Render(this.transport)),
+                new("pjsip_notify.conf", null, NotifyConfRenderer.Render()),
 
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),
@@ -247,7 +248,6 @@ namespace Techie.Pbx.Asterisk.Config
 
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(
                     this.transport, all, allTrunks, certificate, this.confDirectory)),
-                new("pjsip_notify.conf", NotifyModule, NotifyConfRenderer.Render()),
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
                     this.Timezone, this.parking)),

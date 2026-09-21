@@ -6,7 +6,11 @@ namespace Techie.Pbx.Core.Models
     /// <summary>
     /// A desk phone that provisions itself from us: DHCP option 160 points it at the provisioning
     /// endpoint, it asks for its own MAC address, and what it gets back is generated from this row
-    /// and the extension it is linked to (D77).
+    /// and the keys assigned to it (D77).
+    ///
+    /// Which extension it registers as is <b>not</b> here: it is the phone's line key, and
+    /// <see cref="PhoneButton.LineNumber"/> is what asks (schema 020). A phone whose keys say
+    /// nothing is a phone on a desk that nobody has started using yet.
     ///
     /// Most of these fields are written by the phone rather than by an admin. Model, Firmware,
     /// LastIP and LastConfig come from the request that asked for the config, which is why they are
@@ -31,9 +35,6 @@ namespace Techie.Pbx.Core.Models
         public string Brand { get; set; } = PhoneBrand.Polycom;
 
         public bool Enabled { get; set; } = true;
-
-        /// <summary>The extension this phone registers as, or null when nobody has assigned one.</summary>
-        public long? ExtensionID { get; set; }
 
         /// <summary>The firmware version its User-Agent claimed at the last config fetch.</summary>
         public string Firmware { get; set; } = "";
@@ -131,9 +132,6 @@ namespace Techie.Pbx.Core.Models
 
             if (this.LastConfig.Length > 32)
                 errors.Add("Last contact must be 32 characters or fewer.");
-
-            if (this.ExtensionID is <= 0)
-                errors.Add("Choose an extension, or leave the phone unassigned.");
 
             return errors;
         }

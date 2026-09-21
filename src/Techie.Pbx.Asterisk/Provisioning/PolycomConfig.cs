@@ -5,9 +5,9 @@ namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
     /// Everything <see cref="PolycomConfigRenderer"/> needs to write one phone's configuration:
-    /// the row, the extension it is linked to (or null), and the three things that come from the
-    /// server rather than from either — where to find us, where to ask the time, and what the
-    /// time means here.
+    /// the row, the keys on it, the extensions those keys name, and the three things that come
+    /// from the server rather than from any of them — where to find us, where to ask the time, and
+    /// what the time means here.
     ///
     /// Data in, text out: the renderer does no lookups, so the same inputs always produce the same
     /// file and a golden test can pin it (D79).
@@ -22,26 +22,20 @@ namespace Techie.Pbx.Asterisk.Provisioning
         public string AdminPassword { get; set; } = "";
 
         /// <summary>
-        /// The extensions a key may name, which is where the label on it comes from (D121). The
-        /// whole list rather than one row, because a phone watches other people's extensions —
-        /// this is not the one it registers as, and usually does not include it.
-        /// </summary>
-        public List<Extension> ButtonExtensions { get; set; } = new();
-
-        /// <summary>
         /// The assignable keys, already reduced to the ones that can work by
         /// <see cref="PhoneButton.Usable"/>: this renderer writes what it is given rather than
-        /// deciding whether a target is still there, exactly as it is handed a null
-        /// <see cref="Extension"/> for a phone whose extension has been switched off.
+        /// deciding whether a target is still there. The line keys among them are what this phone
+        /// registers as, in key order, and the rest are its lamps (D121, schema 020). No line keys
+        /// means no registration, which is what an auto-added phone nobody has assigned yet gets.
         /// </summary>
         public List<PhoneButton> Buttons { get; set; } = new();
 
         /// <summary>
-        /// The extension this phone registers as, or null when there is none to register — either
-        /// nobody has assigned one yet, or the one assigned has since been switched off and so has
-        /// no PJSIP endpoint to register against.
+        /// The extensions the keys may name: where a line key's credentials come from and where a
+        /// lamp's label does (D121). The whole list rather than one row, because a phone registers
+        /// as one extension and watches several others.
         /// </summary>
-        public Extension? Extension { get; set; }
+        public List<Extension> Extensions { get; set; } = new();
 
         /// <summary>Seconds east of UTC, which is what the phone's clock is set from.</summary>
         public int GmtOffsetSeconds { get; set; }

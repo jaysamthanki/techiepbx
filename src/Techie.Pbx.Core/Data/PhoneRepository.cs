@@ -17,7 +17,7 @@ namespace Techie.Pbx.Core.Data
     /// </summary>
     public class PhoneRepository
     {
-        private const string Columns = "PhoneID, Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled, Brand";
+        private const string Columns = "PhoneID, Mac, Name, Model, Firmware, LastIP, LastConfig, Enabled, Brand";
 
         private const int SqliteConstraintError = 19;
 
@@ -62,14 +62,14 @@ namespace Techie.Pbx.Core.Data
 
         public long Insert(Phone phone)
         {
-            this.ThrowIfInvalid(phone);
+            ThrowIfInvalid(phone);
 
             using var connection = this.database.Open();
             try
             {
                 phone.PhoneID = connection.ExecuteScalar<long>(
-                    "INSERT INTO Phones (Mac, Name, Model, Firmware, LastIP, LastConfig, ExtensionID, Enabled, Brand) " +
-                    "VALUES (@Mac, @Name, @Model, @Firmware, @LastIP, @LastConfig, @ExtensionID, @Enabled, @Brand); " +
+                    "INSERT INTO Phones (Mac, Name, Model, Firmware, LastIP, LastConfig, Enabled, Brand) " +
+                    "VALUES (@Mac, @Name, @Model, @Firmware, @LastIP, @LastConfig, @Enabled, @Brand); " +
                     "SELECT last_insert_rowid();",
                     phone);
 
@@ -118,14 +118,14 @@ namespace Techie.Pbx.Core.Data
 
         public void Update(Phone phone)
         {
-            this.ThrowIfInvalid(phone);
+            ThrowIfInvalid(phone);
 
             using var connection = this.database.Open();
             try
             {
                 var rows = connection.Execute(
                     "UPDATE Phones SET Mac = @Mac, Name = @Name, Model = @Model, Firmware = @Firmware, " +
-                    "LastIP = @LastIP, LastConfig = @LastConfig, ExtensionID = @ExtensionID, Enabled = @Enabled, " +
+                    "LastIP = @LastIP, LastConfig = @LastConfig, Enabled = @Enabled, " +
                     "Brand = @Brand WHERE PhoneID = @PhoneID",
                     phone);
                 if (rows == 0)
@@ -142,19 +142,14 @@ namespace Techie.Pbx.Core.Data
             DateTimeOffset.UtcNow.ToString("u", CultureInfo.InvariantCulture);
 
         /// <summary>
-        /// The model's own rules, plus the one that needs the database: a phone can only be linked
-        /// to an extension that exists. The foreign key would catch that as well, but a message an
-        /// admin can act on is better than a constraint violation.
+        /// The model's own rules, and only those: nothing on this row points at another table any
+        /// more. Which extension a phone registers as is a key on it, and
+        /// <see cref="PhoneButtonRepository"/> is what checks that the extension is still there
+        /// (schema 020).
         /// </summary>
-        private void ThrowIfInvalid(Phone phone)
+        private static void ThrowIfInvalid(Phone phone)
         {
             var errors = phone.Validate();
-
-            if (phone.ExtensionID is > 0 &&
-                new ExtensionRepository(this.database).GetByID(phone.ExtensionID.Value) == null)
-            {
-                errors.Add("That extension is not there any more. Choose another.");
-            }
 
             if (errors.Count > 0)
                 throw new ValidationFailedException(errors);

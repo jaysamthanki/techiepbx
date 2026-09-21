@@ -129,28 +129,23 @@ namespace Techie.Pbx.Web.Controllers
             var stored = this.settings.GetAll();
             var transport = AsteriskSettings.Transport(stored);
 
-            // An extension that has been switched off has no PJSIP endpoint to register against,
-            // so the phone is given the unassigned file rather than credentials that cannot work.
-            var extension = phone.ExtensionID is > 0 ? this.extensions.GetByID(phone.ExtensionID.Value) : null;
-            if (extension is { Enabled: false })
-                extension = null;
-
             stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var provisioningUsername);
             stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var provisioningPassword);
 
-            // The assigned keys, and the extensions they name so each one has a label (D121). A
-            // key whose extension has gone or whose parking slot the lot no longer has is dropped
-            // rather than written as a lamp that can never light.
-            var assigned = this.buttons.GetForPhone(phone.PhoneID);
-            var buttonExtensions = assigned.Count > 0 ? this.extensions.GetAll() : new List<Extension>();
-            var usable = PhoneButton.Usable(assigned, buttonExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
+            // The assigned keys, and the extensions they name: the line keys are what this phone
+            // registers as and the rest are its lamps (D121, schema 020). A key whose extension has
+            // gone or been switched off — it would have no PJSIP endpoint — and a key on a parking
+            // slot the lot no longer has are both dropped here rather than written as a
+            // registration that cannot work or a lamp that can never light.
+            var allExtensions = this.extensions.GetAll();
+            var usable = PhoneButton.Usable(
+                this.buttons.GetForPhone(phone.PhoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
             var config = new YealinkConfig
             {
-                ButtonExtensions = buttonExtensions,
                 Buttons = usable,
                 Codecs = transport.Codecs,
-                Extension = extension,
+                Extensions = allExtensions,
                 NtpServer = AsteriskSettings.NtpServer(stored),
                 Phone = phone,
                 ProvisioningPassword = (provisioningPassword ?? "").Trim(),
@@ -161,7 +156,7 @@ namespace Techie.Pbx.Web.Controllers
                 TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
             };
 
-            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}, {usable.Count} keys");
+            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");
 
             return this.Text(YealinkConfigRenderer.Render(config));
         }

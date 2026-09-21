@@ -1,11 +1,12 @@
 using System.Globalization;
 using System.Text;
 using Techie.Pbx.Asterisk.Config;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
-    /// One phone's configuration, generated from its row and the extension it is linked to. Pure
+    /// One phone's configuration, generated from its row and the keys assigned to it. Pure
     /// function: data in, text out, no lookups and no I/O — the file is never written to disk, it
     /// is generated for each request and handed straight to the phone (D88, mirroring D79).
     ///
@@ -13,7 +14,11 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// completely different from Polycom's attribute-per-element files. Every generated file must
     /// start with the literal <c>#!version:1.0.0.1</c> cookie or the phone refuses it outright.
     ///
-    /// A phone with no extension still gets a valid file: the time and a provisioning poll, and no
+    /// The keys are the whole of it (schema 020): a line key becomes an account and the line key
+    /// that shows it, and every other key becomes a BLF on the first account. What the Buttons tab
+    /// shows is what the handset has.
+    ///
+    /// A phone with no line key still gets a valid file: the time and a provisioning poll, and no
     /// registration. That is what lets a phone auto-register itself, sit on a desk, and start
     /// working the moment an admin assigns it an extension and it polls again (D78, D88).
     /// </summary>
@@ -35,23 +40,31 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// </summary>
         private const int ProvisioningRepeatMinutes = 480;
 
-        /// <summary>The last account slot: accounts 2 through this are disabled (D88).</summary>
-        private const int LastUnusedAccount = 6;
+        /// <summary>The last account slot: every account above the phone's lines is disabled (D88).</summary>
+        private const int LastAccount = 6;
 
         /// <summary>
-        /// The registration a line key subscribes and dials on. Account 1 is the only registration
-        /// this system gives a phone, so it is the only line a key can be on.
+        /// The registration a lamp subscribes and dials on: the first line, which is the extension
+        /// this phone's own user answers as.
         /// </summary>
-        private const int LineKeyAccount = 1;
+        private const int LampAccount = 1;
 
         /// <summary>
         /// Yealink's own line key type for a BLF: the phone SUBSCRIBEs for the key's value so the
         /// lamp follows its hint, and pressing the key dials that same value. It is the direct
         /// counterpart of Polycom's <c>automata</c> attendant resource, and like that one it suits
-        /// both kinds of key we render — a parking slot is dialled to retrieve the call sitting in
+        /// both kinds of lamp we render — a parking slot is dialled to retrieve the call sitting in
         /// it, the same gesture as dialling a colleague (D121).
         /// </summary>
-        private const int LineKeyBlf = 15;
+        private const int LineKeyBlf = 16;
+
+        /// <summary>
+        /// Yealink's own line key type for a line appearance: the key shows the account named by
+        /// <c>linekey.N.line</c> and nothing else, so it takes no value. This is what a line key
+        /// is, and the two types have to differ or a phone would show eight lines where it was
+        /// meant to show one and seven lamps (schema 020).
+        /// </summary>
+        private const int LineKeyLine = 15;
 
         public static string Render(YealinkConfig config)
         {
@@ -61,15 +74,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
             if (phoneErrors.Count > 0)
                 throw new InvalidOperationException($"Phone '{phone.Mac}' is invalid: {string.Join(" ", phoneErrors)}");
 
-            if (config.Extension != null)
-            {
-                var extensionErrors = config.Extension.Validate();
-                if (extensionErrors.Count > 0)
-                {
-                    throw new InvalidOperationException(
-                        $"Extension '{config.Extension.Number}' is invalid: {string.Join(" ", extensionErrors)}");
-                }
-            }
+            var buttons = Validated(config.Buttons);
+            var lines = PhoneButton.Lines(buttons);
 
             var sb = new StringBuilder();
 
@@ -95,39 +101,19 @@ namespace Techie.Pbx.Asterisk.Provisioning
             Line(sb, "auto_provision.repeat.minutes", Number(ProvisioningRepeatMinutes));
 
             sb.Append('\n');
-            for (var account = 2; account <= LastUnusedAccount; account++)
+            for (var account = lines.Count + 1; account <= LastAccount; account++)
                 Line(sb, $"account.{account}.enable", "0");
 
-            if (config.Extension == null)
+            if (lines.Count == 0)
             {
                 sb.Append("\n# No extension is assigned to this phone yet, so it is given no registration.\n");
                 return sb.ToString();
             }
 
-            var extension = config.Extension;
+            for (var index = 0; index < lines.Count; index++)
+                WriteAccount(sb, index + 1, LineExtension(config, lines[index]), config);
 
-            sb.Append('\n');
-            Line(sb, "account.1.enable", "1");
-            Line(sb, "account.1.label", ConfText.Safe(extension.Name, "extension name"));
-            Line(sb, "account.1.display_name", ConfText.Safe(extension.Name, "extension name"));
-            Line(sb, "account.1.auth_name", ConfText.Safe(extension.Number, "extension number"));
-            Line(sb, "account.1.user_name", ConfText.Safe(extension.Number, "extension number"));
-            Line(sb, "account.1.password", ConfText.Safe(extension.Secret, "extension secret"));
-            Line(sb, "account.1.sip_server.1.address", ConfText.Safe(config.ServerAddress, "server address"));
-            Line(sb, "account.1.sip_server.1.port", Number(config.SipPort));
-            Line(sb, "account.1.sip_server.1.transport_type", Number(TransportUdp));
-            Line(sb, "account.1.sip_server.1.expiry", Number(RegistrationExpiry));
-            Line(sb, "account.1.subscribe_mwi", "1");
-            Line(sb, "account.1.subscribe_mwi_to_vm", "1");
-            Line(sb, "account.1.dtmf.type", "2");
-            Line(sb, "account.1.nat.udp_update_enable", "1");
-            Line(sb, "account.1.nat.udp_update_time", "60");
-            Line(sb, "account.1.nat.rport", "1");
-
-            sb.Append('\n');
-            WriteCodecs(sb, config.Codecs);
-
-            WriteLineKeys(sb, config);
+            WriteLineKeys(sb, config, buttons, lines);
 
             return sb.ToString();
         }
@@ -135,23 +121,79 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// <summary>One "key = value" line.</summary>
         private static void Line(StringBuilder sb, string key, string value) => sb.Append(key).Append(" = ").Append(value).Append('\n');
 
+        /// <summary>
+        /// The extension a line key registers as. The caller has already reduced the keys to the
+        /// ones that can work (<see cref="PhoneButton.Usable"/>), so a line naming an extension
+        /// this renderer was not given is the caller's mistake and is refused rather than written
+        /// as a registration with no password behind it.
+        /// </summary>
+        private static Extension LineExtension(YealinkConfig config, PhoneButton line)
+        {
+            var extension = config.Extensions.FirstOrDefault(e =>
+                string.Equals(e.Number, line.TargetValue, StringComparison.Ordinal));
+
+            if (extension == null)
+                throw new InvalidOperationException($"Phone key {line.Position} registers as extension '{line.TargetValue}', which the renderer was not given.");
+
+            var errors = extension.Validate();
+            if (errors.Count > 0)
+                throw new InvalidOperationException($"Extension '{extension.Number}' is invalid: {string.Join(" ", errors)}");
+
+            return extension;
+        }
+
         private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
 
-        /// <summary>The Yealink name and RTP payload type for the codecs this system offers (D73).</summary>
-        private static (string Name, int PayloadType) YealinkCodec(string codec) => codec switch
+        /// <summary>
+        /// The keys in key order, re-validated as the phone is: a row that reached us another way
+        /// must not become a key that dials somewhere else.
+        /// </summary>
+        private static List<PhoneButton> Validated(IEnumerable<PhoneButton> buttons)
         {
-            "ulaw" => ("PCMU", 0),
-            "alaw" => ("PCMA", 8),
-            "g722" => ("G722", 9),
-            "gsm" => ("GSM", 3),
-            _ => throw new InvalidOperationException($"Refusing to write codec '{codec}': not one this system loads."),
-        };
+            var ordered = buttons.OrderBy(b => b.Position).ToList();
+
+            foreach (var button in ordered)
+            {
+                var errors = button.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
+            }
+
+            return ordered;
+        }
+
+        /// <summary>One account: the registration one line key gives the phone.</summary>
+        private static void WriteAccount(StringBuilder sb, int number, Extension extension, YealinkConfig config)
+        {
+            var account = $"account.{Number(number)}";
+
+            sb.Append('\n');
+            Line(sb, $"{account}.enable", "1");
+            Line(sb, $"{account}.label", ConfText.Safe(extension.Name, "extension name"));
+            Line(sb, $"{account}.display_name", ConfText.Safe(extension.Name, "extension name"));
+            Line(sb, $"{account}.auth_name", ConfText.Safe(extension.Number, "extension number"));
+            Line(sb, $"{account}.user_name", ConfText.Safe(extension.Number, "extension number"));
+            Line(sb, $"{account}.password", ConfText.Safe(extension.Secret, "extension secret"));
+            Line(sb, $"{account}.sip_server.1.address", ConfText.Safe(config.ServerAddress, "server address"));
+            Line(sb, $"{account}.sip_server.1.port", Number(config.SipPort));
+            Line(sb, $"{account}.sip_server.1.transport_type", Number(TransportUdp));
+            Line(sb, $"{account}.sip_server.1.expiry", Number(RegistrationExpiry));
+            Line(sb, $"{account}.subscribe_mwi", "1");
+            Line(sb, $"{account}.subscribe_mwi_to_vm", "1");
+            Line(sb, $"{account}.dtmf.type", "2");
+            Line(sb, $"{account}.nat.udp_update_enable", "1");
+            Line(sb, $"{account}.nat.udp_update_time", "60");
+            Line(sb, $"{account}.nat.rport", "1");
+
+            sb.Append('\n');
+            WriteCodecs(sb, number, config.Codecs);
+        }
 
         /// <summary>
         /// One codec slot per codec present, in preference order, skipping anything this system
-        /// has no Yealink name for.
+        /// has no Yealink name for. Per account, because that is how Yealink stores them.
         /// </summary>
-        private static void WriteCodecs(StringBuilder sb, List<string> codecs)
+        private static void WriteCodecs(StringBuilder sb, int account, List<string> codecs)
         {
             var slot = 0;
 
@@ -163,54 +205,64 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 slot++;
                 var (name, payloadType) = YealinkCodec(codec);
 
-                Line(sb, $"account.1.codec.{slot}.enable", "1");
-                Line(sb, $"account.1.codec.{slot}.name", name);
-                Line(sb, $"account.1.codec.{slot}.payload_type", Number(payloadType));
-                Line(sb, $"account.1.codec.{slot}.priority", Number(slot));
+                Line(sb, $"account.{Number(account)}.codec.{slot}.enable", "1");
+                Line(sb, $"account.{Number(account)}.codec.{slot}.name", name);
+                Line(sb, $"account.{Number(account)}.codec.{slot}.payload_type", Number(payloadType));
+                Line(sb, $"account.{Number(account)}.codec.{slot}.priority", Number(slot));
             }
         }
 
         /// <summary>
-        /// The assignable keys, written as Yealink line keys (D121). Each one is a lamp and a quick
-        /// dial: the phone SUBSCRIBEs for the key's value on account 1 and dials the same value when
-        /// the key is pressed. An extension's lamp follows the <c>PJSIP/&lt;number&gt;</c> hint and a
-        /// parking slot's follows <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the dialplan's
-        /// doing — from here both are a number in the internal context, which is why this writes
-        /// both the same way, exactly as Polycom writes both as an <c>automata</c> resource.
+        /// The keys, written as Yealink line keys (D121, schema 020). A line key shows one of the
+        /// phone's own accounts and takes no value; every other key is a lamp and a quick dial —
+        /// the phone SUBSCRIBEs for the key's value on the first account and dials the same value
+        /// when the key is pressed. An extension's lamp follows the <c>PJSIP/&lt;number&gt;</c>
+        /// hint and a parking slot's follows <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the
+        /// dialplan's doing — from here both are a number in the internal context, which is why
+        /// this writes both the same way, exactly as Polycom writes both as an <c>automata</c>
+        /// resource.
         ///
         /// Unlike Polycom's resource list, which a phone reads until the first index it cannot find
         /// and so has to be numbered 1..n, a Yealink line key is addressed by the key itself: key 4
         /// is <c>linekey.4</c>, and an unassigned key is not written at all, so it keeps whatever
         /// the phone does with it by default. All eight keys are offered; a handset with fewer line
-        /// keys than that silently ignores the ones it does not have. The consequence worth
-        /// knowing: key 1 is a phone's default line appearance, so assigning it replaces that.
+        /// keys than that silently ignores the ones it does not have.
         /// </summary>
-        private static void WriteLineKeys(StringBuilder sb, YealinkConfig config)
+        private static void WriteLineKeys(StringBuilder sb, YealinkConfig config, List<PhoneButton> buttons, List<PhoneButton> lines)
         {
-            var buttons = config.Buttons.OrderBy(b => b.Position).ToList();
-            if (buttons.Count == 0)
-                return;
-
-            foreach (var button in buttons)
-            {
-                var errors = button.Validate();
-                if (errors.Count > 0)
-                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
-            }
-
             sb.Append('\n');
-            sb.Append("# Line keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp\n");
-            sb.Append("# follows its hint; a parking slot's is lit while a call is sitting in it.\n");
+            sb.Append("# Keys assigned in TNPBX. Key 1 is the line this phone registers as; the rest are\n");
+            sb.Append("# a lamp and a quick dial each — an extension's follows its hint, a parking slot's\n");
+            sb.Append("# is lit while a call is sitting in it.\n");
 
             foreach (var button in buttons)
             {
                 var key = $"linekey.{Number(button.Position)}";
 
-                Line(sb, $"{key}.line", Number(LineKeyAccount));
+                if (button.IsLine)
+                {
+                    Line(sb, $"{key}.line", Number(lines.FindIndex(l => l.Position == button.Position) + 1));
+                    Line(sb, $"{key}.type", Number(LineKeyLine));
+                    Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions), "line key label"));
+
+                    continue;
+                }
+
+                Line(sb, $"{key}.line", Number(LampAccount));
                 Line(sb, $"{key}.value", ConfText.Safe(button.TargetValue, "line key value"));
                 Line(sb, $"{key}.type", Number(LineKeyBlf));
-                Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.ButtonExtensions), "line key label"));
+                Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions), "line key label"));
             }
         }
+
+        /// <summary>The Yealink name and RTP payload type for the codecs this system offers (D73).</summary>
+        private static (string Name, int PayloadType) YealinkCodec(string codec) => codec switch
+        {
+            "ulaw" => ("PCMU", 0),
+            "alaw" => ("PCMA", 8),
+            "g722" => ("G722", 9),
+            "gsm" => ("GSM", 3),
+            _ => throw new InvalidOperationException($"Refusing to write codec '{codec}': not one this system loads."),
+        };
     }
 }

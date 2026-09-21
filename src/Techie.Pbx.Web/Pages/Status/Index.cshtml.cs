@@ -24,6 +24,7 @@ namespace Techie.Pbx.Web.Pages.Status
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly AnnouncementRepository announcements;
+        private readonly PhoneButtonRepository buttons;
         private readonly CertificateRepository certificates;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inboundRoutes;
@@ -40,6 +41,7 @@ namespace Techie.Pbx.Web.Pages.Status
         public IndexModel()
         {
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
+            this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.certificates = new CertificateRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inboundRoutes = new InboundRouteRepository(PbxDatabase.Current);
@@ -88,6 +90,9 @@ namespace Techie.Pbx.Web.Pages.Status
                 InboundRoutes = this.inboundRoutes.GetAll(),
                 Ivrs = this.ivrs.GetAll(),
                 OutboundRoutes = this.outboundRoutes.GetAll(),
+                // The line keys only: they are what say which extension a phone registers as
+                // (schema 020), and nothing on this page asks about a lamp.
+                PhoneButtons = this.buttons.GetLines(),
                 Phones = this.phones.GetAll(),
                 RestartRequired = this.restart.IsPending,
                 RingGroups = this.ringGroups.GetAll(),

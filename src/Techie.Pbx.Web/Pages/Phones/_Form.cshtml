@@ -1,3 +1,4 @@
+@using Techie.Pbx.Core.Models
 @model PhoneForm
 @{
     var deleteUrl = Url.Page("Index", "Delete");
@@ -8,10 +9,10 @@
     The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
     and footer together, so a validation failure comes back with the modal still open.
 
-    Two tabs (D121). Buttons opens first because it is what an admin comes back to: an extension
-    is assigned once, keys get moved around. Details holds the name, the extension, the enabled
-    flag and what the phone itself reported — the rest of what we know about a phone was written
-    by the phone (D78), so it is shown and not editable.
+    Two tabs (D121). Buttons opens first because it is the whole of what an admin sets: key 1 is
+    the extension the phone registers as and the rest are its lamps (schema 020). Details holds
+    the name, the enabled flag and what the phone itself reported — the rest of what we know about
+    a phone was written by the phone (D78), so it is shown and not editable.
 *@
 <form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
     <div class="modal-header">
@@ -55,13 +56,22 @@
                 One row per assignable key, fixed rather than add and remove buttons: there are
                 eight of them and they never change, so the editor needs no JavaScript at all —
                 the same shape the IVR digit map uses (D59).
+
+                Key 1 is the line the phone registers as, and a second registration may take key 2,
+                so "Line" is offered only while every key above is still a line (schema 020). That
+                is the same rule the save enforces; the dropdown simply does not show what would be
+                refused.
             *@
             <table class="table table-sm align-middle mb-2">
                 <tbody>
+                    @{ var leading = true; }
                     @for (var index = 0; index < Model.Buttons.Count; index++)
                     {
                         var button = Model.Buttons[index];
                         var elementID = $"phone-button-{button.Position}";
+                        var isLine = button.Target?.StartsWith("Line:", StringComparison.Ordinal) == true;
+                        var offerLine = leading;
+                        leading = leading && isLine;
 
                         <tr>
                             <th scope="row" style="width: 6rem;">
@@ -72,29 +82,46 @@
                                 <select class="form-select" id="@elementID" name="buttons[@index].target">
                                     <option value="" selected="@(string.IsNullOrEmpty(button.Target) ? "selected" : null)">Nothing</option>
 
-                                    <optgroup label="Extensions">
-                                        @foreach (var extension in Model.Extensions)
-                                        {
-                                            var key = $"Extension:{extension.Number}";
-
-                                            <option value="@key" selected="@(button.Target == key ? "selected" : null)">
-                                                @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
-                                            </option>
-                                        }
-                                    </optgroup>
-
-                                    @if (Model.ParkingSlots.Count > 0)
+                                    @if (offerLine)
                                     {
-                                        <optgroup label="Call parking">
-                                            @foreach (var slot in Model.ParkingSlots)
+                                        <optgroup label="Line — the extension this phone registers as">
+                                            @foreach (var extension in Model.Extensions)
                                             {
-                                                var key = $"ParkingSlot:{slot}";
+                                                var key = $"Line:{extension.Number}";
 
                                                 <option value="@key" selected="@(button.Target == key ? "selected" : null)">
-                                                    Parking slot @slot
+                                                    @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
                                                 </option>
                                             }
                                         </optgroup>
+                                    }
+
+                                    @if (button.Position > PhoneButton.FirstPosition)
+                                    {
+                                        <optgroup label="User list — a lamp on somebody else">
+                                            @foreach (var extension in Model.Extensions)
+                                            {
+                                                var key = $"Blf:{extension.Number}";
+
+                                                <option value="@key" selected="@(button.Target == key ? "selected" : null)">
+                                                    @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
+                                                </option>
+                                            }
+                                        </optgroup>
+
+                                        @if (Model.ParkingSlots.Count > 0)
+                                        {
+                                            <optgroup label="Call parking">
+                                                @foreach (var slot in Model.ParkingSlots)
+                                                {
+                                                    var key = $"ParkingSlot:{slot}";
+
+                                                    <option value="@key" selected="@(button.Target == key ? "selected" : null)">
+                                                        Parking slot @slot
+                                                    </option>
+                                                }
+                                            </optgroup>
+                                        }
                                     }
                                 </select>
                             </td>
@@ -104,10 +131,13 @@
             </table>
 
             <div class="form-text">
-                A key on an extension is a lamp and a quick dial: it shows whether that phone is
+                <strong>Key 1 is the line this phone registers as</strong>, and it has to have one:
+                a phone signs in as an extension or it is not a phone. Give it a second line on key
+                2 if it really needs one.
+                A key from the user list is a lamp and a quick dial: it shows whether that phone is
                 free, ringing or busy, and pressing it calls them. A key on a parking slot lights
                 while a call is sitting in that slot, and pressing it takes the call.
-                Keys land on the handset's free line keys in order, so a key left on "Nothing" is
+                Keys land on the handset's line keys in order, so a key left on "Nothing" is
                 skipped rather than leaving a gap. The phone picks this up at its next config poll,
                 or straight away if you reboot it.
             </div>
@@ -129,23 +159,10 @@
                 <div class="form-text">What to call this handset, so the table is readable. Yours, not the phone's.</div>
             </div>
 
-            <div class="mb-3">
-                <label class="form-label" for="phone-extension">Extension</label>
-                <select class="form-select" id="phone-extension" name="extensionID">
-                    <option value="" selected="@(Model.ExtensionID is null or 0 ? "selected" : null)">Unassigned</option>
-                    @foreach (var extension in Model.Extensions)
-                    {
-                        <option value="@extension.ExtensionID" selected="@(Model.ExtensionID == extension.ExtensionID ? "selected" : null)">
-                            @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
-                        </option>
-                    }
-                </select>
-                <div class="form-text">
-                    The extension this phone registers as, on line 1. Unassigned phones are still given the
-                    time and a config poll, so one can be assigned later without touching the handset.
-                </div>
-            </div>
-
+            @*
+                No extension field: the extension a phone registers as is key 1 on the Buttons tab
+                (schema 020). Asking here as well is what gave an eight-key handset nine lines.
+            *@
             <div class="form-check mb-4">
                 <input class="form-check-input" type="checkbox" id="phone-enabled" name="enabled" value="true"
                        checked="@(Model.Enabled ? "checked" : null)" />
@@ -189,7 +206,18 @@
                     hx-vals='{"phoneID": @Model.PhoneID}'
                     hx-swap="none"
                     hx-confirm="Forget phone @Model.Mac? If it is still plugged in it will add itself again, with no extension.">Delete</button>
-            @if (Model.LastIP.Length > 0)
+            @*
+                Reboot is a SIP NOTIFY to the contact the phone registered (D123), so it works
+                through NAT — but only for a phone that has registered. When it cannot, the button
+                stays and says why: a disabled button with a reason beats a button that is not
+                there.
+            *@
+            @if (Model.RebootHint.Length > 0)
+            {
+                <button type="button" class="btn btn-outline-secondary ms-2" disabled
+                        title="@Model.RebootHint">Reboot phone</button>
+            }
+            else
             {
                 <button type="button" class="btn btn-outline-secondary ms-2"
                         hx-post="@rebootUrl"

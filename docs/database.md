@@ -133,12 +133,16 @@ D63). `ON DELETE CASCADE`: a rule has no life without its condition.
 | `DestinationType` / `DestinationValue` | TEXT | Holiday-only override destination; empty = the condition's holiday destination (D63) |
 | `SortOrder` | INTEGER | The order the rules are written in |
 
-### Phones (011)
+### Phones (011, 012, 020)
 
 Desk phones that provision themselves from us (D77, D78). Most rows are created by the phone
 rather than by an admin: a valid credential plus a Polycom User-Agent plus an unknown MAC inserts
 one. Nothing here is rendered into `/etc/asterisk` — a phone's config is generated per request
 (D79) — so a write to this table raises no config-pending marker.
+
+**There is no `ExtensionID`.** Which extension a phone registers as is its line key in
+`PhoneButtons` (020, D121 amended); `PhoneButton.LineNumber` is what asks, and
+`PhoneButtonRepository.GetLines` answers it for every phone at once.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -149,7 +153,7 @@ one. Nothing here is rendered into `/etc/asterisk` — a phone's config is gener
 | `Firmware` | TEXT | From the User-Agent, e.g. `5.9.5.0614` |
 | `LastIP` | TEXT | Where it last asked from |
 | `LastConfig` | TEXT | When it last fetched its config, `2026-09-17 09:31:02Z`. Empty = never |
-| `ExtensionID` | INTEGER FK → `Extensions`, nullable | `ON DELETE SET NULL`: deleting an extension unassigns the phone rather than being refused (D80) |
+| `Brand` | TEXT | `Polycom` or `Yealink`, set at insert and never changed afterwards (012, D88) |
 | `Enabled` | INTEGER | 0/1, default 1. A disabled phone is refused its config at the next poll |
 
 ### MohClasses (019)
@@ -178,19 +182,28 @@ options of its own and nothing points at it.
 | `File` | TEXT, unique per class | Stored file name under `/var/lib/asterisk/moh/<class directory>`. `<MohFileID>-<slug>.wav` for an upload, `default-N.wav` for the tracks the installer writes. Unique per class because a class plays its own directory whole |
 | `CreatedUnix` | INTEGER | When it was uploaded. Shown, nothing else |
 
-### PhoneButtons (018)
+### PhoneButtons (018, 020)
 
 The assignable keys on a phone (D121): one row per key that has something on it, so a key nobody
 assigned is absent rather than a row saying "nothing". Like `Phones` it raises no config-pending
 marker — the hints the lamps watch are in the dialplan whether a key points at them or not.
+
+Since 020 this is also **where a phone's registration lives**: key 1 is a `Line`, and a phone
+without one registers as nothing. `PhoneButton.ValidateSet` is what holds that together — a line
+is required, lines are the leading keys, and no two phones may claim one extension as a line.
 
 | Column | Type | Notes |
 |---|---|---|
 | `PhoneButtonID` | INTEGER PK | |
 | `PhoneID` | INTEGER FK → `Phones` | `ON DELETE CASCADE`: a key has no life of its own |
 | `Position` | INTEGER | Which key, 1 to 8. Unique per phone |
-| `TargetType` | TEXT | `Extension` or `ParkingSlot`. No `CHECK`, so a third kind needs no schema script (D35, D121) |
+| `TargetType` | TEXT | `Line`, `Blf` or `ParkingSlot`. No `CHECK`, so the reserved `CallFlowControl` needs no schema script (D35, D121) |
 | `TargetValue` | TEXT | The extension number, or the slot number. A reference, never a copy |
+
+Script 020 renames every `Extension` row to `Blf`, inserts each phone's old `Phones.ExtensionID`
+as a `Line` at key 1 and shifts that phone's other keys down one — **dropping the eighth**, which
+has nowhere to go — then drops the column. The shift is two passes (out to `Position + 1000`, back
+to `Position - 999`) because `UNIQUE (PhoneID, Position)` is checked row by row.
 
 ### Settings (002)
 

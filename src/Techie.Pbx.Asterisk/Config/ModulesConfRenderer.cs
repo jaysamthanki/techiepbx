@@ -50,7 +50,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_caller_id.so",                // the callerid we set per endpoint
                 "res_pjsip_nat.so",                      // rewrite_contact, force_rport, 1:1 NAT
                 "res_pjsip_dtmf_info.so",                // DTMF from phones that send SIP INFO
-                "res_pjsip_notify.so",                   // loads pjsip_notify.conf, the Yealink NOTIFY push (D91)
+                "res_pjsip_notify.so",                   // loads pjsip_notify.conf, the reboot NOTIFY a phone is sent (D91, D123)
                 "res_pjsip_mwi.so",                      // answer a phone's SUBSCRIBE: the message-waiting light (D108)
                 "res_pjsip_mwi_body_generator.so",       // writes the message-summary body those NOTIFYs carry (D108)
                 "res_pjsip_exten_state.so",              // answer a phone's SUBSCRIBE for a hint: the BLF lamp (D121)

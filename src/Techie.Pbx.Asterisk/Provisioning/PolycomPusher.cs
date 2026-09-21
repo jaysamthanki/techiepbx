@@ -6,9 +6,14 @@ using log4net;
 namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
-    /// Tells a Polycom phone, over its own web UI, to fetch its config again or to reboot — the
-    /// mechanism this app's save button and "Reboot phone" use so an admin does not have to wait
-    /// for the daily poll (D79) or walk to the desk (D84).
+    /// Tells a Polycom phone, over its own web UI, to fetch its config again — the mechanism this
+    /// app's save button uses so an admin does not have to wait for the daily poll (D79, D86).
+    ///
+    /// Only a config reload goes this way now. <b>Rebooting is a SIP NOTIFY</b> through Asterisk
+    /// (D123), because this push only reaches a phone on the same network as the server (D118) and
+    /// a NOTIFY rides the registration, which every phone has wherever it is. The reload stays here
+    /// because the only NOTIFY a Polycom phone understands reboots it, and rebooting a handset
+    /// because somebody renamed it would be worse than waiting.
     ///
     /// Best-effort by design: a phone that is off, on another network, or slow to answer still
     /// gets the config at its next poll regardless, so a failed push is a warning, never an
@@ -25,15 +30,9 @@ namespace Techie.Pbx.Asterisk.Provisioning
         private static readonly ILog Log = LogManager.GetLogger(typeof(PolycomPusher));
 
         /// <summary>
-        /// Pushes a reboot. <paramref name="handler"/> is how a test replaces the network call;
-        /// production callers leave it null and get a real one.
-        /// </summary>
-        public static Task<bool> PushReboot(string ip, string adminPassword, HttpMessageHandler? handler = null) =>
-            Push(ip, adminPassword, "Action:Reboot", handler);
-
-        /// <summary>
         /// Pushes a config reload — the phone re-fetches and applies its files immediately instead
-        /// of waiting for its next poll.
+        /// of waiting for its next poll. <paramref name="handler"/> is how a test replaces the
+        /// network call; production callers leave it null and get a real one.
         /// </summary>
         public static Task<bool> PushUpdateConfig(string ip, string adminPassword, HttpMessageHandler? handler = null) =>
             Push(ip, adminPassword, "Action:UpdateConfig", handler);

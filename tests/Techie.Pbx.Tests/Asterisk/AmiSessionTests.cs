@@ -64,18 +64,19 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// The Yealink push mechanism (D91): a typed action, the same reasoning as Reload's own
-        /// test above. Not yet verified against a real Asterisk 22 — see D91's caveat.
+        /// The reboot a phone is sent (D123): a typed action with the NOTIFY's own headers as
+        /// Variable lines, one per header, the same reasoning as Reload's own test above.
         /// </summary>
         [Fact]
         public void Send_notify_sends_a_typed_action_rather_than_a_cli_command()
         {
             var session = LoggedIn("Response: Success\r\nActionID: 2\r\nMessage: NOTIFY sent\r\n\r\n");
 
-            session.SendNotify("1001", "tnpbx-check-cfg");
+            session.SendNotify("1001", new[] { ("Event", "check-sync"), ("Content-Length", "0") });
 
             Assert.EndsWith(
-                "Action: PJSIPSendNotify\r\nActionID: 2\r\nEndpoint: 1001\r\nNotificationName: tnpbx-check-cfg\r\n\r\n",
+                "Action: PJSIPNotify\r\nActionID: 2\r\nEndpoint: 1001\r\n" +
+                "Variable: Event=check-sync\r\nVariable: Content-Length=0\r\n\r\n",
                 _sent.ToString());
         }
 
@@ -84,7 +85,9 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: Unable to find endpoint\r\n\r\n");
 
-            var ex = Assert.Throws<AmiException>(() => session.SendNotify("9999", "tnpbx-check-cfg"));
+            var ex = Assert.Throws<AmiException>(() =>
+                session.SendNotify("9999", new[] { ("Event", "check-sync") }));
+
             Assert.Contains("Unable to find endpoint", ex.Message);
         }
 

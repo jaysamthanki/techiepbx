@@ -55,9 +55,10 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("10.8.20.31", loaded.LastIP);
             Assert.NotEqual("", loaded.LastConfig);
 
-            // An auto-added phone belongs to nobody until an admin says otherwise.
+            // An auto-added phone belongs to nobody until an admin says otherwise: no name, and
+            // no keys, which since schema 020 is what "registers as nothing" means.
             Assert.Equal("", loaded.Name);
-            Assert.Null(loaded.ExtensionID);
+            Assert.Empty(new PhoneButtonRepository(this.database).GetForPhone(loaded.PhoneID));
             Assert.True(loaded.Enabled);
         }
 
@@ -74,24 +75,31 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("10.8.20.44", all[0].LastIP);
         }
 
-        /// <summary>What an admin owns is not the phone's to overwrite.</summary>
+        /// <summary>
+        /// What an admin owns is not the phone's to overwrite — including the keys, which since
+        /// schema 020 are what say who the phone belongs to.
+        /// </summary>
         [Fact]
-        public void Registering_again_keeps_the_name_extension_and_enabled_flag()
+        public void Registering_again_keeps_the_name_keys_and_enabled_flag()
         {
-            var extensionID = this.AddExtension();
+            this.AddExtension();
+            var buttons = new PhoneButtonRepository(this.database);
             var phone = this.phones.Register(Mac, "VVX_410", "5.9.5.0614", "10.8.20.31");
 
             phone.Name = "Reception";
-            phone.ExtensionID = extensionID;
             phone.Enabled = false;
             this.phones.Update(phone);
+            buttons.Replace(phone.PhoneID, new List<PhoneButton>
+            {
+                new() { Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" },
+            });
 
             this.phones.Register(Mac, "VVX_410", "6.4.6.0123", "10.8.20.44");
 
             var loaded = this.phones.GetByMac(Mac)!;
 
             Assert.Equal("Reception", loaded.Name);
-            Assert.Equal(extensionID, loaded.ExtensionID);
+            Assert.Equal("1001", PhoneButton.LineNumber(buttons.GetForPhone(loaded.PhoneID)));
             Assert.False(loaded.Enabled);
         }
 
@@ -120,15 +128,6 @@ namespace Techie.Pbx.Tests.Core
             Assert.Contains("already exists", ex.Message);
         }
 
-        [Fact]
-        public void An_extension_that_does_not_exist_is_refused()
-        {
-            var ex = Assert.Throws<ValidationFailedException>(() =>
-                this.phones.Insert(new Phone { Mac = Mac, ExtensionID = 999 }));
-
-            Assert.Contains("not there any more", ex.Message);
-        }
-
         /// <summary>
         /// A model that has changed underneath us is the check the provisioning endpoint makes
         /// before it serves anything (D78). The rule lives on the model so it can be tested here.
@@ -154,39 +153,40 @@ namespace Techie.Pbx.Tests.Core
         [Fact]
         public void Update_and_delete()
         {
-            var extensionID = this.AddExtension();
             var phone = this.phones.Register(Mac, "VVX_410", "5.9.5.0614", "10.8.20.31");
 
             phone.Name = "Reception";
-            phone.ExtensionID = extensionID;
             this.phones.Update(phone);
 
             var loaded = this.phones.GetByID(phone.PhoneID)!;
             Assert.Equal("Reception", loaded.Name);
-            Assert.Equal(extensionID, loaded.ExtensionID);
 
             this.phones.Delete(phone.PhoneID);
             Assert.Null(this.phones.GetByID(phone.PhoneID));
         }
 
         /// <summary>
-        /// Deleting an extension leaves the phone known but unassigned rather than failing on the
-        /// foreign key: the hardware is still on the desk (D80).
+        /// Deleting an extension leaves the phone known, and its line key still naming the number
+        /// that has gone — a key is a reference by number, not a foreign key (schema 020). The
+        /// hardware is still on the desk (D80), the renderers drop a key whose target has gone, and
+        /// the status page says so.
         /// </summary>
         [Fact]
-        public void Deleting_an_extension_unassigns_the_phone_rather_than_failing()
+        public void Deleting_an_extension_leaves_the_phone_known()
         {
             var extensionID = this.AddExtension();
+            var buttons = new PhoneButtonRepository(this.database);
             var phone = this.phones.Register(Mac, "VVX_410", "5.9.5.0614", "10.8.20.31");
 
-            phone.ExtensionID = extensionID;
-            this.phones.Update(phone);
+            buttons.Replace(phone.PhoneID, new List<PhoneButton>
+            {
+                new() { Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" },
+            });
 
             this.extensions.Delete(extensionID);
 
-            var loaded = this.phones.GetByMac(Mac)!;
-            Assert.NotNull(loaded);
-            Assert.Null(loaded.ExtensionID);
+            Assert.NotNull(this.phones.GetByMac(Mac));
+            Assert.Equal("1001", PhoneButton.LineNumber(buttons.GetForPhone(phone.PhoneID)));
         }
 
         /// <summary>
