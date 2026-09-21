@@ -1929,3 +1929,27 @@ has no pickup groups, only the directed form, and a code that does nothing is wo
 The `pickupexten` default in features.conf is not used: Pickup() is reached through a
 generated pattern, like every other dialable number here. On the cheat sheet under
 "From your phone".
+
+### D35 amendment: an inbound route can also go to an IVR or a time condition (2026-09-20)
+The destinations an inbound route offers are now **Extension, Voicemail, Hangup, RingGroup, Ivr
+and TimeCondition** — the whole of `DestinationCatalog`, with nothing held back.
+
+Why: the two things a caller from outside meets first are the clock and the menu. "Ring the front
+desk at 3am" and "put every caller through to one phone" are both the wrong default, and
+business-hours routing (D63) and an auto attendant (D59) are exactly what fix them. A trunk
+landing straight on a single extension was only ever the simplest case, not the common one.
+
+Nothing in the model, the database or the dialplan had to change for it, which is the point of
+D35 and D36: `InboundRoutes.DestinationType` is a plain `TEXT` column with no `CHECK` on it, so
+there is **no schema script** in this change; `Destination.Validate` has known `Ivr` and
+`TimeCondition` since D59 and D63; `InboundRouteRepository` already validated a saved route
+against the full catalog; and `DestinationDialplan` already renders both as
+`Goto(internal,<play extension>,1)` — the same door an internal caller uses, so a menu or an
+open/closed check behaves identically whether the call came from a desk phone or a trunk.
+
+What was actually behind was one page. `Pages/Inbound/Index.cshtml.cs` still called the one- and
+four-argument `DestinationCatalog` overloads, so the picker offered extensions and mailboxes
+only, and a route pointed at an IVR another way would have read "(gone)" in the table. Both calls
+now pass every source. The golden `extensions-inbound.conf` gains a route to IVR 500 and one to
+time condition 600, and a test renders those routes together with the IVR and time-condition rows
+to prove the `Goto` lands on the entry those renderers really write.

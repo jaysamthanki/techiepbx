@@ -88,6 +88,27 @@ namespace Techie.Pbx.Tests.Asterisk
                 DestinationValue = "1001",
                 Description = "Main line",
             },
+            // The two a caller off the street most often wants first: the clock, and the menu
+            // (D35 amendment). 500 and 600 are the play extensions the IVR and time-condition
+            // goldens use, so it is the same door in both places.
+            new InboundRoute
+            {
+                InboundRouteID = 6,
+                TrunkID = 1,
+                DID = "17771234570",
+                DestinationType = "Ivr",
+                DestinationValue = "500",
+                Description = "Main menu",
+            },
+            new InboundRoute
+            {
+                InboundRouteID = 7,
+                TrunkID = 1,
+                DID = "17771234571",
+                DestinationType = "TimeCondition",
+                DestinationValue = "600",
+                Description = "Business hours",
+            },
         };
 
         private static string Expected(string fileName) =>
@@ -147,6 +168,74 @@ namespace Techie.Pbx.Tests.Asterisk
             var actual = Render(SampleRoutes()[1]);
 
             Assert.Contains(" same => n,VoiceMail(1002@default,u)\n same => n,Hangup()\n", actual);
+        }
+
+        [Fact]
+        public void A_did_can_go_to_an_ivr()
+        {
+            var actual = Render(SampleRoutes()[5]);
+
+            Assert.Contains(" same => n(r6),NoOp(Inbound 17771234570 on callcentric to Ivr:500)\n", actual);
+            Assert.Contains(" same => n,Goto(internal,500,1)\n", actual);
+        }
+
+        [Fact]
+        public void A_did_can_go_to_a_time_condition()
+        {
+            var actual = Render(SampleRoutes()[6]);
+
+            Assert.Contains(" same => n(r7),NoOp(Inbound 17771234571 on callcentric to TimeCondition:600)\n", actual);
+            Assert.Contains(" same => n,Goto(internal,600,1)\n", actual);
+        }
+
+        /// <summary>
+        /// The point of routing an inbound call through the internal context: the Goto the route
+        /// writes lands on the entry the IVR and time-condition renderers write for themselves, so
+        /// a caller off the street reaches the menu and the clock by the door an internal caller
+        /// uses (D36, D35 amendment). Rendering both together is what proves the two halves agree.
+        /// </summary>
+        [Fact]
+        public void An_ivr_and_a_time_condition_route_land_on_the_entry_that_is_really_there()
+        {
+            var announcements = new List<Announcement>
+            {
+                new() { AnnouncementID = 2, Name = "Menu greeting", AudioFile = "menu-greeting.wav" },
+            };
+            var ivrs = new List<Ivr>
+            {
+                new()
+                {
+                    IvrID = 1,
+                    Name = "Main menu",
+                    AnnouncementID = 2,
+                    PlayExtension = "500",
+                    Entries = new List<IvrEntry>
+                    {
+                        new() { Digit = "1", DestinationType = "Extension", DestinationValue = "1001" },
+                    },
+                },
+            };
+            var conditions = new List<TimeCondition>
+            {
+                // No rules, so it is always closed — which is all this test needs it to be: what
+                // matters here is that the number has an entry to arrive at.
+                new() { TimeConditionID = 1, Name = "Business hours", PlayExtension = "600" },
+            };
+
+            var actual = ExtensionsConfRenderer.Render(
+                SampleExtensions(),
+                SampleTrunks(),
+                new List<OutboundRoute>(),
+                SampleRoutes(),
+                new List<RingGroup>(),
+                announcements,
+                ivrs,
+                conditions);
+
+            Assert.Contains("exten => 500,1,Goto(ivr-1,s,1)\n", Context(actual, "internal"));
+            Assert.Contains("exten => 600,1,Goto(tc-1,s,1)\n", Context(actual, "internal"));
+            Assert.Contains(" same => n,Goto(internal,500,1)\n", Context(actual, "from-trunk-callcentric"));
+            Assert.Contains(" same => n,Goto(internal,600,1)\n", Context(actual, "from-trunk-callcentric"));
         }
 
         /// <summary>

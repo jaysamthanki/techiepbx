@@ -20,7 +20,9 @@ namespace Techie.Pbx.Web.Pages.Inbound
         private readonly AnnouncementRepository announcements;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
+        private readonly IvrRepository ivrs;
         private readonly RingGroupRepository ringGroups;
+        private readonly TimeConditionRepository timeConditions;
         private readonly TrunkRepository trunks;
 
         public IndexModel()
@@ -28,7 +30,9 @@ namespace Techie.Pbx.Web.Pages.Inbound
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
+            this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
+            this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
 
@@ -64,13 +68,16 @@ namespace Techie.Pbx.Web.Pages.Inbound
             var allExtensions = this.extensions.GetAll();
             var allGroups = this.ringGroups.GetAll();
             var allAnnouncements = this.announcements.GetAll();
+            var allIvrs = this.ivrs.GetAll();
+            var allConditions = this.timeConditions.GetAll();
             var allTrunks = this.trunks.GetAll();
 
             var rows = this.inbound.GetAll()
                 .Select(route =>
                 {
                     var trunk = allTrunks.FirstOrDefault(t => t.TrunkID == route.TrunkID);
-                    var choice = DestinationCatalog.Find(allExtensions, allGroups, allAnnouncements, route.ToDestination());
+                    var choice = DestinationCatalog.Find(
+                        allExtensions, allGroups, allAnnouncements, allIvrs, allConditions, route.ToDestination());
 
                     return new InboundRouteRow
                     {
@@ -167,13 +174,23 @@ namespace Techie.Pbx.Web.Pages.Inbound
         /// <summary>
         /// The lists the form cannot know for itself: the trunks calls can arrive on, and every
         /// place a call can be sent (D35).
+        ///
+        /// Every source the catalog knows, which is what the repository has always validated a
+        /// saved route against. Ring groups, announcements, IVRs and time conditions belong here
+        /// as much as extensions do: a caller from outside usually wants the clock checked and the
+        /// menu played before any phone rings at all (D35 amendment).
         /// </summary>
         private InboundRouteForm Fill(InboundRouteForm form)
         {
             form.Trunks = this.trunks.GetAll().Where(t => t.Enabled).ToList();
             form.DestinationChoices = new DestinationSelect
             {
-                Choices = DestinationCatalog.All(this.extensions.GetAll()),
+                Choices = DestinationCatalog.All(
+                    this.extensions.GetAll(),
+                    this.ringGroups.GetAll(),
+                    this.announcements.GetAll(),
+                    this.ivrs.GetAll(),
+                    this.timeConditions.GetAll()),
                 ElementID = "route-destination",
                 Name = "destination",
                 SelectedKey = string.IsNullOrEmpty(form.Destination) ? null : form.Destination,
