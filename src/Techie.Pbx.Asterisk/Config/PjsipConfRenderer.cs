@@ -142,6 +142,13 @@ namespace Techie.Pbx.Asterisk.Config
                     sb.Append("remove_existing = no\n");
                 else
                     sb.Append("remove_existing = yes\n");
+
+                // A contact restored from Asterisk's database at boot is by definition dead: the
+                // registration was over the socket of a previous Asterisk process, and behind NAT
+                // it is a port mapping that may already be gone. Prune them and let the phones
+                // re-register — an expired one once survived a restart and filled the AOR's
+                // max_contacts, locking the phone out with 403s (D111).
+                sb.Append("prune_on_boot = yes\n");
             }
 
             foreach (var trunk in TrunkRenderOrder(trunks))
