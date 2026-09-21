@@ -217,6 +217,68 @@ namespace Techie.Pbx.Tests.Core
             Assert.NotNull(this.trunks.GetByID(trunkID));
         }
 
+        /// <summary>
+        /// The music a caller on this route hears while they are held (D122 amended). Stored as the
+        /// class's ID, so renaming the class renames what the dialplan says at the next apply.
+        /// </summary>
+        [Fact]
+        public void A_route_can_name_a_music_on_hold_class()
+        {
+            AddExtension();
+            var trunkID = AddTrunk();
+            var mohClasses = new MohClassRepository(this.database);
+            var mohClassID = mohClasses.Insert(new MohClass { Name = "Front Desk", Directory = "front-desk" });
+
+            var route = Route(trunkID);
+            route.MohClassID = mohClassID;
+            this.inbound.Insert(route);
+
+            Assert.Equal(mohClassID, this.inbound.GetByID(route.InboundRouteID)!.MohClassID);
+        }
+
+        /// <summary>
+        /// The renderer writes the class's name into the dialplan and refuses one it cannot find,
+        /// so a route must not be able to name a class that is not there in the first place.
+        /// </summary>
+        [Fact]
+        public void A_route_cannot_name_a_music_on_hold_class_that_is_not_there()
+        {
+            AddExtension();
+            var trunkID = AddTrunk();
+
+            var route = Route(trunkID);
+            route.MohClassID = 999;
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.inbound.Insert(route));
+            Assert.Contains("music on hold class is not there", ex.Message);
+        }
+
+        /// <summary>
+        /// Deleting a class does not delete the routes that played it: they go back to naming no
+        /// class, which is the same silence-or-whatever-Asterisk-falls-back-to every route had
+        /// before the column existed. A cascade here would delete an inbound route — and with it
+        /// the number a site advertises — because somebody tidied up the hold music.
+        /// </summary>
+        [Fact]
+        public void Deleting_a_class_puts_the_routes_that_played_it_back_to_none()
+        {
+            AddExtension();
+            var trunkID = AddTrunk();
+            var mohClasses = new MohClassRepository(this.database);
+            var mohClassID = mohClasses.Insert(new MohClass { Name = "Front Desk", Directory = "front-desk" });
+
+            var route = Route(trunkID);
+            route.MohClassID = mohClassID;
+            this.inbound.Insert(route);
+
+            mohClasses.Delete(mohClassID);
+
+            var loaded = this.inbound.GetByID(route.InboundRouteID);
+
+            Assert.NotNull(loaded);
+            Assert.Null(loaded!.MohClassID);
+        }
+
         [Fact]
         public void Every_write_raises_the_apply_marker()
         {

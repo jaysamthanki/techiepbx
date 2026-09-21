@@ -137,9 +137,10 @@
                 A key from the user list is a lamp and a quick dial: it shows whether that phone is
                 free, ringing or busy, and pressing it calls them. A key on a parking slot lights
                 while a call is sitting in that slot, and pressing it takes the call.
-                Keys land on the handset's line keys in order, so a key left on "Nothing" is
-                skipped rather than leaving a gap. The phone picks this up at its next config poll,
-                or straight away if you reboot it.
+                Key 6 here is key 6 on the handset: a key left on "Nothing" stays blank on the
+                phone rather than moving the keys below it up, so you can leave a gap between two
+                groups of keys if you want one. The phone picks this up at its next config poll, or
+                straight away if you reboot it.
             </div>
 
             @if (Model.ParkingSlots.Count == 0)

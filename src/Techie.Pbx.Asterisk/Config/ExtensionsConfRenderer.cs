@@ -170,6 +170,19 @@ namespace Techie.Pbx.Asterisk.Config
             string timezone) =>
             Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, timezone, new ParkingSettings());
 
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            string timezone,
+            ParkingSettings parking) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, timezone, parking, new List<MohClass>());
+
         /// <param name="timezone">
         /// The IANA zone a time condition's open hours are written in. It is named as the fifth
         /// argument of every GotoIfTime the condition contexts generate, so Asterisk evaluates the
@@ -178,6 +191,11 @@ namespace Techie.Pbx.Asterisk.Config
         /// <param name="parking">
         /// Call parking, which adds one entry per slot to the internal context when it is switched
         /// on and nothing at all when it is not (D119).
+        /// </param>
+        /// <param name="mohClasses">
+        /// The music on hold classes, so that an inbound route naming one can be written as the
+        /// class's name rather than its ID (D122 amended). A route naming a class that is not in
+        /// this list is refused rather than written, the way every other dangling reference is.
         /// </param>
         public static string Render(
             IEnumerable<Extension> extensions,
@@ -189,7 +207,8 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<Ivr> ivrs,
             IEnumerable<TimeCondition> timeConditions,
             string timezone,
-            ParkingSettings parking)
+            ParkingSettings parking,
+            IEnumerable<MohClass> mohClasses)
         {
             parking.ThrowIfInvalid();
 
@@ -198,6 +217,7 @@ namespace Techie.Pbx.Asterisk.Config
             var routeList = RouteRenderOrder(routes, trunkList);
             var inboundList = InboundRenderOrder(inbound, trunkList);
             var groupList = RingGroupRenderOrder(ringGroups, enabled);
+            var mohClassList = mohClasses.ToList();
 
             // The raw rows as well as the render order: an announcement that is only ever an IVR's
             // greeting has no play extension, so it is not in the list that gets dialplan entries.
@@ -294,7 +314,7 @@ namespace Techie.Pbx.Asterisk.Config
                 AppendTimeConditionContext(sb, condition, timezone);
 
             foreach (var trunk in trunkList)
-                AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList());
+                AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList(), mohClassList);
 
             AppendOutboundRoutes(sb, routeList, trunkList);
 
@@ -841,8 +861,11 @@ namespace Techie.Pbx.Asterisk.Config
         /// No includes and no ordering tricks are needed here, unlike outbound (D46): the DIDs are
         /// literal extensions and the catch-all is a pattern, and Asterisk always prefers a literal
         /// match to a pattern.
+        ///
+        /// A route that names a music on hold class sets it on the channel before the call is
+        /// handed on, so it is already there whenever somebody holds this caller (D122 amended).
         /// </summary>
-        private static void AppendTrunkContext(StringBuilder sb, Trunk trunk, List<InboundRoute> routes)
+        private static void AppendTrunkContext(StringBuilder sb, Trunk trunk, List<InboundRoute> routes, List<MohClass> mohClasses)
         {
             var trunkName = ConfText.Safe(trunk.Name, "trunk name");
 
@@ -880,6 +903,7 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 var destination = catchAll.ToDestination();
                 sb.Append($" same => n(none),NoOp(Inbound catch-all on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
+                sb.Append(MusicOnHoldLine(catchAll, mohClasses));
                 sb.Append(DestinationDialplan.Lines(destination));
             }
 
@@ -891,8 +915,46 @@ namespace Techie.Pbx.Asterisk.Config
                 var label = $"r{route.InboundRouteID}";
 
                 sb.Append($" same => n({label}),NoOp(Inbound {number} on {trunkName} to {ConfText.Safe(destination.Key, "destination")})\n");
+                sb.Append(MusicOnHoldLine(route, mohClasses));
                 sb.Append(DestinationDialplan.Lines(destination));
             }
+        }
+
+        /// <summary>
+        /// What this route's caller hears while anybody has them on hold, as the one dialplan line
+        /// that says it (D122 amended): the class is set on the channel here, before the call is
+        /// handed on, so it is already in place whoever holds them and wherever the call has been
+        /// transferred to by then.
+        ///
+        /// <c>CHANNEL(musicclass)</c> rather than a <c>MusicOnHold</c> of our own: holding is the
+        /// far end's doing, and what Asterisk needs from us is the name to reach for when it
+        /// happens. It is also the name Asterisk's own function has —
+        /// <c>ast_channel_musicclass</c>, <c>func_channel.c</c> — which is worth writing down
+        /// because "mohclass" is what everyone calls it in conversation and Asterisk would answer
+        /// that with a warning and no music.
+        ///
+        /// A route that names no class writes no line, which leaves the channel exactly as every
+        /// route left it before this existed. The name is re-validated and passed through
+        /// <see cref="ConfText.Safe"/> like every other value that reaches a conf file, and a class
+        /// this renderer was not given is refused rather than guessed at.
+        /// </summary>
+        private static string MusicOnHoldLine(InboundRoute route, List<MohClass> mohClasses)
+        {
+            if (route.MohClassID is not { } mohClassID)
+                return "";
+
+            var what = route.CatchAll ? "catch-all" : route.DID;
+            var mohClass = mohClasses.FirstOrDefault(c => c.MohClassID == mohClassID);
+
+            if (mohClass == null)
+                throw new InvalidOperationException($"Inbound route '{what}' plays music on hold class {mohClassID}, which the renderer was not given.");
+
+            if (!MohClass.IsValidName(mohClass.Name))
+                throw new InvalidOperationException($"Inbound route '{what}' plays music on hold class '{mohClass.Name}', which is not a name Asterisk could match.");
+
+            var name = ConfText.Safe(mohClass.Name.Trim(), "music on hold class");
+
+            return $" same => n,Set(CHANNEL(musicclass)={name})\n";
         }
 
         /// <summary>

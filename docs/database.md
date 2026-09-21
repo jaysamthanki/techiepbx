@@ -182,6 +182,15 @@ options of its own and nothing points at it.
 | `File` | TEXT, unique per class | Stored file name under `/var/lib/asterisk/moh/<class directory>`. `<MohFileID>-<slug>.wav` for an upload, `default-N.wav` for the tracks the installer writes. Unique per class because a class plays its own directory whole |
 | `CreatedUnix` | INTEGER | When it was uploaded. Shown, nothing else |
 
+### InboundRoutes: music on hold (021)
+
+Which class a caller on this route hears whenever somebody holds them (D122 amended). The table
+itself is from 006; this is the one column added since.
+
+| Column | Type | Notes |
+|---|---|---|
+| `MohClassID` | INTEGER FK → `MohClasses`, nullable | Null means no class is named, which is what every route did before this column and leaves the channel to Asterisk's own fallback. `ON DELETE SET NULL`: deleting a class must not delete the route, and a route naming a class that has gone is a name the renderer refuses to write |
+
 ### PhoneButtons (018, 020)
 
 The assignable keys on a phone (D121): one row per key that has something on it, so a key nobody
@@ -190,13 +199,15 @@ marker — the hints the lamps watch are in the dialplan whether a key points at
 
 Since 020 this is also **where a phone's registration lives**: key 1 is a `Line`, and a phone
 without one registers as nothing. `PhoneButton.ValidateSet` is what holds that together — a line
-is required, lines are the leading keys, and no two phones may claim one extension as a line.
+is required, the lines are keys 1..n with no gap in them, and no two phones may claim one
+extension as a line. Every other key may be left blank wherever the admin wants the gap, and the
+renderers keep each key where it was put (D121 amended again).
 
 | Column | Type | Notes |
 |---|---|---|
 | `PhoneButtonID` | INTEGER PK | |
 | `PhoneID` | INTEGER FK → `Phones` | `ON DELETE CASCADE`: a key has no life of its own |
-| `Position` | INTEGER | Which key, 1 to 8. Unique per phone |
+| `Position` | INTEGER | Which key, 1 to 8. Unique per phone, and **sparse**: a key left blank has no row and the keys after it keep their own numbers (D121 amended) |
 | `TargetType` | TEXT | `Line`, `Blf` or `ParkingSlot`. No `CHECK`, so the reserved `CallFlowControl` needs no schema script (D35, D121) |
 | `TargetValue` | TEXT | The extension number, or the slot number. A reference, never a copy |
 

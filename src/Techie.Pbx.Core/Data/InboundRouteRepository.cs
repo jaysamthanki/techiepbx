@@ -7,7 +7,7 @@ namespace Techie.Pbx.Core.Data
     public class InboundRouteRepository
     {
         private const string Columns =
-            "InboundRouteID, TrunkID, DID, CatchAll, DestinationType, DestinationValue, Description, Enabled";
+            "InboundRouteID, TrunkID, DID, CatchAll, DestinationType, DestinationValue, Description, Enabled, MohClassID";
 
         private const int SqliteConstraintError = 19;
 
@@ -54,8 +54,8 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 route.InboundRouteID = connection.ExecuteScalar<long>(
-                    "INSERT INTO InboundRoutes (TrunkID, DID, CatchAll, DestinationType, DestinationValue, Description, Enabled) " +
-                    "VALUES (@TrunkID, @DID, @CatchAll, @DestinationType, @DestinationValue, @Description, @Enabled); " +
+                    "INSERT INTO InboundRoutes (TrunkID, DID, CatchAll, DestinationType, DestinationValue, Description, Enabled, MohClassID) " +
+                    "VALUES (@TrunkID, @DID, @CatchAll, @DestinationType, @DestinationValue, @Description, @Enabled, @MohClassID); " +
                     "SELECT last_insert_rowid();",
                     route);
 
@@ -78,7 +78,8 @@ namespace Techie.Pbx.Core.Data
                 var rows = connection.Execute(
                     "UPDATE InboundRoutes SET TrunkID = @TrunkID, DID = @DID, CatchAll = @CatchAll, " +
                     "DestinationType = @DestinationType, DestinationValue = @DestinationValue, " +
-                    "Description = @Description, Enabled = @Enabled WHERE InboundRouteID = @InboundRouteID",
+                    "Description = @Description, Enabled = @Enabled, MohClassID = @MohClassID " +
+                    "WHERE InboundRouteID = @InboundRouteID",
                     route);
                 if (rows == 0)
                     throw new ValidationFailedException($"InboundRouteID {route.InboundRouteID} does not exist.");
@@ -98,8 +99,11 @@ namespace Techie.Pbx.Core.Data
                 : $"There is already a route for {route.DID} on that trunk.";
 
         /// <summary>
-        /// The model's own rules, plus the two that need the database: the trunk has to exist and
-        /// be enabled, and the destination has to still be something a call can be sent to (D35).
+        /// The model's own rules, plus the three that need the database: the trunk has to exist and
+        /// be enabled, the destination has to still be something a call can be sent to (D35), and
+        /// the music on hold class, when one is named, has to be a class that is there (D122
+        /// amended) — the renderer writes the name into the dialplan and refuses one it cannot
+        /// find.
         /// </summary>
         private void ThrowIfInvalid(InboundRoute route)
         {
@@ -129,6 +133,12 @@ namespace Techie.Pbx.Core.Data
                 if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, route.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
             }
+
+            // The class the caller hears on hold, if this route names one. The renderer writes its
+            // name into the dialplan, so a class that is not there would be a name Asterisk could
+            // find nothing for (D122 amended).
+            if (route.MohClassID is { } mohClassID && new MohClassRepository(this.database).GetByID(mohClassID) == null)
+                errors.Add("That music on hold class is not there any more. Choose another.");
 
             if (errors.Count > 0)
                 throw new ValidationFailedException(errors);

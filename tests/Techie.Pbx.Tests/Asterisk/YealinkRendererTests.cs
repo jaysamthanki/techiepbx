@@ -143,6 +143,52 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// The keys a phone is given are the keys the admin put them on, gaps and all (D121
+        /// amended again). Nothing at all is written for a blank key, which is the right answer
+        /// here for the reason the golden file's key 3 shows: a Yealink line key is addressed by
+        /// its own number, so an unwritten key is a key the handset leaves at its default rather
+        /// than a key that shuffles the rest along. This is the same fix Polycom needed and got
+        /// differently, because Polycom's resource list is read until the first missing index.
+        /// </summary>
+        [Fact]
+        public void A_blank_key_keeps_the_keys_after_it_where_they_are()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>
+            {
+                new() { Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" },
+                new() { Position = 6, TargetType = PhoneButtonTarget.Blf, TargetValue = "1002" },
+            };
+
+            var actual = YealinkConfigRenderer.Render(config);
+
+            Assert.Contains("linekey.6.value = 1002\n", actual);
+            Assert.Contains("linekey.6.type = 16\n", actual);
+
+            foreach (var blank in new[] { 2, 3, 4, 5, 7, 8 })
+                Assert.DoesNotContain($"linekey.{blank}.", actual);
+        }
+
+        /// <summary>
+        /// Yealink is given no dial plan of its own: no <c>dialplan.</c> and no <c>dialnow</c>
+        /// rules, so the handset dials on its own Send key and its own timers. The digit map that
+        /// had to be redesigned is Polycom's (D124), and there is nothing here to redesign — a
+        /// Yealink dial-now rule set is a piece to justify on its own, and until it exists this
+        /// test is what says the file really carries none.
+        /// </summary>
+        [Fact]
+        public void No_dial_plan_is_written_for_a_yealink()
+        {
+            var config = SampleConfig();
+            config.Buttons = SampleButtons();
+
+            var actual = YealinkConfigRenderer.Render(config);
+
+            Assert.DoesNotContain("dialplan", actual);
+            Assert.DoesNotContain("dialnow", actual);
+        }
+
+        /// <summary>
         /// Key 1 is the line the phone registers on and takes no value; the rest are BLFs on
         /// account 1. The two types have to differ or the handset shows a row of lines where it
         /// was meant to show one line and some lamps (schema 020).

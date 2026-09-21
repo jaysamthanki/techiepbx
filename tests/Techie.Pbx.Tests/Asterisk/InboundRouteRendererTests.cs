@@ -111,8 +111,72 @@ namespace Techie.Pbx.Tests.Asterisk
             },
         };
 
+        /// <summary>
+        /// The class that ships and one a site added, which is the case worth rendering: a route
+        /// that names the shipped class and a route that names another are the same code path, and
+        /// a route that names neither has to write nothing at all (D122 amended).
+        /// </summary>
+        private static List<MohClass> SampleMohClasses() => new()
+        {
+            new MohClass { MohClassID = 1, Name = "Standard", Directory = "default", IsDefault = true },
+            new MohClass { MohClassID = 3, Name = "Front Desk", Directory = "front-desk" },
+        };
+
+        /// <summary>
+        /// One trunk, one DID with music of its own, one DID with none, and a catch-all with the
+        /// class that ships — so the golden file shows both halves of the choice and both places
+        /// the line can be written.
+        /// </summary>
+        private static List<InboundRoute> MohRoutes() => new()
+        {
+            new InboundRoute
+            {
+                InboundRouteID = 1,
+                TrunkID = 1,
+                DID = "17771234567",
+                DestinationType = "Extension",
+                DestinationValue = "1001",
+                Description = "Main line",
+                MohClassID = 3,
+            },
+            new InboundRoute
+            {
+                InboundRouteID = 2,
+                TrunkID = 1,
+                DID = "17771234568",
+                DestinationType = "Voicemail",
+                DestinationValue = "1002",
+                Description = "Sales after hours",
+            },
+            new InboundRoute
+            {
+                InboundRouteID = 3,
+                TrunkID = 1,
+                CatchAll = true,
+                DestinationType = "Extension",
+                DestinationValue = "1002",
+                Description = "Everything else",
+                MohClassID = 1,
+            },
+        };
+
         private static string Expected(string fileName) =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Expected", fileName)).ReplaceLineEndings("\n");
+
+        /// <summary>The same render every music on hold test does: routes, and the classes they name.</summary>
+        private static string RenderWithMusic(List<InboundRoute> routes, List<MohClass> mohClasses) =>
+            ExtensionsConfRenderer.Render(
+                SampleExtensions(),
+                SampleTrunks(),
+                new List<OutboundRoute>(),
+                routes,
+                new List<RingGroup>(),
+                new List<Announcement>(),
+                new List<Ivr>(),
+                new List<TimeCondition>(),
+                AsteriskSettings.DefaultTimezone,
+                new ParkingSettings(),
+                mohClasses);
 
         private static string Render(params InboundRoute[] routes) =>
             ExtensionsConfRenderer.Render(SampleExtensions(), SampleTrunks(), new List<OutboundRoute>(), routes);
@@ -323,6 +387,88 @@ namespace Techie.Pbx.Tests.Asterisk
             };
 
             Assert.Throws<InvalidOperationException>(() => Render(route));
+        }
+
+        /// <summary>
+        /// The music a caller on this route hears while they are held (D122 amended): one
+        /// <c>Set(CHANNEL(musicclass)=...)</c> in the trunk's context, written before the call is
+        /// handed on so it is already in place whoever holds them.
+        /// </summary>
+        [Fact]
+        public void Music_on_hold_per_route_matches_expected_file()
+        {
+            Assert.Equal(Expected("extensions-inbound-moh.conf"), RenderWithMusic(MohRoutes(), SampleMohClasses()));
+        }
+
+        /// <summary>
+        /// The line goes in immediately before the destination, not after it: a Goto never comes
+        /// back, so anything written after it would be a line Asterisk reaches on no call at all.
+        /// </summary>
+        [Fact]
+        public void The_class_is_set_before_the_call_is_handed_on()
+        {
+            var context = Context(RenderWithMusic(MohRoutes(), SampleMohClasses()), "from-trunk-callcentric");
+
+            Assert.Contains(
+                " same => n(r1),NoOp(Inbound 17771234567 on callcentric to Extension:1001)\n" +
+                " same => n,Set(CHANNEL(musicclass)=Front Desk)\n" +
+                " same => n,Goto(internal,1001,1)\n",
+                context);
+        }
+
+        /// <summary>A catch-all is a route like any other, and it may have music of its own.</summary>
+        [Fact]
+        public void A_catch_all_can_name_a_class_too()
+        {
+            var context = Context(RenderWithMusic(MohRoutes(), SampleMohClasses()), "from-trunk-callcentric");
+
+            Assert.Contains(
+                " same => n(none),NoOp(Inbound catch-all on callcentric to Extension:1002)\n" +
+                " same => n,Set(CHANNEL(musicclass)=Standard)\n",
+                context);
+        }
+
+        /// <summary>
+        /// A route that names no class writes no line, which leaves the channel exactly as every
+        /// route left it before the column existed. That is what makes this change nothing at all
+        /// for a system nobody has configured it on.
+        /// </summary>
+        [Fact]
+        public void A_route_with_no_class_of_its_own_sets_nothing()
+        {
+            Assert.DoesNotContain("musicclass", RenderWithMusic(SampleRoutes(), SampleMohClasses()));
+            Assert.Equal(
+                Expected("extensions-inbound.conf"),
+                RenderWithMusic(SampleRoutes(), SampleMohClasses()));
+        }
+
+        /// <summary>
+        /// A class that is not there is refused rather than written as a name Asterisk would find
+        /// nothing for — the same answer a dangling destination gets. The repository stops this
+        /// from being stored, and deleting a class puts the routes that named it back to none, so
+        /// reaching here means a row arrived another way.
+        /// </summary>
+        [Fact]
+        public void A_class_the_renderer_was_not_given_is_refused()
+        {
+            Assert.Throws<InvalidOperationException>(() => RenderWithMusic(MohRoutes(), new List<MohClass>()));
+        }
+
+        /// <summary>
+        /// And a class whose name Asterisk could not match is refused even though it is in the
+        /// list: <c>default</c> is the fallback that D119's silence depends on, and the renderers
+        /// check it wherever a class name is written.
+        /// </summary>
+        [Fact]
+        public void A_class_named_default_never_reaches_the_dialplan()
+        {
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 1, Name = "Standard", Directory = "default", IsDefault = true },
+                new() { MohClassID = 3, Name = "default", Directory = "front-desk" },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => RenderWithMusic(MohRoutes(), classes));
         }
 
         /// <summary>The text of one context, from its heading to the next one.</summary>

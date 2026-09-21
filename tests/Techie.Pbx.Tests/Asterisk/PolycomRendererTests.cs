@@ -117,9 +117,10 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// A phone with keys on it (D121). Key 1 is the registration and does not appear in the
-        /// resource list at all; the two lamps are resources 1 and 2 although they are keys 2 and
-        /// 4, because a phone reads the resource list until the first index it cannot find, so a
-        /// gap left by an unassigned key would hide everything after it.
+        /// resource list at all; the lamps on keys 2 and 4 are resources 1 and 3, because the
+        /// registration has taken the first line key and a resource lands on the key its index
+        /// says. Key 3 was left blank, so resource 2 is written with an empty address — the list
+        /// cannot skip it, since a phone reads it until the first index it cannot find.
         /// </summary>
         [Fact]
         public void A_phone_with_keys_matches_expected_file()
@@ -128,6 +129,56 @@ namespace Techie.Pbx.Tests.Asterisk
             config.Buttons = SampleButtons();
 
             Assert.Equal(Expected("polycom-phone-buttons.cfg"), PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// The gap is the point (D121 amended again): the user left key 5 blank on a Poly Edge 450
+        /// and expected key 6 to stay where it was put. A blank key is a resource with nothing on
+        /// it rather than a resource that is not written, so every key after it keeps its place.
+        /// </summary>
+        [Fact]
+        public void A_blank_key_keeps_the_keys_after_it_where_they_are()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>
+            {
+                SampleLine(),
+                new() { Position = 4, TargetType = PhoneButtonTarget.Blf, TargetValue = "1002" },
+            };
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            // One line key is taken by the registration, so key 4 is resource 3.
+            Assert.Contains("attendant.resourceList.1.address=\"\"\n", actual);
+            Assert.Contains("attendant.resourceList.2.address=\"\"\n", actual);
+            Assert.Contains("attendant.resourceList.3.address=\"1002\"\n", actual);
+            Assert.Contains("attendant.resourceList.3.label=\"Sales\"\n", actual);
+
+            // A blank key is blank: no label and no type to make the phone show something there.
+            Assert.DoesNotContain("attendant.resourceList.1.label", actual);
+            Assert.DoesNotContain("attendant.resourceList.2.type", actual);
+            Assert.DoesNotContain("attendant.resourceList.4", actual);
+        }
+
+        /// <summary>
+        /// Two registrations take the first two line keys, so a lamp on key 3 is resource 1: the
+        /// resource index counts from the first key the registrations left free.
+        /// </summary>
+        [Fact]
+        public void The_lamps_start_after_the_lines_the_phone_registers_as()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>
+            {
+                SampleLine(),
+                new() { Position = 2, TargetType = PhoneButtonTarget.Line, TargetValue = "1002" },
+                new() { Position = 3, TargetType = PhoneButtonTarget.ParkingSlot, TargetValue = "3" },
+            };
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("attendant.resourceList.1.address=\"3\"\n", actual);
+            Assert.DoesNotContain("attendant.resourceList.2", actual);
         }
 
         /// <summary>

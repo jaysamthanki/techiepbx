@@ -33,18 +33,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
         private const string AttendantType = "automata";
 
         /// <summary>
-        /// What a caller may dial without pressing send. Four-digit extensions, a feature code
-        /// (<c>*97</c>, <c>*43</c>) ended by a pause, the N11 services, and an operator "0" with a
-        /// pause after it.
-        ///
-        /// Extensions here may be 2 to 6 digits (<c>Extension.IsValidNumber</c>), so a site whose
-        /// extensions are not 4 digits gets a phone that waits for the inter-digit timeout instead
-        /// of dialling at once. That is the agreed shape for this piece; making the map follow the
-        /// real extension lengths is a question to ask, not a thing to guess.
+        /// Seconds the phone waits for another digit before dialling what it has, which is what
+        /// every pattern in <see cref="PolycomDigitMap"/> that ends in <c>T</c> is waiting for. A
+        /// user who does not want to wait presses <c>#</c>.
         /// </summary>
-        private const string DigitMap = "xxxx|*xx.T|[2-9]11|0T";
-
-        /// <summary>Seconds the phone waits for another digit before dialling what it has.</summary>
         private const int DigitMapTimeoutSeconds = 3;
 
         /// <summary>How long the phone's registration lasts before it renews, in seconds.</summary>
@@ -113,9 +105,12 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 return sb.ToString();
             }
 
+            // Built from the extensions this system has, so that nothing is ever sent early:
+            // a four-digit fixed pattern used to cut a ten-digit transfer target down to four
+            // digits on a real handset (D124).
             PolycomXml.Element(sb, "  ", "dialplan", new[]
             {
-                PolycomXml.Constant("dialplan.digitmap", DigitMap),
+                PolycomXml.Constant("dialplan.digitmap", PolycomDigitMap.For(config.Extensions)),
                 PolycomXml.Constant("dialplan.digitmap.timeOut", Number(DigitMapTimeoutSeconds)),
             });
 
@@ -159,7 +154,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("call.missedCallTracking.1.enabled", "1"),
             });
 
-            AppendAttendant(sb, config, buttons.Where(b => !b.IsLine).ToList());
+            AppendAttendant(sb, config, buttons.Where(b => !b.IsLine).ToList(), lines.Count);
 
             sb.Append("</polycomConfig>\n");
 
@@ -179,13 +174,16 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// here is the one this file carries. Nothing is written at all for a phone whose only keys
         /// are its lines, so the rest of its line keys stay whatever the handset does with them.
         ///
-        /// The resources are numbered 1..n in key order rather than by the key's own position,
-        /// because a phone reads the list until the first index it does not find: a gap left by an
-        /// unassigned key would hide every key after it. The consequence, and it is the one to
-        /// know: the resources land on the line keys left over after the registrations, in order,
-        /// so clearing one moves the rest up a key.
+        /// <b>Key 6 on the form is key 6 on the handset</b> (D121 amended again). The resources land
+        /// on the line keys left over after the registrations, in order, so the resource index for a
+        /// key is its position less the number of lines — and every index from 1 up to the last
+        /// assigned key is written, whether or not anything is on it. A key the admin left blank
+        /// gets a resource with an empty address and no label or type, which the phone leaves
+        /// unassigned: skipping it instead would shuffle every key after it up one, and the list
+        /// cannot simply stop at the gap because a phone reads it until the first index it does not
+        /// find.
         /// </summary>
-        private static void AppendAttendant(StringBuilder sb, PolycomConfig config, List<PhoneButton> buttons)
+        private static void AppendAttendant(StringBuilder sb, PolycomConfig config, List<PhoneButton> buttons, int lines)
         {
             if (buttons.Count == 0)
                 return;
@@ -197,10 +195,19 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("attendant.reg", "1"),
             };
 
-            for (var index = 0; index < buttons.Count; index++)
+            // The keys are in key order, so the last one is the furthest down the handset.
+            var last = buttons[^1].Position - lines;
+
+            for (var index = 1; index <= last; index++)
             {
-                var button = buttons[index];
-                var resource = $"attendant.resourceList.{Number(index + 1)}";
+                var resource = $"attendant.resourceList.{Number(index)}";
+                var button = buttons.FirstOrDefault(b => b.Position - lines == index);
+
+                if (button == null)
+                {
+                    attributes.Add(PolycomXml.Constant($"{resource}.address", ""));
+                    continue;
+                }
 
                 attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
                 attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions), "attendant label"));

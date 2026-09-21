@@ -116,6 +116,46 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
+        /// A key left blank in the middle is a key the handset leaves alone, which is a thing an
+        /// admin may well want — two groups of lamps with a gap between them — and a thing FreePBX
+        /// allowed. The keys after it keep their own numbers (D121 amended again).
+        /// </summary>
+        [Fact]
+        public void A_key_may_be_left_blank_anywhere_but_the_first()
+        {
+            this.AddExtension();
+            this.AddExtension("1002");
+            this.AddExtension("1003");
+            var phoneID = this.AddPhone();
+
+            this.buttons.Replace(phoneID, new List<PhoneButton>
+            {
+                Line(),
+                Key(2, PhoneButtonTarget.Blf, "1002"),
+                Key(6, PhoneButtonTarget.Blf, "1003"),
+                Key(8, PhoneButtonTarget.ParkingSlot, "1"),
+            });
+
+            Assert.Equal(new[] { 1, 2, 6, 8 }, this.buttons.GetForPhone(phoneID).Select(b => b.Position));
+        }
+
+        /// <summary>
+        /// The one gap that is not allowed is the one above the registration: a phone signs in on
+        /// its first key or the form and the handset disagree about what key 1 is.
+        /// </summary>
+        [Fact]
+        public void The_first_key_cannot_be_the_blank_one()
+        {
+            this.AddExtension();
+            var phoneID = this.AddPhone();
+
+            var ex = Assert.Throws<ValidationFailedException>(() =>
+                this.buttons.Replace(phoneID, new List<PhoneButton> { Key(2, PhoneButtonTarget.Line, "1001") }));
+
+            Assert.Contains("Key 1 has to be the extension this phone registers as", ex.Message);
+        }
+
+        /// <summary>
         /// A second registration takes the next key down, not a key further along: on the handset
         /// the lines are the leading keys whatever this table says, so a set that disagrees would
         /// not be the set an admin saved.

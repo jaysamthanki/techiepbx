@@ -189,9 +189,14 @@ namespace Techie.Pbx.Core.Models
         /// <item><b>Key 1 is a line.</b> A phone has to register as something, and a handset shows
         /// its own line on its first key whatever we say, so a set that starts anywhere else is a
         /// set that would not look like the form that wrote it.</item>
-        /// <item><b>Lines lead.</b> A second or third registration takes the next key down; a line
-        /// after a lamp would push that lamp along on the handset and mean something different
-        /// there than it does here.</item>
+        /// <item><b>Lines lead, and they leave no gap.</b> The registrations are keys
+        /// <see cref="FirstPosition"/> to however many there are: a handset puts its own lines on
+        /// its leading keys whatever this table says, so a line further along would sit somewhere
+        /// else on the phone than it does on the form.</item>
+        /// <item><b>Anything else may be left blank, anywhere.</b> A blank key in the middle is a
+        /// key the handset leaves at its factory default, which is what an admin who wants a gap
+        /// between two groups of lamps means — and what FreePBX allowed (D121 amended). It is the
+        /// renderers' job to keep the keys after it where they were put.</item>
         /// </list>
         ///
         /// Whether those extensions exist, and whether another phone has already claimed one as
@@ -212,20 +217,21 @@ namespace Techie.Pbx.Core.Models
                 errors.Add("Two keys cannot be in the same place.");
 
             var lines = ordered.Count(b => b.IsLine);
+            var firstLine = ordered.FirstOrDefault(b => b.IsLine);
 
-            if (lines == 0 || ordered[0].Position != FirstPosition)
+            // No registration at all, or one that starts further down the handset than key 1 —
+            // whether the key above it holds a lamp or nothing.
+            if (firstLine == null || firstLine.Position != FirstPosition)
             {
                 errors.Add($"Key {FirstPosition} has to be the extension this phone registers as.");
                 return errors;
             }
 
-            for (var index = 0; index < ordered.Count; index++)
-            {
-                if (ordered[index].IsLine == (index < lines))
-                    continue;
-
-                errors.Add($"Key {ordered[index].Position}: only the first keys on a phone can be lines it registers as.");
-            }
+            // The lines have to be keys 1..n. Positions are unique and 1-based, so a line beyond
+            // the number of lines is the only way that can fail — and it fails whether the key
+            // above it holds a lamp or nothing at all.
+            foreach (var line in ordered.Where(b => b.IsLine && b.Position > lines))
+                errors.Add($"Key {line.Position}: only the first keys on a phone can be lines it registers as.");
 
             return errors;
         }

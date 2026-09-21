@@ -93,7 +93,8 @@ namespace Techie.Pbx.Core.Data
 
         /// <summary>
         /// The set's own rules (<see cref="PhoneButton.ValidateSet"/> — every key valid, no two in
-        /// one place, a line first), plus the two that need the database:
+        /// one place, the lines leading from key 1, and any other key free to be left blank
+        /// wherever the admin wants the gap), plus the two that need the database:
         ///
         /// <list type="bullet">
         /// <item>A key on an extension has to name an extension that exists. The key stores the

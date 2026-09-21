@@ -75,6 +75,27 @@
         <div class="form-text">Where the call is sent once it arrives.</div>
     </div>
 
+    @*
+        The music this route's callers hear while somebody has them on hold (D122 amended). Blank
+        is the default and means no class is named, which is what every route did before this
+        existed; the classes themselves live on the Music on hold page.
+    *@
+    <div class="mb-3">
+        <label class="form-label" for="route-moh">Music on hold</label>
+        <select class="form-select" id="route-moh" name="mohClassID">
+            <option value="" selected="@(Model.MohClassID == null ? "selected" : null)">Default</option>
+            @foreach (var mohClass in Model.MohClasses)
+            {
+                <option value="@mohClass.MohClassID" selected="@(mohClass.MohClassID == Model.MohClassID ? "selected" : null)">@mohClass.Name</option>
+            }
+        </select>
+        <div class="form-text">
+            What a caller on this number hears whenever they are put on hold. Default names no
+            class, which leaves it to Asterisk — pick one to be sure of what they hear. Classes are
+            managed on the <a asp-page="/Moh/Index">Music on hold</a> page.
+        </div>
+    </div>
+
     <div class="mb-3">
         <label class="form-label" for="route-description">Description</label>
         <input class="form-control" id="route-description" name="description" value="@Model.Description"

@@ -2007,6 +2007,32 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
 >   and some lamps. Unverified on a real handset (D92) — if a Yealink says otherwise it is one
 >   constant in `YealinkConfigRenderer`.
 
+> **Amended again 2026-09-21: a key may be left blank, and key 6 is key 6.** The user set up eight
+> keys on the Poly Edge 450 with key 5 deliberately blank — two groups of lamps with a gap between
+> them, which FreePBX allowed — and the handset showed the keys below the gap one place higher than
+> the form did. So:
+>
+> - **Blanks are allowed anywhere but the first key.** `PhoneButton.ValidateSet` now says: every key
+>   valid, no two in the same place, and **the lines are keys 1..n with no gap in them** — a phone
+>   signs in on its leading keys whatever we store, so a registration further down would sit
+>   somewhere else on the handset than on the form. Every other key may be left blank, wherever the
+>   admin wants the gap. Nothing about this was ever a database rule: a blank key has always been
+>   stored as no row at all.
+> - **Polycom's resource list is written by position, not packed.** This replaces the numbering
+>   recorded below. A resource's index is its key's position less the number of registrations —
+>   the registrations take the leading line keys, so with one line, key 4 is
+>   `attendant.resourceList.3` — and **every index from 1 to the last assigned key is written**. A
+>   blank key becomes `attendant.resourceList.N.address=""` with no label and no type, which the
+>   phone leaves unassigned. It cannot simply be skipped: a phone reads the list until the first
+>   index it does not find, so a missing index would hide every key after it. That is the whole
+>   reason the list was packed 1..n before, and an empty resource is what keeps both facts true at
+>   once.
+> - **Yealink needed no change**, and the test that says so is the point: a Yealink line key is
+>   addressed by its own number, so key 6 is `linekey.6` and a blank key is simply not written,
+>   which leaves the handset's default on it. Sparse was already right there.
+> - **The consequence recorded below — "clearing one moves the rest up a key" — is gone.** Clearing
+>   a key now clears that key and nothing else.
+
 - **Eight keys, and eight is ours rather than the handset's.** A VVX 310 has six line keys and a
   VVX 410 has twelve; the form offers eight because it is a number an admin can fill in without
   scrolling, not because any phone has exactly that many. A key beyond what the handset has is
@@ -2060,6 +2086,35 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
   and down under the mouse as it grew; sitting near the top of the window keeps it still.
 
 ### D122. Music on hold is several classes, and one of them ships (2026-09-21)
+
+> **Amended 2026-09-21: an inbound route picks the class its callers hear.** Parking was the only
+> customer a class had, so a caller a receptionist put on hold heard whatever Asterisk fell back
+> to. FreePBX lets each inbound route choose, and the difference between the main line and the
+> support line is exactly what a site wants to hear. New column
+> **`InboundRoutes.MohClassID`** (schema 021, nullable), a "Music on hold" dropdown on the inbound
+> route form, and one dialplan line in the trunk's context before the call is handed on:
+>
+> - **`Set(CHANNEL(musicclass)=<name>)`**, not `CHANNEL(mohclass)`. The field Asterisk's `CHANNEL`
+>   function has is `musicclass` (`func_channel.c`, `ast_channel_musicclass`); the other spelling
+>   is what everyone calls it in conversation, and Asterisk answers it with a warning and no music.
+>   Set on the channel rather than played by us, because holding is the far end's doing — what
+>   Asterisk needs from us is the name to reach for when it happens. It goes in before the
+>   destination, since a `Goto` never comes back.
+> - **Null means no class named**, and no line is written, which is exactly what every route did
+>   before the column existed. **Worth knowing, and the user's call to change:** the class that
+>   ships is called `Standard`, and Asterisk's own fallback is a class called `default` that this
+>   system deliberately never writes (D119) — so a route left on "Default" gets *silence* on hold,
+>   not the shipped music. Making null render the `IsDefault` class instead is a one-line change in
+>   `ExtensionsConfRenderer.MusicOnHoldLine`; it was not taken here because it would turn hold
+>   music on for every existing route without anyone asking.
+> - **`ON DELETE SET NULL`.** Deleting a class must not delete the route that played it — that
+>   would take a site's advertised number off the air because somebody tidied up the hold music —
+>   and a route pointing at a class that has gone is a name the renderer refuses to write. The
+>   repository refuses a class that is not there on the way in; the renderer refuses one it was not
+>   given, and one called `default`, on the way out.
+> - **`preferchannelclass = no` stays** and does not get in the way: with it off, Asterisk consults
+>   the channel's own class after the hold payload and the endpoint's `moh_interpret`, and we set
+>   neither of those, so the route's class is what plays. Not yet verified on the lab VM.
 
 D119 built one music on hold class, called `parking`, on one flat directory, because the only
 thing in this system that played hold music was a parked call. A class is a *directory* as far as
@@ -2167,3 +2222,38 @@ a call from.
 - **The HTTP push stays for the config reload only** (D86). The only NOTIFY a Polycom phone
   understands reboots it, and rebooting a handset because somebody renamed it would be worse than
   waiting for the poll. `PolycomPusher.PushReboot` is gone with the button that called it.
+
+### D124. A digit map may only be eager where it cannot be wrong (2026-09-21)
+
+The Polycom digit map D79 shipped was `xxxx|*xx.T|[2-9]11|0T`, with `dialplan.digitmap.timeOut=3`.
+On a real Poly Edge 450 an attended transfer to a ten-digit mobile went out as its **first four
+digits**: `xxxx` full-matches at exactly four, and a Polycom phone dials the moment the digits it
+has match a pattern that does not end in `T` — a longer pattern still being partially matched does
+not stop it. The map is now built per system by `PolycomDigitMap.For(extensions)`.
+
+- **The rule, and it is the whole design: a pattern may be eager only when nothing dialable is
+  longer than it and starts with it.** Everything else ends in `T`, so the phone sends after the
+  inter-digit timeout — or at once when the user presses `#`, which Polycom takes as "send now".
+- **Eager:** `[2-9]xxxxxxxxx` (ten digits), `1xxxxxxxxxx` (eleven), and `[2-9]11`. N11 is safe
+  because the NANP reserves those codes: no area code is N11, so `211` cannot be the start of a
+  ten-digit number.
+- **Timed:** the extensions, seven-digit local dialing (`[2-9]xxxxxxT` — it is the first seven
+  digits of a ten-digit number, and the outbound routes allow it), the feature codes (`*xx.T`,
+  because `*8` takes a whole extension after it) and the operator (`0T`).
+- **The extension patterns come from the extensions this system has**, one per length, with the
+  first digit narrowed to the digits really in use: the lab's 100–104 render as `1xxT`, not
+  `xxxT`. Every extension is 2–6 digits and so is always shorter than a real number, which is why
+  an extension pattern always takes the `T`. Disabled extensions count — what is being described
+  is which lengths mean "extension", and a phone must not need a re-poll to dial one that was
+  switched back on this morning.
+- **The cost, and it is the honest one:** overlapping lengths still overlap. A site on four-digit
+  extensions that dials `1800`, pauses three seconds and then types the rest has sent `1800`. That
+  is inherent in a map that lets an extension be dialled without pressing Send, and it is what
+  FreePBX's generated maps do too. Four digits *of a ten-digit number typed at speed* is the bug;
+  a three-second pause mid-number is a user changing their mind.
+- **The tests do not only pin the string.** `PolycomDigitMapTests` compiles the map the way the
+  phone reads it and asks whether any prefix of a number would be sent on its own, for a ten- and
+  an eleven-digit number — and asserts that the map this replaced *does* send four digits and
+  stop, so the test can be seen to see the bug.
+- **Yealink gets no dial plan at all**, and now has a test saying so. It dials on its own Send key
+  and its own timers; `dialnow` rules for a Yealink are a piece to justify on their own.

@@ -248,9 +248,11 @@ namespace Techie.Pbx.Asterisk.Config
 
                 new("pjsip.conf", PjsipModule, PjsipConfRenderer.Render(
                     this.transport, all, allTrunks, certificate, this.confDirectory)),
+                // The classes go in as well as into musiconhold.conf: an inbound route that picks
+                // one is written as the class's name in the trunk's context (D122 amended).
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
-                    this.Timezone, this.parking)),
+                    this.Timezone, this.parking, allMohClasses)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
 
                 // Call parking (D119). features.conf carries the DTMF that parks a call,

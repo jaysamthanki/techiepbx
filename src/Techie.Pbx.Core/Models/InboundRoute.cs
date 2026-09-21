@@ -39,6 +39,15 @@ namespace Techie.Pbx.Core.Models
 
         public bool Enabled { get; set; } = true;
         public long InboundRouteID { get; set; }
+
+        /// <summary>
+        /// The music on hold class a caller on this route hears whenever they are held, or null for
+        /// none — which leaves the channel as Asterisk found it, exactly as every route did before
+        /// this existed (D122 amended). A reference, never a copy of the name: renaming a class
+        /// renames it here at the next apply, and deleting one puts this back to null.
+        /// </summary>
+        public long? MohClassID { get; set; }
+
         public long TrunkID { get; set; }
 
         /// <summary>The dialplan extension this route answers to: the DID, or any number.</summary>

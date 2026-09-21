@@ -21,6 +21,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
+        private readonly MohClassRepository mohClasses;
         private readonly RingGroupRepository ringGroups;
         private readonly TimeConditionRepository timeConditions;
         private readonly TrunkRepository trunks;
@@ -31,6 +32,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
+            this.mohClasses = new MohClassRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
             this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
@@ -58,6 +60,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
                 DID = route.DID,
                 Enabled = route.Enabled,
                 InboundRouteID = route.InboundRouteID,
+                MohClassID = route.MohClassID,
                 TrunkID = route.TrunkID,
             }));
         }
@@ -128,6 +131,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
             route.DestinationValue = destination.Value;
             route.DID = form.CatchAll ? "" : Text(form.DID);
             route.Enabled = form.Enabled;
+            route.MohClassID = form.MohClassID;
             route.TrunkID = form.TrunkID;
 
             try
@@ -172,8 +176,9 @@ namespace Techie.Pbx.Web.Pages.Inbound
         }
 
         /// <summary>
-        /// The lists the form cannot know for itself: the trunks calls can arrive on, and every
-        /// place a call can be sent (D35).
+        /// The lists the form cannot know for itself: the trunks calls can arrive on, every place a
+        /// call can be sent (D35), and the music on hold classes a held caller could be played
+        /// (D122 amended).
         ///
         /// Every source the catalog knows, which is what the repository has always validated a
         /// saved route against. Ring groups, announcements, IVRs and time conditions belong here
@@ -182,6 +187,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
         /// </summary>
         private InboundRouteForm Fill(InboundRouteForm form)
         {
+            form.MohClasses = this.mohClasses.GetAll();
             form.Trunks = this.trunks.GetAll().Where(t => t.Enabled).ToList();
             form.DestinationChoices = new DestinationSelect
             {
