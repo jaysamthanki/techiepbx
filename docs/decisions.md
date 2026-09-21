@@ -1953,3 +1953,51 @@ only, and a route pointed at an IVR another way would have read "(gone)" in the 
 now pass every source. The golden `extensions-inbound.conf` gains a route to IVR 500 and one to
 time condition 600, and a test renders those routes together with the IVR and time-condition rows
 to prove the `Goto` lands on the entry those renderers really write.
+
+### D121. Phone buttons: eight keys, and the hints their lamps watch (2026-09-20)
+A phone's edit modal now has two tabs — **Buttons** first, because it is what an admin comes back
+to, and **Details** second with everything the form had before. The Buttons tab is eight
+dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parking slot.
+
+- **Eight keys, and eight is ours rather than the handset's.** A VVX 310 has six line keys and a
+  VVX 410 has twelve; the form offers eight because it is a number an admin can fill in without
+  scrolling, not because any phone has exactly that many. A key beyond what the handset has is
+  simply not shown on it. Asking the phone how many keys it has means knowing every model, which
+  is a feature to justify on its own.
+- **Two kinds today, and a third that is not built.** `PhoneButtons.TargetType` is `'Extension'`
+  or `'ParkingSlot'`, stored as plain `TEXT` with **no `CHECK`** on it — the same shape
+  `InboundRoutes.DestinationType` has (D35). Call flow control is the kind this was designed
+  around: when it is built it is a constant in `PhoneButtonTarget`, a case in
+  `PhoneButton.Validate` and a label, and **no schema script**.
+- **A key is a reference, never a copy.** It stores the extension number or the slot number, so a
+  renamed extension relabels every key that watches it at the next poll, and a deleted one leaves
+  a key that is dropped rather than a key that dials a stranger.
+- **The dialplan grows hints, whether or not anything watches them.** `[internal]` now carries
+  `exten => <number>,hint,PJSIP/<number>` for every enabled extension and
+  `exten => <slot>,hint,park:<slot>@parkedcalls` for every parking slot. The park device name was
+  read off the Asterisk 22 sources (`res/res_parking.c` builds it as `park:%d@%s` from the lot's
+  own context, which our `res_parking.conf` sets to `parkedcalls`), not guessed. They are
+  unconditional because a hint costs one dialplan line and nothing else, and because assigning a
+  key must not need an apply before the lamp works — nothing about a phone is written to
+  /etc/asterisk (D79), and that stays true.
+- **Two more modules are loaded, and the allowlist says why.** A hint is half a lamp; the other
+  half is answering the phone's SUBSCRIBE, so `res_pjsip_exten_state.so` and
+  `res_pjsip_dialog_info_body_generator.so` join the allowlist (D31) — the dialog-info+xml body is
+  what a BLF key asks for. The PIDF generators are deliberately **not** loaded: that is presence,
+  which nothing here does.
+- **Polycom renders them as an attendant resource list**, one resource per assigned key:
+  `attendant.reg`, then `address`, `label` and `type` per resource. There is no `attendant.uri` —
+  that names a *server-side* resource list, and ours is the one the file carries. Resources are
+  numbered 1..n in key order rather than by the key's own position, because a phone reads the
+  list until the first index it cannot find: a gap left by an unassigned key would hide every key
+  after it. The consequence worth knowing is that clearing key 1 moves the rest up a key.
+- **Yealink renders nothing for this yet.** The model, the table and the UI are brand-neutral;
+  only `PolycomConfigRenderer` knows what a key looks like. A Yealink phone keeps the keys it is
+  given in the database and ignores them until its renderer learns the same trick.
+- **A key that cannot work is dropped rather than written.** `PhoneButton.Usable` is what the
+  provisioning endpoint filters through: an extension that has been deleted or switched off has
+  no endpoint to watch, and a slot outside the configured lot — parking off, or fewer slots than
+  it once had — has no hint to subscribe to.
+- **Modals are no longer centred.** `modal-dialog-centered` is gone from `_FormModal.cshtml`, the
+  only place it was. A form that changes height — tabs, eight rows of keys — moved the header up
+  and down under the mouse as it grew; sitting near the top of the window keeps it still.

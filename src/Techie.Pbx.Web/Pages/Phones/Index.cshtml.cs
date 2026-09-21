@@ -28,12 +28,14 @@ namespace Techie.Pbx.Web.Pages.Phones
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly PhoneButtonRepository buttons;
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
         public IndexModel()
         {
+            this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -65,6 +67,9 @@ namespace Techie.Pbx.Web.Pages.Phones
             return this.Partial("_Form", this.Fill(new PhoneForm
             {
                 Brand = phone.Brand,
+                Buttons = this.buttons.GetForPhone(phone.PhoneID)
+                    .Select(button => new PhoneButtonForm { Position = button.Position, Target = button.Key })
+                    .ToList(),
                 Enabled = phone.Enabled,
                 ExtensionID = phone.ExtensionID,
                 Firmware = phone.Firmware,
@@ -181,9 +186,12 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// Saves the three fields an admin owns. Everything else on the row was written by the
-        /// phone and is left alone, so a save cannot overwrite what the last provisioning request
-        /// recorded.
+        /// Saves what an admin owns: the keys on the Buttons tab (D121) and the three fields on
+        /// Details. Everything else on the row was written by the phone and is left alone, so a
+        /// save cannot overwrite what the last provisioning request recorded.
+        ///
+        /// A key left on "Nothing" posts an empty target and is simply not among the rows saved,
+        /// which is how a key is cleared: the whole set is replaced every time.
         /// </summary>
         public IActionResult OnPostSave(PhoneForm form)
         {
@@ -195,24 +203,28 @@ namespace Techie.Pbx.Web.Pages.Phones
             phone.ExtensionID = form.ExtensionID is > 0 ? form.ExtensionID : null;
             phone.Name = (form.Name ?? "").Trim();
 
+            var assigned = new List<PhoneButton>();
+            var unreadable = new List<string>();
+
+            foreach (var row in form.Buttons.Where(b => !string.IsNullOrWhiteSpace(b.Target)))
+            {
+                if (PhoneButton.TryParse(row.Target, row.Position, out var button))
+                    assigned.Add(button);
+                else
+                    unreadable.Add($"Key {row.Position}: that is not something a key can be put on.");
+            }
+
+            if (unreadable.Count > 0)
+                return this.Partial("_Form", this.Refill(form, phone, unreadable));
+
             try
             {
                 this.phones.Update(phone);
+                this.buttons.Replace(phone.PhoneID, assigned);
             }
             catch (ValidationFailedException ex)
             {
-                // The read-only half of the form is not posted back, so it is refilled from the
-                // row rather than coming back blank under the error message.
-                form.Errors = ex.Errors.ToList();
-                form.Brand = phone.Brand;
-                form.Firmware = phone.Firmware;
-                form.LastConfig = phone.LastConfig;
-                form.LastIP = phone.LastIP;
-                form.LocalSipPort = phone.LocalSipPort;
-                form.Mac = phone.Mac;
-                form.Model = phone.Model;
-
-                return this.Partial("_Form", this.Fill(form));
+                return this.Partial("_Form", this.Refill(form, phone, ex.Errors));
             }
 
             this.PushConfigReload(phone);
@@ -239,16 +251,43 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// The list the form cannot know for itself: the extensions this phone could register as.
-        /// A disabled extension has no PJSIP endpoint, so it is not offered — except when it is the
-        /// one already chosen, which has to stay visible or saving the form would silently
-        /// unassign the phone.
+        /// The lists the form cannot know for itself.
+        ///
+        /// The extensions this phone could register as, or put a key on: a disabled extension has
+        /// no PJSIP endpoint, so it is not offered — except when it is the one already chosen or
+        /// one a key already names, which have to stay visible or saving the form would silently
+        /// unassign the phone or clear the key.
+        ///
+        /// The parking slots, which exist only when parking is switched on (D119), and one row per
+        /// assignable key whatever arrived: a posted form carries them all, a GET carries only the
+        /// keys that have something on them, and either way the tab shows every key (D121).
         /// </summary>
         private PhoneForm Fill(PhoneForm form)
         {
-            form.Extensions = this.extensions.GetAll()
-                .Where(e => e.Enabled || e.ExtensionID == form.ExtensionID)
+            var posted = form.Buttons
+                .Where(b => b.Position >= PhoneButton.FirstPosition && b.Position <= PhoneButton.Count)
+                .GroupBy(b => b.Position)
+                .ToDictionary(g => g.Key, g => g.First().Target);
+
+            form.Buttons = Enumerable.Range(PhoneButton.FirstPosition, PhoneButton.Count)
+                .Select(position => new PhoneButtonForm
+                {
+                    Position = position,
+                    Target = posted.TryGetValue(position, out var target) ? target : "",
+                })
                 .ToList();
+
+            var named = form.Buttons
+                .Select(b => PhoneButton.TryParse(b.Target, b.Position, out var button) ? button : null)
+                .Where(b => b is { TargetType: PhoneButtonTarget.Extension })
+                .Select(b => b!.TargetValue)
+                .ToList();
+
+            form.Extensions = this.extensions.GetAll()
+                .Where(e => e.Enabled || e.ExtensionID == form.ExtensionID || named.Contains(e.Number))
+                .ToList();
+
+            form.ParkingSlots = AsteriskSettings.Parking(this.settings.GetAll()).SlotNumbers.ToList();
 
             return form;
         }
@@ -300,6 +339,24 @@ namespace Techie.Pbx.Web.Pages.Phones
                 return;
 
             _ = PolycomPusher.PushUpdateConfig(phone.LastIP, adminPassword);
+        }
+
+        /// <summary>
+        /// The form as it comes back under an error message. The read-only half of it is not
+        /// posted, so it is refilled from the row rather than coming back blank.
+        /// </summary>
+        private PhoneForm Refill(PhoneForm form, Phone phone, IEnumerable<string> errors)
+        {
+            form.Errors = errors.ToList();
+            form.Brand = phone.Brand;
+            form.Firmware = phone.Firmware;
+            form.LastConfig = phone.LastConfig;
+            form.LastIP = phone.LastIP;
+            form.LocalSipPort = phone.LocalSipPort;
+            form.Mac = phone.Mac;
+            form.Model = phone.Model;
+
+            return this.Fill(form);
         }
 
         /// <summary>A setting's stored value, or null.</summary>

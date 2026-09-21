@@ -241,6 +241,12 @@ namespace Techie.Pbx.Asterisk.Config
 
                 sb.Append('\n');
                 sb.Append($"; {name}\n");
+
+                // The hint is what a BLF key on another phone subscribes to: it is how a lamp
+                // knows this extension is ringing or busy (D121). One per extension, whether or
+                // not any phone is watching it — a hint costs a dialplan line and nothing else,
+                // and a key assigned later must not need an apply to light up.
+                sb.Append($"exten => {number},hint,PJSIP/{number}\n");
                 sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{DialOptions})\n");
 
                 if (extension.VoicemailEnabled)
@@ -624,11 +630,17 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($"; Call parking. Press {ConfText.Safe(parking.DtmfCode, "park feature code")} during a call to park it; the system says which\n");
             sb.Append("; slot it went into. Dial that slot number from any phone to pick it up.\n");
             sb.Append($"; An unclaimed call rings back the phone that parked it after {parking.TimeoutSeconds.ToString(CultureInfo.InvariantCulture)}s (D119).\n");
+            sb.Append("; Each slot carries a hint as well, so a phone key can watch it: park:N@<context>\n");
+            sb.Append("; is the device state res_parking publishes for the lot, and it is lit while a\n");
+            sb.Append("; call is sitting there (D121).\n");
+
+            var context = ConfText.Safe(ParkingConfRenderer.Context, "parking lot context");
 
             foreach (var slot in parking.SlotNumbers)
             {
                 var number = slot.ToString(CultureInfo.InvariantCulture);
 
+                sb.Append($"exten => {number},hint,park:{number}@{context}\n");
                 sb.Append($"exten => {number},1,ParkedCall({lot},{number})\n");
                 sb.Append(" same => n,Hangup()\n");
             }

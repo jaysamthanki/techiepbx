@@ -144,6 +144,32 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("extensions.conf"), actual);
         }
 
+        /// <summary>
+        /// Every enabled extension gets a hint, which is what a BLF key on another phone
+        /// subscribes to (D121). One per extension whether anything watches it or not: a key
+        /// assigned later must not need an apply before its lamp works.
+        /// </summary>
+        [Fact]
+        public void Every_enabled_extension_gets_a_hint()
+        {
+            var actual = ExtensionsConfRenderer.Render(SampleExtensions());
+
+            Assert.Contains("exten => 1001,hint,PJSIP/1001\n", actual);
+            Assert.Contains("exten => 1002,hint,PJSIP/1002\n", actual);
+        }
+
+        /// <summary>A switched-off extension has no endpoint, so there is nothing to watch.</summary>
+        [Fact]
+        public void A_disabled_extension_gets_no_hint()
+        {
+            var extensions = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111", Enabled = false },
+            };
+
+            Assert.DoesNotContain("hint", ExtensionsConfRenderer.Render(extensions));
+        }
+
         [Fact]
         public void Voicemail_matches_expected_file()
         {

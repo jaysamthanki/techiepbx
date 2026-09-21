@@ -133,6 +133,28 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.DoesNotContain("ParkedCall", actual);
             Assert.DoesNotContain("Call parking", actual);
+            Assert.DoesNotContain("park:", actual);
+        }
+
+        /// <summary>
+        /// Every slot gets a hint on the device state res_parking publishes for the lot, which is
+        /// what makes a phone key light while a call is parked there (D121). The device name was
+        /// read off the Asterisk 22 sources — <c>res/res_parking.c</c> builds it as
+        /// <c>park:&lt;slot&gt;@&lt;parking context&gt;</c> — not guessed.
+        /// </summary>
+        [Fact]
+        public void Every_parking_slot_gets_a_hint()
+        {
+            var actual = ExtensionsConfRenderer.Render(
+                SampleExtensions(), new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>(),
+                new List<RingGroup>(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
+                AsteriskSettings.DefaultTimezone, Enabled());
+
+            Assert.Contains($"exten => 1,hint,park:1@{ParkingConfRenderer.Context}\n", actual);
+            Assert.Contains($"exten => 3,hint,park:3@{ParkingConfRenderer.Context}\n", actual);
+
+            // Three slots are configured, so there is no fourth lamp to watch.
+            Assert.DoesNotContain("park:4@", actual);
         }
 
         /// <summary>

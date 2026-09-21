@@ -12,7 +12,12 @@
         footer, which is the wrong shape for that class's flex layout. A long form scrolls the
         page instead, which is what it did before.
     *@
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    @*
+        Not modal-dialog-centered either (D121): a form that grows — the phone editor's tabs, a
+        long list of keys — pushes a centred modal up and down as it changes height. Sitting near
+        the top of the window keeps the header still while the body changes.
+    *@
+    <div class="modal-dialog modal-lg">
         <div class="modal-content" id="form-modal-content">
             <div class="modal-body">
                 <p class="text-secondary mb-0">Loading…</p>

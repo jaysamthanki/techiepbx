@@ -148,6 +148,21 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// A hint in the dialplan is only half of a BLF lamp (D121): the other half is a phone's
+        /// SUBSCRIBE being answered, which needs the extension-state module and a body generator
+        /// for the dialog-info+xml a BLF key asks for. Without them the keys are written to the
+        /// phone and never light, which is exactly the quiet failure the allowlist causes (D31).
+        /// </summary>
+        [Theory]
+        [InlineData("res_pjsip_pubsub.so")]
+        [InlineData("res_pjsip_exten_state.so")]
+        [InlineData("res_pjsip_dialog_info_body_generator.so")]
+        public void The_allowlist_carries_what_a_blf_key_subscribes_with(string module)
+        {
+            Assert.Contains(module, ModulesConfRenderer.Modules);
+        }
+
+        /// <summary>
         /// The things a PBX gets attacked through that we do not use: other channel drivers,
         /// anonymous SIP identification, and the HTTP server.
         /// </summary>

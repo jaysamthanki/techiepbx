@@ -164,6 +164,20 @@ per-class UI, so a track has no options of its own and nothing points at it.
 | `File` | TEXT, unique | Stored file name, `<MohFileID>-<slug>.wav`, under `/var/lib/asterisk/moh`. Unique because one flat directory is what `res_musiconhold` plays |
 | `CreatedUnix` | INTEGER | When it was uploaded. Shown, nothing else |
 
+### PhoneButtons (018)
+
+The assignable keys on a phone (D121): one row per key that has something on it, so a key nobody
+assigned is absent rather than a row saying "nothing". Like `Phones` it raises no config-pending
+marker — the hints the lamps watch are in the dialplan whether a key points at them or not.
+
+| Column | Type | Notes |
+|---|---|---|
+| `PhoneButtonID` | INTEGER PK | |
+| `PhoneID` | INTEGER FK → `Phones` | `ON DELETE CASCADE`: a key has no life of its own |
+| `Position` | INTEGER | Which key, 1 to 8. Unique per phone |
+| `TargetType` | TEXT | `Extension` or `ParkingSlot`. No `CHECK`, so a third kind needs no schema script (D35, D121) |
+| `TargetValue` | TEXT | The extension number, or the slot number. A reference, never a copy |
+
 ### Settings (002)
 
 Key/value rather than a column per setting, so adding one needs no schema script (D15).

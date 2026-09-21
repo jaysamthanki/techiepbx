@@ -16,6 +16,17 @@ namespace Techie.Pbx.Asterisk.Provisioning
     public static class PolycomConfigRenderer
     {
         /// <summary>
+        /// What kind of attendant resource an assigned key is. "automata" is the monitored line:
+        /// the phone SUBSCRIBEs to the address (so the lamp follows its hint) and pressing the
+        /// key dials it, with the long-press behaviours (pickup, transfer to it) that Polycom
+        /// attaches to a monitored key. "normal" would be a plain speed dial with no lamp, which
+        /// is not what a key is for here. Both kinds of key we render want exactly this — a
+        /// parking slot is dialled to retrieve the call in it, the same gesture as dialling a
+        /// colleague (D121).
+        /// </summary>
+        private const string AttendantType = "automata";
+
+        /// <summary>
         /// What a caller may dial without pressing send. Four-digit extensions, a feature code
         /// (<c>*97</c>, <c>*43</c>) ended by a pause, the N11 services, and an operator "0" with a
         /// pause after it.
@@ -135,9 +146,64 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("call.missedCallTracking.1.enabled", "1"),
             });
 
+            AppendAttendant(sb, config);
+
             sb.Append("</polycomConfig>\n");
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// The assignable keys, written as Polycom's attendant resource list (D121). Each resource
+        /// is a lamp and a quick dial: the phone SUBSCRIBEs for the address in its own dialplan
+        /// context and dials the same address when the key is pressed. An extension's lamp follows
+        /// the <c>PJSIP/&lt;number&gt;</c> hint and a parking slot's follows
+        /// <c>park:&lt;slot&gt;@parkedcalls</c>, but that is the dialplan's doing — from here both
+        /// are a number in the internal context, which is why this writes both the same way.
+        ///
+        /// There is no <c>attendant.uri</c>: that names a server-side resource list, and the list
+        /// here is the one this file carries. Nothing is written at all for a phone with no keys
+        /// assigned, so its line keys stay the line appearances they were.
+        ///
+        /// The resources are numbered 1..n in key order rather than by the key's own position,
+        /// because a phone reads the list until the first index it does not find: a gap left by an
+        /// unassigned key would hide every key after it. The consequence, and it is the one to
+        /// know: the keys land on the handset's free line keys in order, so clearing key 1 moves
+        /// the rest up a key.
+        /// </summary>
+        private static void AppendAttendant(StringBuilder sb, PolycomConfig config)
+        {
+            var buttons = config.Buttons.OrderBy(b => b.Position).ToList();
+            if (buttons.Count == 0)
+                return;
+
+            foreach (var button in buttons)
+            {
+                var errors = button.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Phone key {button.Position} is invalid: {string.Join(" ", errors)}");
+            }
+
+            // Which registration the subscriptions and the calls go out on. Line 1 is the only
+            // registration this system gives a phone.
+            var attributes = new List<(string Name, string Value)>
+            {
+                PolycomXml.Constant("attendant.reg", "1"),
+            };
+
+            for (var index = 0; index < buttons.Count; index++)
+            {
+                var button = buttons[index];
+                var resource = $"attendant.resourceList.{Number(index + 1)}";
+
+                attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
+                attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.ButtonExtensions), "attendant label"));
+                attributes.Add(PolycomXml.Constant($"{resource}.type", AttendantType));
+            }
+
+            PolycomXml.Comment(sb, "  ", "Line keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
+            PolycomXml.Comment(sb, "  ", "follows its hint; a parking slot's is lit while a call is sitting in it.");
+            PolycomXml.Element(sb, "  ", "attendant", attributes);
         }
 
         private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);

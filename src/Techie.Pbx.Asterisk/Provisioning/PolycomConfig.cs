@@ -22,6 +22,21 @@ namespace Techie.Pbx.Asterisk.Provisioning
         public string AdminPassword { get; set; } = "";
 
         /// <summary>
+        /// The extensions a key may name, which is where the label on it comes from (D121). The
+        /// whole list rather than one row, because a phone watches other people's extensions —
+        /// this is not the one it registers as, and usually does not include it.
+        /// </summary>
+        public List<Extension> ButtonExtensions { get; set; } = new();
+
+        /// <summary>
+        /// The assignable keys, already reduced to the ones that can work by
+        /// <see cref="PhoneButton.Usable"/>: this renderer writes what it is given rather than
+        /// deciding whether a target is still there, exactly as it is handed a null
+        /// <see cref="Extension"/> for a phone whose extension has been switched off.
+        /// </summary>
+        public List<PhoneButton> Buttons { get; set; } = new();
+
+        /// <summary>
         /// The extension this phone registers as, or null when there is none to register — either
         /// nobody has assigned one yet, or the one assigned has since been switched off and so has
         /// no PJSIP endpoint to register against.

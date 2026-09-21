@@ -8,8 +8,10 @@
     The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
     and footer together, so a validation failure comes back with the modal still open.
 
-    Only three fields post. The rest of what we know about a phone was written by the phone
-    itself (D78), so it is shown and not editable.
+    Two tabs (D121). Buttons opens first because it is what an admin comes back to: an extension
+    is assigned once, keys get moved around. Details holds the name, the extension, the enabled
+    flag and what the phone itself reported — the rest of what we know about a phone was written
+    by the phone (D78), so it is shown and not editable.
 *@
 <form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
     <div class="modal-header">
@@ -32,61 +34,151 @@
 
     <input type="hidden" name="phoneID" value="@Model.PhoneID" />
 
-    <div class="mb-3">
-        <label class="form-label" for="phone-name">Name</label>
-        <input class="form-control" id="phone-name" name="name" value="@Model.Name"
-               maxlength="64" autocomplete="off" placeholder="Reception" />
-        <div class="form-text">What to call this handset, so the table is readable. Yours, not the phone's.</div>
-    </div>
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="phone-tab-buttons" data-bs-toggle="tab" data-bs-target="#phone-pane-buttons"
+                    type="button" role="tab" aria-controls="phone-pane-buttons" aria-selected="true">Buttons</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="phone-tab-details" data-bs-toggle="tab" data-bs-target="#phone-pane-details"
+                    type="button" role="tab" aria-controls="phone-pane-details" aria-selected="false">Details</button>
+        </li>
+    </ul>
 
-    <div class="mb-3">
-        <label class="form-label" for="phone-extension">Extension</label>
-        <select class="form-select" id="phone-extension" name="extensionID">
-            <option value="" selected="@(Model.ExtensionID is null or 0 ? "selected" : null)">Unassigned</option>
-            @foreach (var extension in Model.Extensions)
+    @*
+        Both panes are inside the one form, so the fields on the tab that is not showing are
+        posted just the same: switching tabs is not switching forms.
+    *@
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="phone-pane-buttons" role="tabpanel" aria-labelledby="phone-tab-buttons">
+            @*
+                One row per assignable key, fixed rather than add and remove buttons: there are
+                eight of them and they never change, so the editor needs no JavaScript at all —
+                the same shape the IVR digit map uses (D59).
+            *@
+            <table class="table table-sm align-middle mb-2">
+                <tbody>
+                    @for (var index = 0; index < Model.Buttons.Count; index++)
+                    {
+                        var button = Model.Buttons[index];
+                        var elementID = $"phone-button-{button.Position}";
+
+                        <tr>
+                            <th scope="row" style="width: 6rem;">
+                                <label class="col-form-label" for="@elementID">Key @button.Position</label>
+                                <input type="hidden" name="buttons[@index].position" value="@button.Position" />
+                            </th>
+                            <td>
+                                <select class="form-select" id="@elementID" name="buttons[@index].target">
+                                    <option value="" selected="@(string.IsNullOrEmpty(button.Target) ? "selected" : null)">Nothing</option>
+
+                                    <optgroup label="Extensions">
+                                        @foreach (var extension in Model.Extensions)
+                                        {
+                                            var key = $"Extension:{extension.Number}";
+
+                                            <option value="@key" selected="@(button.Target == key ? "selected" : null)">
+                                                @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
+                                            </option>
+                                        }
+                                    </optgroup>
+
+                                    @if (Model.ParkingSlots.Count > 0)
+                                    {
+                                        <optgroup label="Call parking">
+                                            @foreach (var slot in Model.ParkingSlots)
+                                            {
+                                                var key = $"ParkingSlot:{slot}";
+
+                                                <option value="@key" selected="@(button.Target == key ? "selected" : null)">
+                                                    Parking slot @slot
+                                                </option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="form-text">
+                A key on an extension is a lamp and a quick dial: it shows whether that phone is
+                free, ringing or busy, and pressing it calls them. A key on a parking slot lights
+                while a call is sitting in that slot, and pressing it takes the call.
+                Keys land on the handset's free line keys in order, so a key left on "Nothing" is
+                skipped rather than leaving a gap. The phone picks this up at its next config poll,
+                or straight away if you reboot it.
+            </div>
+
+            @if (Model.ParkingSlots.Count == 0)
             {
-                <option value="@extension.ExtensionID" selected="@(Model.ExtensionID == extension.ExtensionID ? "selected" : null)">
-                    @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
-                </option>
+                <div class="form-text">
+                    Call parking is switched off, so there are no slots to put on a key. Switch it
+                    on from the <a asp-page="/Parking/Index">Parking</a> page.
+                </div>
             }
-        </select>
-        <div class="form-text">
-            The extension this phone registers as, on line 1. Unassigned phones are still given the
-            time and a config poll, so one can be assigned later without touching the handset.
+        </div>
+
+        <div class="tab-pane fade" id="phone-pane-details" role="tabpanel" aria-labelledby="phone-tab-details">
+            <div class="mb-3">
+                <label class="form-label" for="phone-name">Name</label>
+                <input class="form-control" id="phone-name" name="name" value="@Model.Name"
+                       maxlength="64" autocomplete="off" placeholder="Reception" />
+                <div class="form-text">What to call this handset, so the table is readable. Yours, not the phone's.</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="phone-extension">Extension</label>
+                <select class="form-select" id="phone-extension" name="extensionID">
+                    <option value="" selected="@(Model.ExtensionID is null or 0 ? "selected" : null)">Unassigned</option>
+                    @foreach (var extension in Model.Extensions)
+                    {
+                        <option value="@extension.ExtensionID" selected="@(Model.ExtensionID == extension.ExtensionID ? "selected" : null)">
+                            @extension.Number @extension.Name@(extension.Enabled ? "" : " (disabled)")
+                        </option>
+                    }
+                </select>
+                <div class="form-text">
+                    The extension this phone registers as, on line 1. Unassigned phones are still given the
+                    time and a config poll, so one can be assigned later without touching the handset.
+                </div>
+            </div>
+
+            <div class="form-check mb-4">
+                <input class="form-check-input" type="checkbox" id="phone-enabled" name="enabled" value="true"
+                       checked="@(Model.Enabled ? "checked" : null)" />
+                <label class="form-check-label" for="phone-enabled">Enabled</label>
+                <div class="form-text">A disabled phone is refused its configuration the next time it asks.</div>
+            </div>
+
+            @* What the phone told us. Read-only, because editing a record of what happened is not editing anything. *@
+            <h6 class="text-secondary">What the phone reported</h6>
+            <dl class="row mb-0 small">
+                <dt class="col-sm-4">MAC address</dt>
+                <dd class="col-sm-8 font-monospace">@Model.Mac</dd>
+
+                <dt class="col-sm-4">Brand</dt>
+                <dd class="col-sm-8">@Model.Brand</dd>
+
+                <dt class="col-sm-4">Model</dt>
+                <dd class="col-sm-8">@(Model.Model.Length > 0 ? Model.Model : "—")</dd>
+
+                <dt class="col-sm-4">Firmware</dt>
+                <dd class="col-sm-8">@(Model.Firmware.Length > 0 ? Model.Firmware : "—")</dd>
+
+                <dt class="col-sm-4">Last IP</dt>
+                <dd class="col-sm-8 font-monospace">@(Model.LastIP.Length > 0 ? Model.LastIP : "—")</dd>
+
+                <dt class="col-sm-4">Last contact</dt>
+                <dd class="col-sm-8 font-monospace">@(Model.LastConfig.Length > 0 ? Model.LastConfig : "—")</dd>
+
+                <dt class="col-sm-4">Local SIP port</dt>
+                <dd class="col-sm-8 font-monospace">@Model.LocalSipPort</dd>
+            </dl>
         </div>
     </div>
-
-    <div class="form-check mb-4">
-        <input class="form-check-input" type="checkbox" id="phone-enabled" name="enabled" value="true"
-               checked="@(Model.Enabled ? "checked" : null)" />
-        <label class="form-check-label" for="phone-enabled">Enabled</label>
-        <div class="form-text">A disabled phone is refused its configuration the next time it asks.</div>
-    </div>
-
-    @* What the phone told us. Read-only, because editing a record of what happened is not editing anything. *@
-    <h6 class="text-secondary">What the phone reported</h6>
-    <dl class="row mb-0 small">
-        <dt class="col-sm-4">MAC address</dt>
-        <dd class="col-sm-8 font-monospace">@Model.Mac</dd>
-
-        <dt class="col-sm-4">Brand</dt>
-        <dd class="col-sm-8">@Model.Brand</dd>
-
-        <dt class="col-sm-4">Model</dt>
-        <dd class="col-sm-8">@(Model.Model.Length > 0 ? Model.Model : "—")</dd>
-
-        <dt class="col-sm-4">Firmware</dt>
-        <dd class="col-sm-8">@(Model.Firmware.Length > 0 ? Model.Firmware : "—")</dd>
-
-        <dt class="col-sm-4">Last IP</dt>
-        <dd class="col-sm-8 font-monospace">@(Model.LastIP.Length > 0 ? Model.LastIP : "—")</dd>
-
-        <dt class="col-sm-4">Last contact</dt>
-        <dd class="col-sm-8 font-monospace">@(Model.LastConfig.Length > 0 ? Model.LastConfig : "—")</dd>
-
-        <dt class="col-sm-4">Local SIP port</dt>
-        <dd class="col-sm-8 font-monospace">@Model.LocalSipPort</dd>
-    </dl>
     </div>
 
     @* Deleting and rebooting live here now that the table has no button column (D48). *@

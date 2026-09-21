@@ -53,6 +53,8 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_notify.so",                   // loads pjsip_notify.conf, the Yealink NOTIFY push (D91)
                 "res_pjsip_mwi.so",                      // answer a phone's SUBSCRIBE: the message-waiting light (D108)
                 "res_pjsip_mwi_body_generator.so",       // writes the message-summary body those NOTIFYs carry (D108)
+                "res_pjsip_exten_state.so",              // answer a phone's SUBSCRIBE for a hint: the BLF lamp (D121)
+                "res_pjsip_dialog_info_body_generator.so", // the dialog-info+xml body a BLF key asks for (D121)
             }),
 
             ("Bridging two people together", new[]

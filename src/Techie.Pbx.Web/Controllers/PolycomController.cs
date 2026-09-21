@@ -46,12 +46,14 @@ namespace Techie.Pbx.Web.Controllers
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(PolycomController));
 
+        private readonly PhoneButtonRepository buttons;
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
         public PolycomController()
         {
+            this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -119,9 +121,18 @@ namespace Techie.Pbx.Web.Controllers
             stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
             stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
 
+            // The assigned keys, and the extensions they name so each one has a label (D121). A
+            // key whose extension has gone or whose parking slot the lot no longer has is dropped
+            // rather than written as a lamp that can never light.
+            var assigned = this.buttons.GetForPhone(phone.PhoneID);
+            var known = assigned.Count > 0 ? this.extensions.GetAll() : new List<Extension>();
+            var usable = PhoneButton.Usable(assigned, known, AsteriskSettings.Parking(stored).SlotNumbers);
+
             var config = new PolycomConfig
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
+                ButtonExtensions = known,
+                Buttons = usable,
                 Extension = extension,
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
                 Phone = phone,
@@ -131,7 +142,7 @@ namespace Techie.Pbx.Web.Controllers
                 UserPassword = (userPassword ?? "").Trim(),
             };
 
-            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}");
+            Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, extension {extension?.Number ?? "none"}, {usable.Count} keys");
 
             return this.Xml(PolycomConfigRenderer.Render(config));
         }
