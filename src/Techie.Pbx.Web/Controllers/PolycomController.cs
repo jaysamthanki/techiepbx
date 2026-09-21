@@ -125,15 +125,15 @@ namespace Techie.Pbx.Web.Controllers
             // key whose extension has gone or whose parking slot the lot no longer has is dropped
             // rather than written as a lamp that can never light.
             var assigned = this.buttons.GetForPhone(phone.PhoneID);
-            var known = assigned.Count > 0 ? this.extensions.GetAll() : new List<Extension>();
-            var usable = PhoneButton.Usable(assigned, known, AsteriskSettings.Parking(stored).SlotNumbers);
+            var buttonExtensions = assigned.Count > 0 ? this.extensions.GetAll() : new List<Extension>();
+            var usable = PhoneButton.Usable(assigned, buttonExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
             var config = new PolycomConfig
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
-                ButtonExtensions = known,
+                ButtonExtensions = buttonExtensions,
                 Buttons = usable,
-                Extension = extension,
+                Extension = extension ?? new Extension(),
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
                 Phone = phone,
                 ServerAddress = this.ServerAddress(transport.BindAddress),
