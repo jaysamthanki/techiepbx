@@ -25,6 +25,8 @@ namespace Techie.Pbx.Asterisk.Config
     /// no class to start: bridge_holding falls back to a silence generator when ast_moh_start
     /// fails. The generated musiconhold.conf never defines a class called <c>default</c> for
     /// exactly this reason, so the fallback chain finds nothing and the caller hears nothing.
+    /// Which class it names when there is music is the Parking.MusicClass setting: parking is one
+    /// of several classes now, not the only one (D122).
     /// </summary>
     public static class ParkingConfRenderer
     {
@@ -104,9 +106,9 @@ namespace Techie.Pbx.Asterisk.Config
             if (parking.UsesMusicOnHold)
             {
                 sb.Append('\n');
-                sb.Append("; What the parked caller hears. The class is the one generated\n");
-                sb.Append("; musiconhold.conf defines from the uploaded tracks.\n");
-                sb.Append($"parkedmusicclass = {ConfText.Safe(MohConfRenderer.ClassName, "music on hold class")}\n");
+                sb.Append("; What the parked caller hears: one of the classes the generated\n");
+                sb.Append("; musiconhold.conf defines, chosen by the Parking.MusicClass setting (D122).\n");
+                sb.Append($"parkedmusicclass = {ConfText.Safe(parking.MusicClass.Trim(), "music on hold class")}\n");
             }
             else
             {

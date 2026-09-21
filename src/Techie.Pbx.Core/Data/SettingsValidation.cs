@@ -228,6 +228,14 @@ namespace Techie.Pbx.Core.Data
                         errors.Add($"The parking setting must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is off.");
                     break;
 
+                case SettingsKeys.ParkingMusicClass:
+                    // The shape only: whether a class of that name exists is the Music on hold
+                    // page's business, and a class an admin is about to create must not be
+                    // unstorable here first (D122). A name Asterisk cannot match is still refused.
+                    if (!MohClass.IsValidName(text))
+                        errors.Add($"The music on hold class must be the name of a class on the Music on hold page: letters, digits, spaces, dashes and underscores, {MohClass.MaxNameLength} characters or fewer, and not 'default'. Leave it blank for the class that ships with the system.");
+                    break;
+
                 case SettingsKeys.ParkingSlots:
                     if (!int.TryParse(text, out var slots) || slots is < MinParkingSlots or > MaxParkingSlots)
                         errors.Add($"The number of parking slots must be a whole number between {MinParkingSlots} and {MaxParkingSlots}. A slot is retrieved by dialling its number, so there can only be as many as there are single digits.");

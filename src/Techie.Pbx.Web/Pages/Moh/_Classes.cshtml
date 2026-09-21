@@ -1,0 +1,42 @@
+@model List<MohClassRow>
+@*
+    The music on hold classes. Clicking anywhere on a row opens its edit form (D48), where the
+    Delete button also lives.
+
+    The order is the one the generated musiconhold.conf writes them in: the class that ships first,
+    then by name.
+*@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name">Name</th>
+            <th data-field="directory">Directory</th>
+            <th data-field="tracks">Tracks</th>
+            <th data-field="uses">Used by</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "ClassForm", new { mohClassID = row.MohClassID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace text-secondary">@row.Directory</td>
+                <td>@row.Tracks</td>
+                <td>
+                    @if (row.IsDefault)
+                    {
+                        <span class="badge text-bg-secondary me-1" title="The class that ships with the system. It cannot be deleted.">Default</span>
+                    }
+                    @if (row.IsParkingClass)
+                    {
+                        <span class="badge text-bg-primary" title="Parked callers hear this class, when the parking audio setting says moh.">Parking</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

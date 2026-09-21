@@ -1849,7 +1849,7 @@ every one of them lands in a generated conf file.
   `/var/lib/asterisk/moh` with `sort = alpha`. Asterisk plays the directory rather than a list, so
   the rows are written into the file as comments — there to be read next to an `ls`, not obeyed.
   New table `MohFiles` (017), the announcements upload/convert pattern (D55) with one flat
-  directory: the stored name is `<MohFileID>-<slug>.wav`, ID first because two names that slug the
+  directory: the stored name is `<MohFileID>-<slug>.g722`, ID first because two names that slug the
   same way would otherwise be one file.
 - **Three modules join the allowlist**: `res_parking.so`, `res_musiconhold.so` and
   `bridge_holding.so` — the last being the one that is easy to forget and impossible to work
@@ -2010,3 +2010,74 @@ dropdowns, "Key 1" to "Key 8", each offering nothing, any extension, or a parkin
 - **Modals are no longer centred.** `modal-dialog-centered` is gone from `_FormModal.cshtml`, the
   only place it was. A form that changes height — tabs, eight rows of keys — moved the header up
   and down under the mouse as it grew; sitting near the top of the window keeps it still.
+
+### D122. Music on hold is several classes, and one of them ships (2026-09-21)
+
+D119 built one music on hold class, called `parking`, on one flat directory, because the only
+thing in this system that played hold music was a parked call. A class is a *directory* as far as
+`res_musiconhold` is concerned, so more than one costs a section each — and the ask was exactly
+that: a different tune or message for parked callers than for anywhere else music is wanted.
+Music on hold is now its own feature with its own page, and parking is one of its customers.
+
+- **New table `MohClasses` (019): `Name`, `Directory`, `IsDefault`.** `MohFiles` gains
+  `MohClassID` (`NOT NULL`, `ON DELETE CASCADE`) and its `File` is unique *per class* rather than
+  globally, because each class plays its own directory. SQLite cannot add a `NOT NULL` column
+  with a `REFERENCES` clause, so the script rebuilds the table; everything D119 uploaded is
+  pointed at the class that ships, which is the directory those files are already in.
+- **`Name` is unique `COLLATE NOCASE`, and no class may be called `default`.** Asterisk matches
+  class names with `strcasecmp` (`res/res_musiconhold.c`, `moh_class_cmp` and `ast_str_case_hash`),
+  so "Jazz" and "jazz" would be one class to it and two to an admin. `default` is refused outright
+  for the reason D119 refused it: it is the class Asterisk falls back to whenever music is asked
+  for and none was named, so a class by that name would be played to a parked caller whose setting
+  says `silence`. That is checked in the model, in the database and again in the renderer.
+- **The class that ships is called `Standard`, not `Default`.** The word would have been the
+  reserved name under another capital. The table says which class is the default one with a badge
+  instead, and its *directory* is still `default` — a path Asterisk has no opinion about.
+- **`Directory` is separate from `Name`**: lower-case letters, digits and dashes, 24 characters,
+  unique. Renaming a class must not have to move files, and a name an admin would write ("Front
+  desk") is not a path. Changing the directory does move the music, in one `Directory.Move`.
+- **The renderer writes one section per class**, `[<name>]` with `mode = files`,
+  `directory = /var/lib/asterisk/moh/<class directory>` and `sort = alpha`. A class with no rows
+  is still written out: `files` mode scans the directory, so the tracks the installer put there
+  play with no database row at all, and an empty directory is simply nothing to play.
+  `preferchannelclass = no` stays, for D119's reason.
+- **Parking picks a class by name: new setting `Parking.MusicClass`** (Asterisk scope, default
+  `Standard`), written as `parkedmusicclass`. `Parking.Audio` still decides *whether* there is
+  music at all, and silence is still implemented as writing no `parkedmusicclass`. The setting is
+  validated for shape only — a name Asterisk could match, and not `default` — because a class an
+  admin is about to create must not be unstorable first; a name that matches no class is silence,
+  since Asterisk finds nothing to start. The Music on hold page will not delete the class the
+  parking settings point at, or the class that ships.
+- **A new `/Moh` page, "Music on hold", under Call Handling after Parking**, and the upload
+  section is gone from the Parking page. Two tables: the classes, and every track with the class
+  it plays in. Rows open their edit form in the shared modal (D42, D48) with Delete in the footer.
+  The upload is D119's spool-and-convert, placed only if the conversion worked (D55) — but
+  into the class's directory, and the format changed after the user asked for better than
+  telephone-quality music: hold music now converts to 16 kHz mono **G.722**, the same wideband
+  the voice path carries (D117), so a G.722 call plays it with no transcoding at all.
+  `format_g722.so` joins the module allowlist to read the files. Announcements stay 8 kHz PCM
+  WAV (D55): they play through the narrowband voicemail path, and one format per feature is
+  the bargain both make. 
+- **A track does not move between classes.** The class is chosen when the track is added and is
+  read-only afterwards: moving one is moving a file on disk to make a dropdown true, and deleting
+  it and uploading it again says the same thing with no new failure mode to explain.
+- **The three tracks that ship are rows *and* files, put there by different things.** The schema
+  script inserts `default-1.g722`, `default-2.g722` and `default-3.g722` into the class that ships —
+  but only on a system that had no music on hold of its own, so an existing install's tracks stay
+  its own business. The installer puts the audio there: `install.sh` and `build-asterisk-vm.sh`
+  transcode the three royalty-free Audiodollar MP3s kept in the repo at `media/musiconhold` with
+  `ffmpeg -ar 8000 -ac 1 -sample_fmt s16`, never overwriting a file that is already there. They
+  are owned `tnpbx:asterisk` 0640 rather than `asterisk:asterisk`, because renaming a track ends
+  in a `chmod` on that file and `chmod` needs ownership — and `MohStore` now logs a refused
+  `chmod` rather than throwing, since a move keeps the file's mode and there was nothing to fix.
+- **`MohFile.IsValidFile` no longer insists on the `<id>-` prefix.** Uploads are still stored as
+  `<MohFileID>-<slug>.g722` — that is what keeps two tracks with the same name apart — but the
+  rule is now lower-case letters, digits and dashes then `.g722`, because `default-1.g722` was
+  named by a shell script that has never seen the database. Nothing about the safety changes: no
+  dot but the extension and no separator of any kind, checked again before a path is built.
+- **The opsound tarball is gone from both installers.** It was D119's starter music, downloaded
+  into the flat directory that is no longer a class. The tracks that ship replace it, and one
+  fewer thing is fetched over the network at install time. An upgrade moves any `*.g722` still
+  loose in `/var/lib/asterisk/moh` into the class that ships, which is where its rows now point —
+  in `app-deploy.sh` as well as `install.sh`, because a deploy is what brings the schema script
+  that repoints them.

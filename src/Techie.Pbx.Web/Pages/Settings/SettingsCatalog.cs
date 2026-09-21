@@ -223,9 +223,16 @@ namespace Techie.Pbx.Web.Pages.Settings
             {
                 Choices = ParkingAudio.All,
                 Default = ParkingAudio.Silence,
-                Description = "What a parked caller hears while they wait. Music plays the tracks on the Parking page, as one class, in the order they are listed — with no tracks uploaded it is silence either way.",
+                Description = "What a parked caller hears while they wait: nothing, or the music on hold class named below. With no tracks in that class it is silence either way.",
                 Key = SettingsKeys.ParkingAudio,
                 Sample = ParkingAudio.MusicOnHold,
+            },
+            new SettingDescriptor
+            {
+                Default = ParkingSettings.DefaultMusicClass,
+                Description = "Which music on hold class a parked caller hears, by name, when the setting above says moh. The classes are on the Music on hold page; a name that matches none of them is silence, because Asterisk finds nothing to play.",
+                Key = SettingsKeys.ParkingMusicClass,
+                Sample = ParkingSettings.DefaultMusicClass,
             },
             new SettingDescriptor
             {

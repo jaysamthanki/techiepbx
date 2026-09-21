@@ -22,6 +22,7 @@ namespace Techie.Pbx.Tests.Asterisk
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
+        private readonly MohClassRepository mohClasses;
         private readonly MohFileRepository mohFiles;
         private readonly OutboundRouteRepository routes;
         private readonly RingGroupRepository ringGroups;
@@ -42,6 +43,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.extensions = new ExtensionRepository(this.database);
             this.inbound = new InboundRouteRepository(this.database);
             this.ivrs = new IvrRepository(this.database);
+            this.mohClasses = new MohClassRepository(this.database);
             this.mohFiles = new MohFileRepository(this.database);
             this.ringGroups = new RingGroupRepository(this.database);
             this.routes = new OutboundRouteRepository(this.database);
@@ -56,7 +58,7 @@ namespace Techie.Pbx.Tests.Asterisk
             this.applier = new ConfigApplier(
                 this.confDirectory, new PjsipTransport(), new ParkingSettings(), this.certificates, this.extensions,
                 this.trunks, this.routes, this.inbound, this.ringGroups, this.announcements, this.ivrs,
-                this.timeConditions, this.mohFiles, ami, this.pending);
+                this.timeConditions, this.mohClasses, this.mohFiles, ami, this.pending);
         }
 
         public void Dispose()
@@ -361,8 +363,9 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// An uploaded track becomes a class in musiconhold.conf, and the lot names that class
-        /// only once the audio setting says music (D119).
+        /// An uploaded track lands in its class's section of musiconhold.conf, and the lot names a
+        /// class only once the audio setting says music (D119, D122). The class an admin added is
+        /// there next to the one that ships, and the lot follows the Parking.MusicClass setting.
         /// </summary>
         [Fact]
         public void Music_on_hold_reaches_the_class_and_the_lot()
@@ -371,17 +374,23 @@ namespace Techie.Pbx.Tests.Asterisk
             this.settings.Set(SettingsKeys.AmiUsername, "tnpbx");
             this.settings.Set(SettingsKeys.AmiSecret, "not-a-real-secret");
             this.settings.Set(SettingsKeys.ParkingEnabled, Toggles.On);
-            this.mohFiles.Insert(new MohFile { Name = "Piano Loop", CreatedUnix = 1 });
+
+            var frontDesk = this.mohClasses.Insert(new MohClass { Name = "Front desk", Directory = "front-desk" });
+            var trackID = this.mohFiles.Insert(new MohFile { MohClassID = frontDesk, Name = "Piano Loop", CreatedUnix = 1 });
 
             var silent = this.FromSettings().Render();
+            var moh = Content(silent, "musiconhold.conf");
 
-            Assert.Contains("[parking]\n", Content(silent, "musiconhold.conf"));
-            Assert.Contains("; 1-piano-loop.wav - Piano Loop\n", Content(silent, "musiconhold.conf"));
+            Assert.Contains($"[{MohClass.DefaultName}]\n", moh);
+            Assert.Contains("[Front desk]\n", moh);
+            Assert.Contains("directory = /var/lib/asterisk/moh/front-desk\n", moh);
+            Assert.Contains($"; {trackID}-piano-loop.g722 - Piano Loop\n", moh);
             Assert.DoesNotContain("parkedmusicclass =", Content(silent, "res_parking.conf"));
 
             this.settings.Set(SettingsKeys.ParkingAudio, ParkingAudio.MusicOnHold);
+            this.settings.Set(SettingsKeys.ParkingMusicClass, "Front desk");
 
-            Assert.Contains("parkedmusicclass = parking\n", Content(this.FromSettings().Render(), "res_parking.conf"));
+            Assert.Contains("parkedmusicclass = Front desk\n", Content(this.FromSettings().Render(), "res_parking.conf"));
         }
 
         /// <summary>

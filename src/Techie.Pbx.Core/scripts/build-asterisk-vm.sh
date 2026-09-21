@@ -129,20 +129,60 @@ else
     "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-core-sounds-en-g722-1.6.1.tar.gz"
   tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
   rm -f /tmp/core-sounds-g722.tar.gz
+fi
 
-  # Music on hold (D119): the free-licensed opsound set, so moh mode has something to play.
-  log "installing music on hold"
-  mkdir -p /var/lib/asterisk/moh
-  curl -sSfL -o /tmp/moh.tar.gz \
-    "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-moh-opsound-g722-2.03.tar.gz"
-  tar -xzf /tmp/moh.tar.gz -C /var/lib/asterisk/moh
-  rm -f /tmp/moh.tar.gz
+# --- music on hold ------------------------------------------------------------
+# The class that ships with the product (D122): music on hold is one directory per class now, and
+# this is the Default class's. The source is the three royalty-free Audiodollar tracks kept in the
+# repo at media/musiconhold — their Audiodollar source IDs are in the file names and in that
+# directory's README — transcoded here to 16-bit 8 kHz mono PCM WAV, the same conversion the
+# upload form does and what format_wav plays with no work at call time (D55). Asterisk here is
+# built without format_mp3, so the MP3s cannot be dropped in as they are.
+#
+# Outside the build branch above: a VM that already has Asterisk still wants the music.
+
+MOH_DIR="/var/lib/asterisk/moh"
+MOH_DEFAULT_DIR="${MOH_DIR}/default"
+MOH_SOURCE_DIR="${MOH_SOURCE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../../media/musiconhold}"
+
+# default-N.g722, in the order the class plays them: it sorts its directory alphabetically. The
+# names match what the application's schema writes into MohFiles for this class.
+MOH_DEFAULT_TRACKS=(
+  "default-1.g722:audiodollar-on-hold-music-371876.mp3"
+  "default-2.g722:audiodollar-piano-piano-inspirational-music-570589.mp3"
+  "default-3.g722:audiodollar-bollywood-bollywood-551817.mp3"
+)
+
+mkdir -p "$MOH_DEFAULT_DIR"
+
+if [[ -d "$MOH_SOURCE_DIR" ]]; then
+  log "installing music on hold from ${MOH_SOURCE_DIR}"
+  for track in "${MOH_DEFAULT_TRACKS[@]}"; do
+    target="${MOH_DEFAULT_DIR}/${track%%:*}"
+    mp3="${MOH_SOURCE_DIR}/${track#*:}"
+
+    [[ -f "$target" ]] && continue
+    [[ -f "$mp3" ]] || { warn "missing ${mp3}, skipping $(basename "$target")"; continue; }
+
+    ffmpeg -nostdin -loglevel error -y -i "$mp3" -ar 16000 -ac 1 -acodec g722 "$target"
+  done
+else
+  warn "no music on hold source at ${MOH_SOURCE_DIR}; the Default class will be empty"
 fi
 
 # --- ownership ---------------------------------------------------------------
 
 mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
 chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
+# Music on hold: one directory per class (D122), setgid for the same reason the announcements
+# directory is — the web user creates class directories and writes converted uploads into them.
+chmod 2770 "$MOH_DIR" "$MOH_DEFAULT_DIR"
+# The tracks that ship belong to the web user where there is one: the application renames the
+# file when an admin renames the track, and chmod needs ownership. Asterisk reads via the group.
+if id tnpbx &>/dev/null; then
+  chown tnpbx:asterisk "${MOH_DEFAULT_DIR}"/*.wav 2>/dev/null || true
+  chmod 0640 "${MOH_DEFAULT_DIR}"/*.wav 2>/dev/null || true
+fi
 # Announcement audio (converted uploads) lands here; setgid so app-written files stay
 # group-readable by asterisk (D18, same model as /etc/asterisk).
 mkdir -p /var/lib/asterisk/sounds/tnpbx/announcements

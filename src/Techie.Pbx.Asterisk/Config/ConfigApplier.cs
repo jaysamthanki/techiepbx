@@ -42,7 +42,7 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string FeaturesModule = "features";
 
-        /// <summary>Owns musiconhold.conf, the one generated hold class (D119).</summary>
+        /// <summary>Owns musiconhold.conf, the generated hold classes (D119, D122).</summary>
         public const string MohModule = "res_musiconhold";
 
         /// <summary>
@@ -77,6 +77,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly AnnouncementRepository announcements;
         private readonly IvrRepository ivrs;
         private readonly TimeConditionRepository timeConditions;
+        private readonly MohClassRepository mohClasses;
         private readonly MohFileRepository mohFiles;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
@@ -94,6 +95,7 @@ namespace Techie.Pbx.Asterisk.Config
             AnnouncementRepository announcements,
             IvrRepository ivrs,
             TimeConditionRepository timeConditions,
+            MohClassRepository mohClasses,
             MohFileRepository mohFiles,
             AmiSettings ami,
             ConfigPendingMarker pending)
@@ -110,6 +112,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.announcements = announcements;
             this.ivrs = ivrs;
             this.timeConditions = timeConditions;
+            this.mohClasses = mohClasses;
             this.mohFiles = mohFiles;
             this.ami = ami;
             this.pending = pending;
@@ -149,6 +152,9 @@ namespace Techie.Pbx.Asterisk.Config
                 announcements,
                 ivrs,
                 timeConditions,
+                // The classes come out of the database the certificates do, rather than being one
+                // more argument every caller has to pass: nothing but this renders them (D122).
+                new MohClassRepository(database),
                 mohFiles,
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database))
@@ -216,6 +222,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allAnnouncements = this.announcements.GetAll();
             var allIvrs = this.ivrs.GetAll();
             var allTimeConditions = this.timeConditions.GetAll();
+            var allMohClasses = this.mohClasses.GetAll();
             var allMohFiles = this.mohFiles.GetAll();
 
             // One certificate feeds both the TLS transport and the file it points at, so it is read
@@ -247,10 +254,11 @@ namespace Techie.Pbx.Asterisk.Config
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
 
                 // Call parking (D119). features.conf carries the DTMF that parks a call,
-                // musiconhold.conf the class a parked caller might hear, and res_parking.conf the
-                // lot itself — in that order, so the class exists before the lot names it.
+                // musiconhold.conf the classes — one of which a parked caller might hear (D122) —
+                // and res_parking.conf the lot itself, in that order, so the class exists before
+                // the lot names it.
                 new("features.conf", FeaturesModule, FeaturesConfRenderer.Render(this.parking)),
-                new("musiconhold.conf", MohModule, MohConfRenderer.Render(allMohFiles)),
+                new("musiconhold.conf", MohModule, MohConfRenderer.Render(allMohClasses, allMohFiles)),
                 new("res_parking.conf", ParkingModule, ParkingConfRenderer.Render(this.parking)),
             };
 

@@ -107,6 +107,10 @@ namespace Techie.Pbx.Asterisk.Config
             if (code != null && SettingsValidation.IsParkingDtmfCode(code))
                 parking.DtmfCode = code;
 
+            var musicClass = Text(settings, SettingsKeys.ParkingMusicClass);
+            if (musicClass != null && MohClass.IsValidName(musicClass))
+                parking.MusicClass = musicClass.Trim();
+
             var slots = Number(settings, SettingsKeys.ParkingSlots, parking.Slots);
             if (slots is >= SettingsValidation.MinParkingSlots and <= SettingsValidation.MaxParkingSlots)
                 parking.Slots = slots;

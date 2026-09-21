@@ -74,16 +74,25 @@ chmod 0750 "$APP_HOME"
 
 # --- music on hold directory ---------------------------------------------------
 #
-# The one directory res_musiconhold plays for the generated hold class (D119). The
-# same setgid model as the announcements directory: owned by asterisk, group
-# writable, so the files tnpbx uploads are group-readable by the asterisk process.
-# Created here as well as in install.sh, because an existing box was installed
-# before this directory existed.
+# The base of what res_musiconhold plays: one directory per class inside it (D119,
+# D122), and the class directories themselves are created by install.sh or by the
+# app when a class is added. The same setgid model as the announcements directory:
+# owned by asterisk, group writable, so the files tnpbx writes are group-readable by
+# the asterisk process. Created here as well as in install.sh, because an existing
+# box was installed before this directory existed.
 
 log "creating ${MOH_DIR}"
-mkdir -p "$MOH_DIR"
-chown asterisk:asterisk "$MOH_DIR"
-chmod 2770 "$MOH_DIR"
+mkdir -p "$MOH_DIR" "${MOH_DIR}/default"
+chown asterisk:asterisk "$MOH_DIR" "${MOH_DIR}/default"
+chmod 2770 "$MOH_DIR" "${MOH_DIR}/default"
+
+# D119 kept every track loose in ${MOH_DIR}, because there was one class. The schema script this
+# deploy brings points those rows at the class that ships, whose directory is "default" (D122),
+# so the files have to follow them or the UI shows a table of missing audio.
+if compgen -G "${MOH_DIR}/*.wav" > /dev/null; then
+  log "moving music on hold into ${MOH_DIR}/default (D122)"
+  mv -n "${MOH_DIR}"/*.wav "${MOH_DIR}/default/"
+fi
 
 # --- systemd unit --------------------------------------------------------------
 

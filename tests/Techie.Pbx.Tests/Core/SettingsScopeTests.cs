@@ -37,8 +37,8 @@ namespace Techie.Pbx.Tests.Core
         /// directory it writes to, the AMI account manager.conf carries, every Sip key that
         /// AsteriskSettings.Transport turns into pjsip.conf or rtp.conf, the timezone every
         /// GotoIfTime in the generated dialplan names (D74), and every Parking key — those land in
-        /// features.conf, res_parking.conf and the dialplan's slot entries, so all five need an
-        /// apply (D119).
+        /// features.conf, res_parking.conf and the dialplan's slot entries, so all six need an
+        /// apply (D119, D122).
         /// </summary>
         [Fact]
         public void The_asterisk_scope_is_the_keys_a_generated_conf_file_carries()
@@ -54,6 +54,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.ParkingAudio,
                     SettingsKeys.ParkingDtmfCode,
                     SettingsKeys.ParkingEnabled,
+                    SettingsKeys.ParkingMusicClass,
                     SettingsKeys.ParkingSlots,
                     SettingsKeys.ParkingTimeout,
                     SettingsKeys.SipBindAddress,

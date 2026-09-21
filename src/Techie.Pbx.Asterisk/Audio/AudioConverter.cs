@@ -15,16 +15,27 @@ namespace Techie.Pbx.Asterisk.Audio
     /// file name cannot become an argument and an argument cannot become a command
     /// (security.md: "never shells out with string-built commands").
     /// </summary>
+    /// <summary>
+    /// One stored-audio target: the file extension, the sample rate ffmpeg writes, and the codec
+    /// and muxer it uses. Two exist (D55 announcements, D122 hold music); a third would be added
+    /// here, not by widening a converter with a mode flag.
+    /// </summary>
+    public sealed record AudioOutput(
+        string Extension,
+        int SampleRateHz,
+        string Codec,
+        string Muxer);
+
     public class AudioConverter
     {
         /// <summary>Mono: a phone call is one channel, and stereo would only be thrown away.</summary>
         public const int Channels = 1;
 
-        /// <summary>The program name, resolved on PATH. Debian's <c>ffmpeg</c> package installs it.</summary>
-        public const string DefaultProgram = "ffmpeg";
-
         /// <summary>8 kHz, the sample rate a narrowband SIP call actually carries.</summary>
         public const int SampleRateHz = 8000;
+
+        /// <summary>The program name, resolved on PATH. Debian's <c>ffmpeg</c> package installs it.</summary>
+        public const string DefaultProgram = "ffmpeg";
 
         /// <summary>
         /// Long enough for a 20 MB video to be decoded on a small VM, short enough that a wedged
@@ -39,15 +50,31 @@ namespace Techie.Pbx.Asterisk.Audio
 
         public int TimeoutSeconds { get; }
 
+        /// <summary>What to write: the sample rate, codec and muxer the stored file gets.</summary>
+        public AudioOutput Output { get; }
+
+        /// <summary>
+        /// The announcement format, 8 kHz mono PCM WAV (D55): what a prompt plays from, and the
+        /// default so the announcement stores keep their behaviour unchanged.
+        /// </summary>
+        public static AudioOutput PromptWav { get; } = new(".wav", 8000, "pcm_s16le", "wav");
+
+        /// <summary>
+        /// The music on hold format, 16 kHz mono G.722 (D122): wideband, the same as the voice
+        /// path (D117), so a G.722 call plays it with no transcoding at all.
+        /// </summary>
+        public static AudioOutput MohG722 { get; } = new(".g722", 16000, "g722", "g722");
+
         public AudioConverter()
-            : this(DefaultProgram, DefaultTimeoutSeconds)
+            : this(DefaultProgram, DefaultTimeoutSeconds, PromptWav)
         {
         }
 
-        public AudioConverter(string program, int timeoutSeconds)
+        public AudioConverter(string program, int timeoutSeconds, AudioOutput? output = null)
         {
             this.Program = program;
             this.TimeoutSeconds = timeoutSeconds;
+            this.Output = output ?? PromptWav;
         }
 
         /// <summary>
@@ -100,7 +127,7 @@ namespace Techie.Pbx.Asterisk.Audio
         /// The fixed argv. Everything is a separate element, so neither path is ever parsed as
         /// anything but a file name.
         /// </summary>
-        private static List<string> Arguments(string sourcePath, string targetPath) => new()
+        private List<string> Arguments(string sourcePath, string targetPath) => new()
         {
             "-nostdin",                 // never wait on a console that isn't there
             "-hide_banner",
@@ -110,9 +137,9 @@ namespace Techie.Pbx.Asterisk.Audio
             "-vn",                      // an iPhone clip carries video; a prompt does not
             "-map_metadata", "-1",      // no tags in the file we store
             "-ac", Channels.ToString(CultureInfo.InvariantCulture),
-            "-ar", SampleRateHz.ToString(CultureInfo.InvariantCulture),
-            "-acodec", "pcm_s16le",
-            "-f", "wav",
+            "-ar", this.Output.SampleRateHz.ToString(CultureInfo.InvariantCulture),
+            "-acodec", this.Output.Codec,
+            "-f", this.Output.Muxer,
             targetPath,
         };
 

@@ -1,0 +1,51 @@
+@model List<MohTrackRow>
+@*
+    Every uploaded track, with the class it plays in. Clicking anywhere on a row opens its edit
+    form (D48), where the Delete button also lives.
+
+    The order is the class, then the file name — not the display name — because that is the order
+    Asterisk plays them in: a class sorts its directory alphabetically (D119). The table is
+    therefore not sortable by the user: a sort that disagreed with what you hear would be a lie.
+*@
+@if (Model.Count == 0)
+{
+    <p class="text-secondary">
+        No tracks yet. Add one and choose which class it belongs to; a class with nothing in it
+        plays nothing, which sounds exactly like silence.
+    </p>
+}
+
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="class">Class</th>
+            <th data-field="name">Name</th>
+            <th data-field="file">Stored as</th>
+            <th data-field="audio">Audio</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "TrackForm", new { mohFileID = row.MohFileID });
+
+            <tr data-edit-url="@editUrl">
+                <td class="text-secondary">@row.ClassName</td>
+                <td>@row.Name</td>
+                <td class="font-monospace text-secondary">@row.File</td>
+                <td>
+                    @if (row.AudioUsable)
+                    {
+                        @row.Audio
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-warning" title="There is nothing to play. Open the track and upload its audio again.">@row.Audio</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>

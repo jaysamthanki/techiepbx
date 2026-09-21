@@ -32,6 +32,25 @@ APP_HOME="/opt/tnpbx"
 ANNOUNCEMENTS_DIR="/var/lib/asterisk/sounds/tnpbx/announcements"
 MOH_DIR="/var/lib/asterisk/moh"
 
+# Music on hold is one directory per class now (D122), and this is the class that ships: the
+# application creates the row, this script puts the music in it. The source is three royalty-free
+# Audiodollar tracks kept in the repo at media/musiconhold — the Audiodollar source IDs are in the
+# file names and in that directory's README — transcoded here to the one format this system
+# stores, which format_wav plays with no transcoding at call time (D55, D117). Asterisk is built
+# without format_mp3, so the MP3s themselves are not usable as they are.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MOH_DEFAULT_DIR="${MOH_DIR}/default"
+MOH_SOURCE_DIR="${MOH_SOURCE_DIR:-${SCRIPT_DIR}/../../../media/musiconhold}"
+
+# Which repo track becomes which file. The names are what the application's schema writes into
+# MohFiles for the class that ships, so the two have to agree: default-N.g722, played in that
+# order because the class sorts its directory alphabetically.
+MOH_DEFAULT_TRACKS=(
+  "default-1.g722:audiodollar-on-hold-music-371876.mp3"
+  "default-2.g722:audiodollar-piano-piano-inspirational-music-570589.mp3"
+  "default-3.g722:audiodollar-bollywood-bollywood-551817.mp3"
+)
+
 DRY_RUN=0
 REBUILD=0
 
@@ -115,8 +134,9 @@ log "system clock: $(date -u)"
 
 # --- 3. packages --------------------------------------------------------------
 # Build dependencies for Asterisk, plus what the application needs at run time: libicu for
-# .NET globalisation, ffmpeg for announcement conversion (D55), sqlite3 for looking at the
-# database by hand, curl and ca-certificates for outbound HTTPS.
+# .NET globalisation, ffmpeg for announcement conversion (D55) and for the music on hold this
+# script transcodes and the upload form converts (D122), sqlite3 for looking at the database by
+# hand, curl and ca-certificates for outbound HTTPS.
 
 case "${VERSION_ID:-13}" in
   12) ICU_PACKAGE="libicu72" ;;
@@ -160,7 +180,7 @@ fi
 
 log "creating directories"
 run mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk \
-             "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$APP_HOME"
+             "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$MOH_DEFAULT_DIR" "$APP_HOME"
 
 apply_layout() {
   run chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
@@ -177,10 +197,12 @@ apply_layout() {
   run chown -R asterisk:asterisk /var/lib/asterisk/sounds/tnpbx
   run chmod 2770 /var/lib/asterisk/sounds/tnpbx "$ANNOUNCEMENTS_DIR"
 
-  # Music on hold (converted uploads) lands here, in the one directory the generated
-  # musiconhold.conf names as its class's directory (D119). Same setgid model again.
+  # Music on hold lands here, one directory per class: the generated musiconhold.conf names
+  # <this>/<class directory> (D119, D122). Same setgid model again, and on the subdirectories
+  # too — the web user creates a class directory itself when a class is added, and the setgid bit
+  # on the parent is what makes what it writes there group-owned by asterisk.
   run chown -R asterisk:asterisk "$MOH_DIR"
-  run chmod 2770 "$MOH_DIR"
+  run chmod 2770 "$MOH_DIR" "$MOH_DEFAULT_DIR"
 
   # The application's deploy target. Created and left EMPTY: the app is deployed separately.
   run chown "${APP_USER}:asterisk" "$APP_HOME"
@@ -234,6 +256,7 @@ else
     echo "  [dry-run] make install    (binaries, core sounds; samples deliberately NOT installed)"
     echo "  [dry-run] fetch + extract G.722 core sounds into /var/lib/asterisk/sounds/en (D117)"
     echo "  [dry-run] ldconfig"
+    # The music on hold that ships is installed below, whether or not Asterisk was rebuilt.
   else
     cd "$BUILD_DIR"
     ./configure --with-pjproject-bundled > /tmp/asterisk-configure.log 2>&1 \
@@ -269,22 +292,57 @@ else
       "${CORE_SOUNDS_URL}/asterisk-core-sounds-en-g722-${CORE_SOUNDS_VERSION}.tar.gz"
     run tar -xzf /tmp/core-sounds-g722.tar.gz -C /var/lib/asterisk/sounds/en
     run rm -f /tmp/core-sounds-g722.tar.gz
-
-    # Music on hold: the opsound set, free-licensed and what FreePBX ships, so Parking.Audio=moh
-    # has something to play before the admin uploads anything (D119). The class scans the
-    # directory, so files here play without a database row.
-    log "installing music on hold"
-    run mkdir -p /var/lib/asterisk/moh
-    run curl -sSfL -o /tmp/moh.tar.gz \
-      "https://downloads.asterisk.org/pub/telephony/sounds/releases/asterisk-moh-opsound-g722-2.03.tar.gz"
-    run tar -xzf /tmp/moh.tar.gz -C /var/lib/asterisk/moh
-    run rm -f /tmp/moh.tar.gz
   fi
 
   # make install creates its own directories; re-assert the layout over the top of them.
   log "re-applying ownership and permissions after make install"
   apply_layout
 fi
+
+# The music on hold that ships with the product (D122), outside the build branch above: an
+# upgrade that skips the Asterisk rebuild still has to end up with the music the application
+# lists. The application's schema creates the Default class and a row per track; this puts the
+# audio where that class plays it. Nothing is overwritten — a track an admin has replaced through
+# the UI stays replaced.
+install_default_moh() {
+  # D119 kept every track straight in ${MOH_DIR}, because there was one class. Anything still
+  # loose there belongs to the class that ships, which is where those rows now point.
+  if compgen -G "${MOH_DIR}/*.wav" > /dev/null; then
+    log "moving music on hold into ${MOH_DEFAULT_DIR} (D122)"
+    run mv -n "${MOH_DIR}"/*.wav "${MOH_DEFAULT_DIR}/"
+  fi
+
+  if [[ ! -d "$MOH_SOURCE_DIR" ]]; then
+    warn "no music on hold source at ${MOH_SOURCE_DIR}; the Default class stays empty until tracks are uploaded"
+    return 0
+  fi
+
+  # ffmpeg was installed in step 3, so its absence means something went wrong rather than
+  # something is missing. Not checked during a --dry-run review, which may be run anywhere.
+  if (( ! DRY_RUN )); then
+    command -v ffmpeg &>/dev/null || die "ffmpeg is not installed, so the music on hold cannot be converted"
+  fi
+
+  log "installing the music on hold that ships (from ${MOH_SOURCE_DIR})"
+  for track in "${MOH_DEFAULT_TRACKS[@]}"; do
+    local target="${MOH_DEFAULT_DIR}/${track%%:*}"
+    local mp3="${MOH_SOURCE_DIR}/${track#*:}"
+
+    # Already there: either this has run before, or the admin replaced the track through the UI.
+    [[ -f "$target" ]] && continue
+    [[ -f "$mp3" ]] || { warn "missing ${mp3}, skipping $(basename "$target")"; continue; }
+
+    # 16-bit 8 kHz mono PCM WAV: the same conversion the upload form does, and what format_wav
+    # plays with no transcoding at call time (D55).
+    run ffmpeg -nostdin -loglevel error -y -i "$mp3" -ar 16000 -ac 1 -acodec g722 "$target"
+
+    # Owned by the web user, group asterisk: Asterisk reads it through the group (D18), and the
+    # application renames this very file when an admin renames the track — which needs to own it.
+    run chown "${APP_USER}:asterisk" "$target"
+    run chmod 0640 "$target"
+  done
+}
+install_default_moh
 
 # --- 6. systemd unit ----------------------------------------------------------
 # Our own unit rather than "make config": Asterisk's init script runs it as root. This is the

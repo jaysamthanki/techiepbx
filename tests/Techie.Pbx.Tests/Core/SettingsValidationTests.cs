@@ -574,6 +574,32 @@ namespace Techie.Pbx.Tests.Core
             Assert.Empty(SettingsValidation.Errors(key, value));
         }
 
+        /// <summary>
+        /// The class a parked caller hears is checked for shape only — whether a class of that name
+        /// exists is the Music on hold page's business, and a class an admin is about to create
+        /// must not be unstorable here first (D122). "default" is still refused: it is the class
+        /// Asterisk plays when nobody named one, which is how silence works (D119).
+        /// </summary>
+        [Theory]
+        [InlineData("Standard")]
+        [InlineData("Front desk")]
+        [InlineData("moh_2")]
+        public void A_music_on_hold_class_name_asterisk_could_match_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.ParkingMusicClass, value));
+        }
+
+        [Theory]
+        [InlineData("default")]
+        [InlineData("DEFAULT")]
+        [InlineData("[evil]")]
+        [InlineData("front;desk")]
+        [InlineData("a music on hold class name much too long to store")]
+        public void A_music_on_hold_class_name_asterisk_could_not_match_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.ParkingMusicClass, value));
+        }
+
         [Theory]
         [InlineData(SettingsKeys.ParkingEnabled, "yes")]
         [InlineData(SettingsKeys.ParkingAudio, "music")]

@@ -38,12 +38,25 @@ namespace Techie.Pbx.Tests.Asterisk
             new Extension { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111" },
         };
 
+        /// <summary>
+        /// Three classes: the one that ships, one an admin added, and one with nothing in it —
+        /// which still has to be written out, because a directory the installer or an admin filled
+        /// plays without a database row (D122). Out of order, to prove the renderer sorts them.
+        /// </summary>
+        private static List<MohClass> SampleClasses() => new()
+        {
+            new MohClass { MohClassID = 3, Name = "Waiting room", Directory = "waiting-room" },
+            new MohClass { MohClassID = 1, Name = MohClass.DefaultName, Directory = MohClass.DefaultDirectory, IsDefault = true },
+            new MohClass { MohClassID = 2, Name = "Front desk", Directory = "front-desk" },
+        };
+
         private static List<MohFile> SampleTracks() => new()
         {
             // Out of order, and one with no audio: only the stored ones are worth naming.
-            new MohFile { MohFileID = 2, Name = "O'Brien's Theme", File = "2-obrien-s-theme.wav", CreatedUnix = 1 },
-            new MohFile { MohFileID = 3, Name = "Never Uploaded", File = "", CreatedUnix = 2 },
-            new MohFile { MohFileID = 1, Name = "Piano Loop", File = "1-piano-loop.wav", CreatedUnix = 3 },
+            new MohFile { MohFileID = 2, MohClassID = 1, Name = "O'Brien's Theme", File = "2-obrien-s-theme.g722", CreatedUnix = 1 },
+            new MohFile { MohFileID = 3, MohClassID = 1, Name = "Never Uploaded", File = "", CreatedUnix = 2 },
+            new MohFile { MohFileID = 1, MohClassID = 1, Name = "Piano Loop", File = "1-piano-loop.g722", CreatedUnix = 3 },
+            new MohFile { MohFileID = 4, MohClassID = 2, Name = "Hold Message", File = "4-hold-message.g722", CreatedUnix = 4 },
         };
 
         private static ParkingSettings Enabled() => new()
@@ -92,6 +105,7 @@ namespace Techie.Pbx.Tests.Asterisk
             {
                 Audio = ParkingAudio.MusicOnHold,
                 Enabled = true,
+                MusicClass = "Front desk",
                 Slots = 4,
                 TimeoutSeconds = 120,
             };
@@ -99,16 +113,81 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("res_parking-moh.conf"), ParkingConfRenderer.Render(parking));
         }
 
+        /// <summary>
+        /// No classes at all — a database nobody has looked at — is the general section and nothing
+        /// else. Not even an empty class, because there is none to write.
+        /// </summary>
         [Fact]
-        public void Moh_with_no_tracks_matches_expected_file()
+        public void Moh_with_no_classes_matches_expected_file()
         {
             Assert.Equal(Expected("musiconhold.conf"), MohConfRenderer.Render());
         }
 
         [Fact]
-        public void Moh_with_tracks_matches_expected_file()
+        public void Moh_with_classes_and_tracks_matches_expected_file()
         {
-            Assert.Equal(Expected("musiconhold-files.conf"), MohConfRenderer.Render(SampleTracks()));
+            Assert.Equal(Expected("musiconhold-files.conf"), MohConfRenderer.Render(SampleClasses(), SampleTracks()));
+        }
+
+        /// <summary>
+        /// A class with no rows is still a section: <c>mode = files</c> scans the directory, so the
+        /// tracks the installer put in the class that ships play without a database row, and an
+        /// empty directory is simply nothing to play (D122).
+        /// </summary>
+        [Fact]
+        public void A_class_with_no_tracks_is_still_written_out()
+        {
+            var actual = MohConfRenderer.Render(SampleClasses());
+
+            Assert.Contains($"[{MohClass.DefaultName}]\n", actual);
+            Assert.Contains("[Waiting room]\n", actual);
+            Assert.Contains("directory = /var/lib/asterisk/moh/waiting-room\n", actual);
+        }
+
+        /// <summary>
+        /// Each class plays its own directory, which is the whole point of having more than one.
+        /// </summary>
+        [Fact]
+        public void Every_class_names_its_own_directory()
+        {
+            var actual = MohConfRenderer.Render(SampleClasses(), SampleTracks());
+
+            Assert.Contains($"directory = {MohStore.DefaultMohPath}/{MohClass.DefaultDirectory}\n", actual);
+            Assert.Contains($"directory = {MohStore.DefaultMohPath}/front-desk\n", actual);
+            Assert.DoesNotContain($"directory = {MohStore.DefaultMohPath}\n", actual);
+        }
+
+        /// <summary>
+        /// Asterisk matches class names with strcasecmp (res/res_musiconhold.c, moh_class_cmp), so
+        /// two classes that differ only in case are one class to it and two to an admin. The
+        /// database refuses that pair; the renderer refuses it again rather than writing a file
+        /// whose meaning depends on load order.
+        /// </summary>
+        [Fact]
+        public void Two_classes_whose_names_differ_only_in_case_are_refused()
+        {
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 1, Name = "Jazz", Directory = "jazz" },
+                new() { MohClassID = 2, Name = "JAZZ", Directory = "jazz-2" },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => MohConfRenderer.Render(classes));
+        }
+
+        /// <summary>
+        /// A class whose directory is not one this system would have written must not reach a conf
+        /// file: it is a path, and the store builds one from it.
+        /// </summary>
+        [Fact]
+        public void A_class_directory_we_would_not_have_written_is_refused()
+        {
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 1, Name = "Evil", Directory = "../../etc/asterisk" },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => MohConfRenderer.Render(classes));
         }
 
         [Fact]
@@ -228,15 +307,27 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// The class must not be called "default": Asterisk falls back to a class by that name
-        /// whenever a caller asks for music and none was named, so one would be played to a parked
-        /// caller whose setting says silence (res/res_musiconhold.c, local_ast_moh_start).
+        /// No class may be called "default": Asterisk falls back to a class by that name whenever
+        /// a caller asks for music and none was named, so one would be played to a parked caller
+        /// whose setting says silence (res/res_musiconhold.c, local_ast_moh_start). The class that
+        /// ships is called something else for exactly this reason, and a class an admin tries to
+        /// name that way is refused before it is stored and again before it is written.
         /// </summary>
-        [Fact]
-        public void The_music_class_is_not_called_default()
+        [Theory]
+        [InlineData("default")]
+        [InlineData("Default")]
+        [InlineData("DEFAULT")]
+        public void No_music_class_may_be_called_default(string name)
         {
-            Assert.NotEqual("default", MohConfRenderer.ClassName);
-            Assert.DoesNotContain("[default]", MohConfRenderer.Render(SampleTracks()));
+            var classes = new List<MohClass>
+            {
+                new() { MohClassID = 1, Name = name, Directory = "somewhere" },
+            };
+
+            Assert.NotEqual("default", MohClass.DefaultName, StringComparer.OrdinalIgnoreCase);
+            Assert.NotEmpty(classes[0].Validate());
+            Assert.Throws<InvalidOperationException>(() => MohConfRenderer.Render(classes));
+            Assert.DoesNotContain("[default]", MohConfRenderer.Render(SampleClasses(), SampleTracks()));
         }
 
         /// <summary>
@@ -253,10 +344,10 @@ namespace Techie.Pbx.Tests.Asterisk
         [Fact]
         public void A_track_with_no_audio_is_left_out()
         {
-            var actual = MohConfRenderer.Render(SampleTracks());
+            var actual = MohConfRenderer.Render(SampleClasses(), SampleTracks());
 
             Assert.DoesNotContain("Never Uploaded", actual);
-            Assert.Equal(2, MohConfRenderer.RenderOrder(SampleTracks()).Count);
+            Assert.Equal(3, MohConfRenderer.RenderOrder(SampleTracks()).Count);
         }
 
         /// <summary>
@@ -268,10 +359,10 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var tracks = new List<MohFile>
             {
-                new() { MohFileID = 1, Name = "Evil", File = "../../etc/asterisk/pjsip.conf" },
+                new() { MohFileID = 1, MohClassID = 1, Name = "Evil", File = "../../etc/asterisk/pjsip.conf" },
             };
 
-            Assert.Throws<InvalidOperationException>(() => MohConfRenderer.Render(tracks));
+            Assert.Throws<InvalidOperationException>(() => MohConfRenderer.Render(SampleClasses(), tracks));
         }
 
         [Theory]
@@ -329,11 +420,19 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains(module, ModulesConfRenderer.Modules);
         }
 
-        /// <summary>The music on hold directory the renderer names is the one the store writes to.</summary>
+        /// <summary>
+        /// The directory the renderer names for a class is the one the store writes that class's
+        /// tracks to: the two have to be the same directory or Asterisk plays nothing.
+        /// </summary>
         [Fact]
         public void The_class_names_the_directory_the_store_writes_to()
         {
-            Assert.Contains($"directory = {MohStore.DefaultMohPath}\n", MohConfRenderer.Render(SampleTracks()));
+            var mohClass = SampleClasses().Single(c => c.IsDefault);
+            var store = new MohStore();
+
+            Assert.Contains($"directory = {MohStore.ConfDirectory(mohClass)}\n",
+                MohConfRenderer.Render(SampleClasses(), SampleTracks()));
+            Assert.Equal(store.ClassPath(mohClass), MohStore.ConfDirectory(mohClass));
         }
     }
 }

@@ -219,6 +219,13 @@ namespace Techie.Pbx.Core.Data
         public const string ParkingEnabled = "Parking.Enabled";
 
         /// <summary>
+        /// Which music on hold class a parked caller hears, by name, when <see cref="ParkingAudio"/>
+        /// says music (D122). Written into res_parking.conf as parkedmusicclass; the classes
+        /// themselves are the Music on hold page's.
+        /// </summary>
+        public const string ParkingMusicClass = "Parking.MusicClass";
+
+        /// <summary>
         /// How many parking slots there are, 1 to 9, default 9 (D119). One digit each, because a
         /// slot is retrieved by dialling its number and extensions here are three digits or more.
         /// </summary>
@@ -265,6 +272,7 @@ namespace Techie.Pbx.Core.Data
             ParkingAudio,
             ParkingDtmfCode,
             ParkingEnabled,
+            ParkingMusicClass,
             ParkingSlots,
             ParkingTimeout,
             SystemNtpServer,
@@ -358,6 +366,7 @@ namespace Techie.Pbx.Core.Data
             [ParkingAudio] = SettingScope.Asterisk,
             [ParkingDtmfCode] = SettingScope.Asterisk,
             [ParkingEnabled] = SettingScope.Asterisk,
+            [ParkingMusicClass] = SettingScope.Asterisk,
             [ParkingSlots] = SettingScope.Asterisk,
             [ParkingTimeout] = SettingScope.Asterisk,
 

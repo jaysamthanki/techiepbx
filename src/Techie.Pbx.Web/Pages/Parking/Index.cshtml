@@ -3,21 +3,11 @@
 @{
     ViewData["Title"] = "Call parking";
 
-    var formUrl = Url.Page("Index", "Form");
     var settingsUrl = Url.Page("Index", "Settings");
-    var tableUrl = Url.Page("Index", "Table");
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0">Call parking</h1>
-    <div class="d-flex gap-2">
-        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
-        <button type="button" class="btn btn-primary"
-                hx-get="@formUrl"
-                hx-target="#form-modal-content"
-                data-bs-toggle="modal"
-                data-bs-target="#form-modal">Add music on hold</button>
-    </div>
 </div>
 
 <p class="text-secondary">
@@ -27,28 +17,15 @@
     feature code, a parking lot and one dialplan entry per slot, so it needs an apply.
 </p>
 
+<p class="text-secondary">
+    The music a parked caller hears is a music on hold class, managed on the
+    <a asp-page="/Moh/Index">Music on hold</a> page (D122). Name the class here; upload its tracks
+    there.
+</p>
+
 @* The settings arrive from the Settings handler, and come back whenever one is saved. *@
 <div id="parking-settings" hx-get="@settingsUrl" hx-trigger="load, settingsChanged from:body">
     <p class="text-secondary">Loading parking settings…</p>
-</div>
-
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="h5 card-title">Music on hold</h2>
-        <p class="card-text text-secondary">
-            One class, one directory: every track here is played to a parked caller in turn, in the
-            order they are listed. Uploads are converted on the way in, like an announcement's.
-        </p>
-
-        @*
-            The table refreshes on a track changing and on a setting changing, because it also says
-            whether anything is currently going to play these.
-        *@
-        <div id="moh-table" hx-get="@tableUrl"
-             hx-trigger="load, mohFilesChanged from:body, settingsChanged from:body">
-            <p class="text-secondary">Loading music on hold…</p>
-        </div>
-    </div>
 </div>
 
 <partial name="_FormModal" />

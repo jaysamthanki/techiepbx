@@ -1,0 +1,68 @@
+@page "/Moh"
+@model IndexModel
+@{
+    ViewData["Title"] = "Music on hold";
+
+    var classFormUrl = Url.Page("Index", "ClassForm");
+    var classesUrl = Url.Page("Index", "Classes");
+    var trackFormUrl = Url.Page("Index", "TrackForm");
+    var tracksUrl = Url.Page("Index", "Tracks");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Music on hold</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-outline-primary"
+                hx-get="@classFormUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add class</button>
+        <button type="button" class="btn btn-primary"
+                hx-get="@trackFormUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add track</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    A music on hold class is a name Asterisk knows and a directory it plays, in turn, in file-name
+    order (D122). One class ships with the system and has music in it already; add more to give a
+    different part of the system its own — a different tune or message for parked callers, say.
+    Changing any of this writes musiconhold.conf, so it needs an apply.
+</p>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Classes</h2>
+        <p class="card-text text-secondary">
+            Click a class to rename it or change the directory it plays. The class parked callers
+            hear is chosen on the <a asp-page="/Parking/Index">Parking</a> page.
+        </p>
+
+        @* The counts move when a track is added or removed, so this listens for both events. *@
+        <div id="moh-classes" hx-get="@classesUrl"
+             hx-trigger="load, mohClassesChanged from:body, mohFilesChanged from:body, settingsChanged from:body">
+            <p class="text-secondary">Loading classes…</p>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Tracks</h2>
+        <p class="card-text text-secondary">
+            Every track, with the class it plays in. Uploads are converted on the way in, like an
+            announcement's. A track stays in the class it was added to: to move one, delete it and
+            upload it again.
+        </p>
+
+        <div id="moh-tracks" hx-get="@tracksUrl"
+             hx-trigger="load, mohFilesChanged from:body, mohClassesChanged from:body">
+            <p class="text-secondary">Loading tracks…</p>
+        </div>
+    </div>
+</div>
+
+<partial name="_FormModal" />
