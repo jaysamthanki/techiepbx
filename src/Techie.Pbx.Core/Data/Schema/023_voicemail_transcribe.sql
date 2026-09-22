@@ -1,0 +1,16 @@
+-- D128. Whether the email a mailbox sends also carries a text transcript of the message.
+--
+-- Voicemail to email landed in D126: app_voicemail composes the message and hands it to
+-- /opt/tnpbx/bin/voicemail-mail, which relays it through the application's Mail.* settings. This
+-- column is what tells that script to transcribe the recording first — whisper.cpp on the box
+-- itself, so nothing about a customer's voicemail leaves the server.
+--
+-- Off by default, and deliberately per mailbox rather than a system setting: transcription costs
+-- roughly the length of the message in CPU time, and a site with one receptionist who wants
+-- readable voicemail should not pay for it on every other extension. It is also useless without
+-- an email address, which is checked where the option is rendered rather than here.
+--
+-- Nothing in Asterisk reads this column: app_voicemail has no transcription option and no way to
+-- pass one on, so the renderer writes it into a generated
+-- /etc/asterisk/tnpbx-voicemail-options.json that the script looks the mailbox up in (D128).
+ALTER TABLE Extensions ADD COLUMN VoicemailTranscribe INTEGER NOT NULL DEFAULT 0;

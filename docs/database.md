@@ -42,7 +42,7 @@ service user, mode 0600.
 | `Secret` | TEXT | SIP password, 16–64 letters/digits |
 | `Enabled` | INTEGER | 0/1, default 1. Disabled extensions are left out of the generated config. |
 
-### Extensions: voicemail columns (003)
+### Extensions: voicemail columns (003, 023)
 
 One optional mailbox per extension, so columns rather than a table (D27). A disabled extension
 gets no mailbox whatever these say.
@@ -51,9 +51,10 @@ gets no mailbox whatever these say.
 |---|---|---|
 | `VoicemailEnabled` | INTEGER | 0/1, default 0 |
 | `VoicemailPin` | TEXT | 4–8 digits, required once enabled. Written into `voicemail.conf` as typed (D28) |
-| `VoicemailEmail` | TEXT | Optional. Stored and rendered, but nothing sends email yet (F4) |
+| `VoicemailEmail` | TEXT | Optional. Where each message is emailed, through the `Mail.Smtp.*` relay (D126) |
 | `VoicemailAttachRecording` | INTEGER | 0/1, default 1 |
 | `VoicemailDeleteAfterEmail` | INTEGER | 0/1, default 0. Never rendered as `delete=yes` without an address to email |
+| `VoicemailTranscribe` | INTEGER | 0/1, default 0 (023). Transcribe the recording into the email. Nothing in Asterisk reads it: it is rendered into `/etc/asterisk/tnpbx-voicemail-options.json` for the mailcmd script (D128), and false without an address to email |
 
 ### Announcements (008)
 

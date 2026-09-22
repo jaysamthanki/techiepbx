@@ -17,6 +17,10 @@ namespace Techie.Pbx.Tests.Asterisk
                 VoicemailEnabled = true,
                 VoicemailPin = "4321",
                 VoicemailEmail = "sales@example.com",
+
+                // Transcription changes nothing in voicemail.conf and nothing in any other
+                // generated file: it is rendered into tnpbx-voicemail-options.json alone (D128).
+                VoicemailTranscribe = true,
             },
             new Extension
             {
@@ -175,6 +179,111 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = VoicemailConfRenderer.Render(SampleExtensions());
             Assert.Equal(Expected("voicemail.conf"), actual);
+        }
+
+        [Fact]
+        public void Voicemail_options_match_expected_file()
+        {
+            var actual = VoicemailOptionsRenderer.Render(SampleExtensions());
+            Assert.Equal(Expected(VoicemailOptionsRenderer.FileName), actual);
+        }
+
+        /// <summary>
+        /// The two voicemail files describe the same mailboxes: one entry here per line there, so
+        /// a mailbox missing from this file means "no such mailbox" rather than "not written yet".
+        /// </summary>
+        [Fact]
+        public void Voicemail_options_name_every_mailbox_and_nothing_else()
+        {
+            var options = VoicemailOptionsRenderer.Render(SampleExtensions());
+
+            Assert.Contains("\"1002\"", options);
+
+            // No mailbox, so no entry — and the disabled one has a mailbox switched on and still
+            // gets nothing, exactly as it gets no line in voicemail.conf.
+            Assert.DoesNotContain("\"1001\"", options);
+            Assert.DoesNotContain("\"1003\"", options);
+
+            // Nobody has a mailbox: the file is still written, and says so.
+            Assert.Contains("\"Mailboxes\": {}", VoicemailOptionsRenderer.Render(WithoutVoicemail()));
+        }
+
+        /// <summary>
+        /// Transcription is the script's business and app_voicemail has no idea about it (D128):
+        /// an invented per-mailbox option would be a warning per mailbox on every reload.
+        /// </summary>
+        [Fact]
+        public void Voicemail_conf_says_nothing_about_transcription()
+        {
+            var actual = VoicemailConfRenderer.Render(SampleExtensions());
+
+            Assert.DoesNotContain("transcri", actual, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("whisper", actual, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("1002 => 4321,O'Brien (Sales),sales@example.com,,attach=yes|delete=no\n", actual);
+        }
+
+        /// <summary>
+        /// A transcript is a thing that goes in an email. With no address there is no email, so
+        /// the option is false however the extension was saved — the same rule attach and delete
+        /// follow in voicemail.conf.
+        /// </summary>
+        [Fact]
+        public void A_mailbox_with_no_email_is_never_transcribed()
+        {
+            var extensions = new List<Extension>
+            {
+                new()
+                {
+                    Number = "1001",
+                    Name = "Front Desk",
+                    Secret = "AAAAbbbbCCCCdddd1111",
+                    VoicemailEnabled = true,
+                    VoicemailPin = "4321",
+                    VoicemailTranscribe = true,
+                },
+            };
+
+            var options = VoicemailOptionsRenderer.Render(extensions);
+
+            Assert.Contains("\"1001\"", options);
+            Assert.Contains("\"Transcribe\": false", options);
+        }
+
+        [Fact]
+        public void Voicemail_options_carry_no_pin_no_address_and_no_name()
+        {
+            var options = VoicemailOptionsRenderer.Render(SampleExtensions());
+
+            Assert.DoesNotContain("4321", options);
+            Assert.DoesNotContain("sales@example.com", options);
+            Assert.DoesNotContain("O'Brien", options);
+        }
+
+        /// <summary>The generated header every file this application writes carries, in the one
+        /// form JSON has for it: a key, because JSON has no comments.</summary>
+        [Fact]
+        public void Voicemail_options_say_they_are_generated()
+        {
+            Assert.Contains("Do not edit", VoicemailOptionsRenderer.Render(SampleExtensions()));
+            Assert.Equal("tnpbx-voicemail-options.json", VoicemailOptionsRenderer.FileName);
+        }
+
+        [Fact]
+        public void Voicemail_options_refuse_an_unsafe_row_like_every_other_renderer()
+        {
+            var extensions = new List<Extension>
+            {
+                new()
+                {
+                    Number = "1001",
+                    Name = "Evil\n[evil]",
+                    Secret = "AAAAbbbbCCCCdddd1111",
+                    VoicemailEnabled = true,
+                    VoicemailPin = "4321",
+                },
+            };
+
+            Assert.Throws<InvalidOperationException>(() => VoicemailOptionsRenderer.Render(extensions));
         }
 
         /// <summary>

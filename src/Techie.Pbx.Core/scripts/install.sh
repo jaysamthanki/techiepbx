@@ -31,6 +31,15 @@ APP_USER="tnpbx"
 APP_HOME="/opt/tnpbx"
 APP_BIN_DIR="${APP_HOME}/bin"
 APP_CONFIG_DIR="${APP_HOME}/Config"
+
+# Voicemail transcription (D128), and every one of these is optional: see section 6. small.en is
+# the English-only model, about 488 MB, and roughly real time on the hardware this targets — big
+# enough to be worth reading, small enough to run on a PBX while it is also being a PBX.
+WHISPER_DIR="${APP_HOME}/whisper"
+WHISPER_MODEL="${WHISPER_DIR}/ggml-small.en.bin"
+WHISPER_MODEL_URL="https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin"
+WHISPER_REPO="https://github.com/ggml-org/whisper.cpp"
+WHISPER_SOURCE_DIR="/usr/src/whisper.cpp"
 ANNOUNCEMENTS_DIR="/var/lib/asterisk/sounds/tnpbx/announcements"
 MOH_DIR="/var/lib/asterisk/moh"
 
@@ -184,7 +193,7 @@ fi
 log "creating directories"
 run mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk \
              "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$MOH_DEFAULT_DIR" \
-             "$APP_HOME" "$APP_BIN_DIR" "$APP_CONFIG_DIR"
+             "$APP_HOME" "$APP_BIN_DIR" "$APP_CONFIG_DIR" "$WHISPER_DIR"
 
 apply_layout() {
   run chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
@@ -224,6 +233,12 @@ apply_layout() {
   # and no world bit at all, because the file carries the SMTP password.
   run chown "${APP_USER}:asterisk" "$APP_CONFIG_DIR"
   run chmod 2750 "$APP_CONFIG_DIR"
+
+  # The speech model the mailcmd script feeds to whisper-cli (D128). root-owned and world-readable
+  # for the same reasons bin/ is: the asterisk process reads it, nothing else may rewrite it, and
+  # there is no secret in a language model. Empty unless section 6 managed to download one.
+  run chown root:root "$WHISPER_DIR"
+  run chmod 0755 "$WHISPER_DIR"
 }
 apply_layout
 
@@ -371,7 +386,113 @@ install_default_moh() {
 }
 install_default_moh
 
-# --- 6. systemd unit ----------------------------------------------------------
+# --- 6. speech recognition, and it is optional --------------------------------
+#
+# whisper.cpp, which is what transcribes a voicemail into the email it is attached to (D128).
+# Every step here is best effort and **none of them may end the install**: a box without it is a
+# supported box that emails voicemail exactly as it always did, and the mailcmd script checks for
+# the binary and the model before it tries to use them. So each step warns and returns instead of
+# dying, and this section is the only one in the file that does not use die().
+#
+# Built from source like Asterisk, for the same reason: there is no Debian package, and the
+# architecture this runs on (the lab is aarch64) is not one with a published binary. CPU inference
+# only — no CUDA, no BLAS — because a PBX has spare CPU, and small.en is roughly real time on it,
+# which is what lets the script transcribe in line before relaying the email.
+#
+# Not pinned to a release tag: whisper-cli's arguments have been stable for a long time, an
+# optional component that fails to build costs nothing, and a tag that has been retired upstream
+# would cost every new install its transcription. Worth revisiting if that ever stops being true.
+
+install_whisper() {
+  if (( DRY_RUN )); then
+    echo "  [dry-run] apt-get install -y --no-install-recommends git cmake"
+    echo "  [dry-run] git clone --depth 1 ${WHISPER_REPO} ${WHISPER_SOURCE_DIR}"
+    echo "  [dry-run] cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j${JOBS}"
+    echo "  [dry-run] install build/bin/whisper-cli ${APP_BIN_DIR}/whisper-cli (root:root 0755)"
+    echo "  [dry-run] download ${WHISPER_MODEL_URL}"
+    echo "  [dry-run]   to ${WHISPER_MODEL} (~488 MB)"
+    echo "  [dry-run] every step above only warns on failure: transcription is optional"
+    return 0
+  fi
+
+  if [[ -x "${APP_BIN_DIR}/whisper-cli" && -s "$WHISPER_MODEL" ]]; then
+    log "voicemail transcription is already installed (delete ${APP_BIN_DIR}/whisper-cli to rebuild)"
+    return 0
+  fi
+
+  log "installing voicemail transcription (optional; a failure here does not stop the install)"
+
+  if ! apt-get install -y -q --no-install-recommends git cmake > /tmp/whisper-packages.log 2>&1; then
+    warn "could not install git and cmake, so voicemail transcription will not be available (see /tmp/whisper-packages.log)"
+    return 0
+  fi
+
+  if [[ ! -x "${APP_BIN_DIR}/whisper-cli" ]]; then
+    rm -rf "$WHISPER_SOURCE_DIR"
+
+    if ! git clone --depth 1 "$WHISPER_REPO" "$WHISPER_SOURCE_DIR" > /tmp/whisper-clone.log 2>&1; then
+      warn "could not clone ${WHISPER_REPO}, so voicemail transcription will not be available (see /tmp/whisper-clone.log)"
+      return 0
+    fi
+
+    log "compiling whisper.cpp with ${JOBS} jobs"
+    if ! cmake -S "$WHISPER_SOURCE_DIR" -B "${WHISPER_SOURCE_DIR}/build" \
+                -DCMAKE_BUILD_TYPE=Release > /tmp/whisper-build.log 2>&1 \
+       || ! cmake --build "${WHISPER_SOURCE_DIR}/build" -j"${JOBS}" --config Release \
+                >> /tmp/whisper-build.log 2>&1; then
+      warn "the whisper.cpp build failed, so voicemail transcription will not be available (see /tmp/whisper-build.log)"
+      return 0
+    fi
+
+    # The examples are built as well, and this is the only one of them we want: one binary, given
+    # a model and a wav file, that prints the text. The rest stays in /usr/src.
+    if [[ ! -x "${WHISPER_SOURCE_DIR}/build/bin/whisper-cli" ]]; then
+      warn "the whisper.cpp build produced no whisper-cli, so voicemail transcription will not be available"
+      return 0
+    fi
+
+    # root:root 0755, like the mailcmd script beside it: Asterisk runs this as the asterisk user,
+    # and neither that user nor the web user may rewrite a program Asterisk executes.
+    if ! install -o root -g root -m 0755 \
+                 "${WHISPER_SOURCE_DIR}/build/bin/whisper-cli" "${APP_BIN_DIR}/whisper-cli"; then
+      warn "could not install whisper-cli into ${APP_BIN_DIR}, so voicemail transcription will not be available"
+      return 0
+    fi
+  fi
+
+  if [[ ! -s "$WHISPER_MODEL" ]]; then
+    log "downloading the whisper small.en model (~488 MB, this takes a while)"
+
+    # Downloaded beside itself and renamed, so an interrupted download never looks like a model.
+    if ! curl -sSfL -o "${WHISPER_MODEL}.part" "$WHISPER_MODEL_URL"; then
+      rm -f "${WHISPER_MODEL}.part"
+      warn "could not download the speech model, so voicemail transcription will not be available until ${WHISPER_MODEL} exists"
+      return 0
+    fi
+
+    mv "${WHISPER_MODEL}.part" "$WHISPER_MODEL"
+  fi
+
+  # Both halves have to be there before this says so: the script needs the binary and the model,
+  # and a summary that claims transcription works when it does not is worse than no summary.
+  if [[ ! -x "${APP_BIN_DIR}/whisper-cli" || ! -s "$WHISPER_MODEL" ]]; then
+    warn "voicemail transcription is not available: ${APP_BIN_DIR}/whisper-cli or ${WHISPER_MODEL} is missing"
+    return 0
+  fi
+
+  chown root:root "${APP_BIN_DIR}/whisper-cli" "$WHISPER_MODEL"
+  chmod 0755 "${APP_BIN_DIR}/whisper-cli"
+  chmod 0644 "$WHISPER_MODEL"
+
+  log "voicemail transcription is available: ${APP_BIN_DIR}/whisper-cli with small.en"
+}
+
+# Called with "|| warn" as well as being guarded step by step: "set -e" would otherwise turn an
+# unguarded failure in there — a full disk during install, say — into a failed install, and this
+# section is the one part of the script that is not allowed to do that.
+install_whisper || warn "voicemail transcription could not be installed; nothing else on this box is affected"
+
+# --- 7. systemd unit ----------------------------------------------------------
 # Our own unit rather than "make config": Asterisk's init script runs it as root. This is the
 # unit proven on the lab VM.
 
@@ -406,7 +527,7 @@ run systemctl enable asterisk
 # identifier. It starts for the first time after the app has written its config.
 log "asterisk.service is enabled but NOT started (there is no configuration yet)"
 
-# --- 7. summary ---------------------------------------------------------------
+# --- 8. summary ---------------------------------------------------------------
 
 cat <<EOF
 
@@ -425,11 +546,20 @@ Created:
   ${MOH_DIR}     asterisk:asterisk  2770  setgid
   ${APP_HOME}               ${APP_USER}:asterisk  0750  the deploy target
   ${APP_BIN_DIR}           root:root  0755  voicemail-mail (Asterisk's mailcmd)
+                                            and whisper-cli, if it built
   ${APP_CONFIG_DIR}        ${APP_USER}:asterisk  2750  setgid, holds mail.json
+  ${WHISPER_DIR}        root:root  0755  the speech model, if it downloaded
   /usr/sbin/asterisk       Asterisk ${ASTERISK_MAJOR}.x built from source
   asterisk.service         our hardened unit, enabled
 
 Clock: Etc/UTC with NTP (D74). Open hours are entered in the customer's zone.
+
+Optional, and it says above whether it worked:
+  * Voicemail transcription (whisper.cpp + the small.en model). If either the
+    build or the 488 MB download failed, everything else on this box still
+    works and voicemail is emailed without a transcript. Re-run this script to
+    try again, or put whisper-cli and ${WHISPER_MODEL}
+    in place by hand.
 
 Deliberately NOT done:
   * The web application is NOT deployed and tnpbx-web.service does NOT exist.

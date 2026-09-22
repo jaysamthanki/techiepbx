@@ -87,6 +87,7 @@ Generated files (current):
 | `pjsip.conf` | `PjsipConfRenderer` | UDP transport (with NAT settings when needed), one endpoint + auth + aor per enabled extension |
 | `extensions.conf` | `ExtensionsConfRenderer` | `[internal]` context: `*43` echo test, `*97` voicemail (when any mailbox exists), one explicit `Dial` entry per enabled extension, falling back to the mailbox when there is one (D29) |
 | `voicemail.conf` | `VoicemailConfRenderer` | `[general]` recording settings and one mailbox line per enabled extension with voicemail switched on, in context `default` |
+| `tnpbx-voicemail-options.json` | `VoicemailOptionsRenderer` | Not an Asterisk file: mailbox → `{Transcribe}` for the `mailcmd` script, which app_voicemail has no way to tell (D128) |
 
 | `asterisk.conf` | `AsteriskConfRenderer` | `[options]`: verbose, and `live_dangerously`/`execincludes` off. Restart, not reload (D33) |
 | `modules.conf` | `ModulesConfRenderer` | `autoload = no` and an explicit `load =` allowlist (D31). Restart, not reload |
@@ -197,8 +198,8 @@ pipeline, so it wraps authentication and records anonymous provisioning fetches 
 
 Both live inside the install (`/opt/tnpbx`), which is the only place the hardened unit grants write
 access to — never `/var/log`, which `ProtectSystem=strict` makes read-only to this process. Both are
-therefore cleared by a re-deploy, which keeps `appsettings.json`, `Data/`, `bin/` and `Config/` (D95,
-D126).
+therefore cleared by a re-deploy, which keeps `appsettings.json`, `Data/`, `bin/`, `Config/` and
+`whisper/` (D95, D126, D128).
 
 ## Mail out of the box
 
@@ -214,3 +215,11 @@ opening this app's database, so the app writes the SMTP half of those settings t
 (0640, group `asterisk`) whenever a setting is saved and at every start. Nothing in `/etc/asterisk`
 carries a mail credential — the generated `voicemail.conf` names the script's fixed path and
 nothing else, which is why a mail setting is not an apply.
+
+That script also transcribes the recording on its way past, when the mailbox asked for one (D128):
+whisper.cpp and its model on this machine, so a voicemail is never sent anywhere to be read. Which
+mailboxes asked is the one thing it cannot learn from the email, because `app_voicemail` has no
+transcription option and runs `mailcmd` with no arguments, so the apply renders
+`/etc/asterisk/tnpbx-voicemail-options.json` — mailbox → `{Transcribe}`, no PIN and no address —
+alongside `voicemail.conf`. Both the engine and the model are optional parts of the install, and
+every way transcription can fail still relays the message.

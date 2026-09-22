@@ -48,6 +48,13 @@ namespace Techie.Pbx.Core.Models
         public string VoicemailPin { get; set; } = "";
 
         /// <summary>
+        /// Transcribe the recording and put the text in the email (D128). Off by default: it costs
+        /// roughly the length of the message in CPU time on the box itself, and it does nothing at
+        /// all without an address to email, so the renderer writes it for a mailbox that has one.
+        /// </summary>
+        public bool VoicemailTranscribe { get; set; }
+
+        /// <summary>
         /// What counts as an extension number. Public because a destination points at one, and
         /// two places deciding what a number looks like is one place too many.
         /// </summary>

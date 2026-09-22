@@ -103,6 +103,7 @@ namespace Techie.Pbx.Tests.Core
                 VoicemailEmail = "desk@example.com",
                 VoicemailAttachRecording = false,
                 VoicemailDeleteAfterEmail = true,
+                VoicemailTranscribe = true,
             };
             this.repository.Insert(extension);
 
@@ -113,6 +114,14 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("desk@example.com", loaded.VoicemailEmail);
             Assert.False(loaded.VoicemailAttachRecording);
             Assert.True(loaded.VoicemailDeleteAfterEmail);
+            Assert.True(loaded.VoicemailTranscribe);
+
+            // And an update carries it back off again: a column that only ever goes one way is a
+            // column the UPDATE forgot.
+            loaded.VoicemailTranscribe = false;
+            this.repository.Update(loaded);
+
+            Assert.False(this.repository.GetByNumber("1001")!.VoicemailTranscribe);
         }
 
         /// <summary>An extension that never asked for voicemail has none, and needs no PIN.</summary>
@@ -127,6 +136,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("", loaded.VoicemailPin);
             Assert.True(loaded.VoicemailAttachRecording);
             Assert.False(loaded.VoicemailDeleteAfterEmail);
+            Assert.False(loaded.VoicemailTranscribe);
         }
 
         [Theory]

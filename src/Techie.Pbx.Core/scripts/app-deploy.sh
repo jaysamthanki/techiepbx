@@ -10,9 +10,10 @@
 # What it does:
 #   - unpacks the self-contained publish into /opt/tnpbx (tnpbx:asterisk 0750)
 #   - preserves an existing appsettings.json, Data/ (the database), bin/ (the
-#     root-owned voicemail mailcmd script) and Config/ (mail.json, the SMTP
-#     credentials that script reads) across re-deploys: all of it lives in the
-#     target, not the tarball (D95, D126)
+#     root-owned voicemail mailcmd script and whisper-cli), Config/ (mail.json,
+#     the SMTP credentials that script reads) and whisper/ (the speech model)
+#     across re-deploys: all of it lives in the target, not the tarball
+#     (D95, D126, D128)
 #   - (re)installs bin/voicemail-mail root:root 0755 from the tarball (D126)
 #   - writes /etc/systemd/system/tnpbx-web.service (User=tnpbx, never root,
 #     bindings the app chooses itself: 8080 always, plus 80 always and 443 once
@@ -37,6 +38,7 @@ APP_HOME="/opt/tnpbx"
 APP_BIN_DIR="${APP_HOME}/bin"
 APP_CONFIG_DIR="${APP_HOME}/Config"
 MOH_DIR="/var/lib/asterisk/moh"
+WHISPER_DIR="${APP_HOME}/whisper"
 UNIT="/etc/systemd/system/tnpbx-web.service"
 POLKIT="/etc/polkit-1/rules.d/40-tnpbx-asterisk.rules"
 
@@ -58,13 +60,15 @@ mkdir -p "${APP_HOME}/Data"
 
 # The tarball carries repo defaults; the server's own state must survive every re-deploy.
 # appsettings.json and Data/ (the SQLite database and the data protection key ring) are that
-# state, and so are the two directories install.sh creates: bin/ holds the root-owned mailcmd
-# script Asterisk executes, and Config/ holds mail.json with the SMTP password in it (D126).
+# state, and so are the three directories install.sh creates: bin/ holds the root-owned mailcmd
+# script Asterisk executes (and whisper-cli beside it), Config/ holds mail.json with the SMTP
+# password in it (D126), and whisper/ holds a 488 MB speech model that a deploy has no way to
+# fetch and no business re-downloading (D128).
 #
 # Written as plain "if" blocks rather than "test && command": under "set -e" a test that
 # comes out false is a failed command at the top level, which would end the deploy.
 KEEP_DIR=$(mktemp -d)
-for kept in appsettings.json Data bin Config; do
+for kept in appsettings.json Data bin Config whisper; do
     if [[ -e "${APP_HOME}/${kept}" ]]; then
         cp -a "${APP_HOME}/${kept}" "${KEEP_DIR}/"
     fi
@@ -73,7 +77,7 @@ done
 find "${APP_HOME}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xzf "$TARBALL" -C "$APP_HOME"
 
-for kept in appsettings.json Data bin Config; do
+for kept in appsettings.json Data bin Config whisper; do
     if [[ -e "${KEEP_DIR}/${kept}" ]]; then
         rm -rf "${APP_HOME:?}/${kept}"
         cp -a "${KEEP_DIR}/${kept}" "${APP_HOME}/"
@@ -106,6 +110,20 @@ chmod 0755 "$APP_BIN_DIR"
 if [[ -f "${APP_BIN_DIR}/voicemail-mail" ]]; then
     chown root:root "${APP_BIN_DIR}/voicemail-mail"
     chmod 0755 "${APP_BIN_DIR}/voicemail-mail"
+fi
+
+# whisper-cli and its model are install.sh's business, not this script's — a 488 MB download is
+# not part of a deploy (D128). They are only put back root-owned here, after the chown -R above,
+# for the same reason the mailcmd script is: the web user may not rewrite a program that runs as
+# the asterisk user, nor the model it is fed.
+if [[ -f "${APP_BIN_DIR}/whisper-cli" ]]; then
+    chown root:root "${APP_BIN_DIR}/whisper-cli"
+    chmod 0755 "${APP_BIN_DIR}/whisper-cli"
+fi
+
+if [[ -d "$WHISPER_DIR" ]]; then
+    chown -R root:root "$WHISPER_DIR"
+    chmod 0755 "$WHISPER_DIR"
 fi
 
 # mail.json is written here by the app and read by that script as the asterisk user, so the
@@ -207,6 +225,7 @@ TNPBX web application deployed
   /opt/tnpbx            app + Data/tnpbx.db (SQLite, preserved on re-deploy)
   ${APP_BIN_DIR}        root:root 0755, voicemail-mail (Asterisk's mailcmd)
   ${APP_CONFIG_DIR}     ${APP_USER}:${APP_GROUP} 2750, mail.json (written by the app)
+  ${WHISPER_DIR}    root:root 0755, the speech model, if install.sh got one
   ${MOH_DIR}   asterisk:asterisk 2770, the music on hold class's directory
   tnpbx-web.service     User=tnpbx, http://0.0.0.0:8080, hardened
   ${POLKIT}

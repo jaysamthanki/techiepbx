@@ -83,17 +83,20 @@ namespace Techie.Pbx.Tests.Asterisk
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf", "logger.conf",
                     "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
-                    "extensions.conf", "voicemail.conf",
+                    "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName,
                     "features.conf", "musiconhold.conf", "res_parking.conf",
                 },
                 files.Select(f => f.FileName));
 
+            // The options file is the one thing here Asterisk never reads: it is the mailcmd
+            // script's, and it is listed against app_voicemail rather than against no module at
+            // all, because "no module" means "this needs an Asterisk restart" (D128).
             Assert.Equal(
                 new string?[]
                 {
                     null, null, null, null, ConfigApplier.LoggerModule,
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
-                    ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
+                    ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
                 },
                 files.Select(f => f.Module));
@@ -160,12 +163,14 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var written = this.applier.Write().Select(f => f.FileName).ToList();
 
-            // Thirteen files since call parking (D119): the ten of piece 23 — tnpbx-cert.pem is
-            // always written, empty when no certificate exists so a stale key never lingers
-            // (D101) — plus features.conf, musiconhold.conf and res_parking.conf, which are
+            // Fourteen files: the thirteen of call parking (D119) — the ten of piece 23, of which
+            // tnpbx-cert.pem is always written, empty when no certificate exists so a stale key
+            // never lingers (D101), plus features.conf, musiconhold.conf and res_parking.conf,
             // written whether parking is switched on or not so that switching it off is itself
-            // something an apply carries out.
-            Assert.Equal(13, written.Count);
+            // something an apply carries out — and tnpbx-voicemail-options.json, which is written
+            // even with no mailboxes at all, so that removing the last one removes its options
+            // too (D128).
+            Assert.Equal(14, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
@@ -204,8 +209,8 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// Switching voicemail on rewrites the mailbox list, the dialplan that falls back to it
-        /// and the endpoint, which now carries a mailboxes = line for MWI (D108): three files,
-        /// three modules.
+        /// and the endpoint, which now carries a mailboxes = line for MWI (D108) — and the mailcmd
+        /// script's options file, which lists exactly the mailboxes that exist (D128).
         /// </summary>
         [Fact]
         public void Switching_voicemail_on_touches_the_dialplan_the_mailboxes_and_pjsip()
@@ -221,11 +226,50 @@ namespace Techie.Pbx.Tests.Asterisk
             var changed = this.applier.Write();
 
             Assert.Equal(
-                new[] { "pjsip.conf", "extensions.conf", "voicemail.conf" },
+                new[] { "pjsip.conf", "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName },
                 changed.Select(f => f.FileName));
             Assert.Equal(
-                new[] { ConfigApplier.PjsipModule, ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule },
+                new[]
+                {
+                    ConfigApplier.PjsipModule, ConfigApplier.DialplanModule,
+                    ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
+                },
                 changed.Select(f => f.Module));
+
+            // Two files, one reload: the options file rides along with the module that owns
+            // voicemail rather than adding a reload of its own (D128).
+            Assert.Equal(
+                new[] { ConfigApplier.PjsipModule, ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule },
+                ConfigApplier.ReloadOrder(changed));
+        }
+
+        /// <summary>
+        /// The transcription choice reaches a file, because app_voicemail has no option for it and
+        /// no way to pass one to the mailcmd script (D128). It touches that file and no other:
+        /// nothing in Asterisk's own configuration changes.
+        /// </summary>
+        [Fact]
+        public void Switching_transcription_on_only_touches_the_options_file()
+        {
+            this.extensions.Insert(new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = "AAAAbbbbCCCCdddd1111",
+                VoicemailEnabled = true,
+                VoicemailPin = "4321",
+                VoicemailEmail = "desk@example.com",
+            });
+            this.applier.Write();
+
+            var extension = this.extensions.GetByNumber("1001")!;
+            extension.VoicemailTranscribe = true;
+            this.extensions.Update(extension);
+
+            var changed = this.applier.Write();
+
+            Assert.Equal(VoicemailOptionsRenderer.FileName, Assert.Single(changed).FileName);
+            Assert.Contains("\"Transcribe\": true", changed[0].Content);
         }
 
         [Fact]

@@ -37,5 +37,11 @@ namespace Techie.Pbx.Web.Pages.Extensions
         public string? VoicemailEmail { get; set; } = "";
         public bool VoicemailEnabled { get; set; }
         public string? VoicemailPin { get; set; } = "";
+
+        /// <summary>
+        /// Transcribe the recording into the email (D128). Only does anything when there is an
+        /// address to email and the box has whisper.cpp installed, which is optional.
+        /// </summary>
+        public bool VoicemailTranscribe { get; set; }
     }
 }

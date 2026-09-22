@@ -8,7 +8,8 @@ namespace Techie.Pbx.Core.Data
     {
         private const string Columns =
             "ExtensionID, Number, Name, Secret, Enabled, OutboundCallerID, " +
-            "VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail";
+            "VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail, " +
+            "VoicemailTranscribe";
         private const int SqliteConstraintError = 19;
 
         private readonly Database database;
@@ -55,8 +56,8 @@ namespace Techie.Pbx.Core.Data
             {
                 extension.ExtensionID = connection.ExecuteScalar<long>(
                     "INSERT INTO Extensions " +
-                    "(Number, Name, Secret, Enabled, OutboundCallerID, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail) " +
-                    "VALUES (@Number, @Name, @Secret, @Enabled, @OutboundCallerID, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail); " +
+                    "(Number, Name, Secret, Enabled, OutboundCallerID, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail, VoicemailTranscribe) " +
+                    "VALUES (@Number, @Name, @Secret, @Enabled, @OutboundCallerID, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail, @VoicemailTranscribe); " +
                     "SELECT last_insert_rowid();",
                     extension);
 
@@ -81,7 +82,8 @@ namespace Techie.Pbx.Core.Data
                     "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +
                     "OutboundCallerID = @OutboundCallerID, " +
                     "VoicemailEnabled = @VoicemailEnabled, VoicemailPin = @VoicemailPin, VoicemailEmail = @VoicemailEmail, " +
-                    "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail " +
+                    "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail, " +
+                    "VoicemailTranscribe = @VoicemailTranscribe " +
                     "WHERE ExtensionID = @ExtensionID",
                     extension);
                 if (rows == 0)

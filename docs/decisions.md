@@ -2534,3 +2534,72 @@ through the SMTP settings the Email tab already holds.
   `format` reorder rests on. `grep -n 'fmt' /usr/src/asterisk-22/apps/app_voicemail.c` around
   `sendmail()` settles that, and the substitution list in
   `configs/samples/voicemail.conf.sample` settles the template.
+
+### D128. Voicemail transcription: whisper.cpp on the box, and a generated file to ask for it (2026-09-21)
+Voicemail to email (D126) delivers a recording somebody still has to listen to. Transcription puts
+the words in the email, and the interesting question was never the engine — it was **where the
+audio goes** and **how a per-extension choice reaches a script that takes no arguments**.
+
+- **On the box, not in an API.** A voicemail is a customer's private message, often the one with
+  the account number in it. Sending it to a transcription service would make every TNPBX install a
+  site that ships its callers' voices to a third party, and would add an API key to protect, a
+  bill, a network dependency and a privacy question to answer. whisper.cpp runs on the server with
+  no network at all. The engine is **whisper.cpp with the `small.en` model** (~488 MB, English
+  only): roughly real time on the hardware this targets, and noticeably better than `base.en` on
+  8 kHz telephone audio, which is the worst input a speech model gets.
+- **Optional, and the install may fail at it.** There is no Debian package, so `install.sh`
+  clones and builds it — which is exactly the kind of step that fails on a strange network or a
+  small VM. So **every step of it only warns**: a box where the clone, the build or the 488 MB
+  download failed is a fully working PBX that emails voicemail without a transcript, and the
+  script checks for `whisper-cli` and the model before it tries to use either. This is the one
+  section of `install.sh` that never calls `die()`. `app-deploy.sh` preserves `whisper/` across
+  re-deploys for the obvious reason: a deploy has no business re-downloading half a gigabyte.
+- **Per mailbox, not per system.** Transcribing costs roughly the length of the message in CPU
+  time on a machine that is also switching calls. The receptionist who wants readable voicemail
+  should not make every other extension pay for it, so it is a checkbox on the extension —
+  `Extensions.VoicemailTranscribe`, off by default, and ignored without an address to email.
+- **A generated JSON file is how the choice reaches the script, because nothing else could.**
+  `app_voicemail` has no transcription option, and `mailcmd` is a fixed string it runs as
+  `( mailcmd < tmpfile ; rm -f tmpfile ) &` — there is no argument to pass and no variable to set.
+  Inventing a per-mailbox option in `voicemail.conf` was the obvious idea and is the wrong one:
+  `app_voicemail` answers an unknown option with a warning **per mailbox on every reload**, is
+  under no obligation to keep ignoring it, and the script would then have to parse
+  `voicemail.conf` to read it back. So a renderer writes
+  **`/etc/asterisk/tnpbx-voicemail-options.json`**, mailbox → `{ "Transcribe": bool }`, next to
+  the file it belongs with. It is rendered output from the extension rows, so it is written by an
+  apply through the same atomic writer as everything else (D4), and the asterisk user already
+  reads that directory through the group (D18). It carries **no PIN, no address and no name** —
+  a mailbox number and a boolean — so a group-readable conf directory is a fine place for it.
+- **It is listed against `app_voicemail` even though Asterisk never reads it.** `GeneratedFile`
+  has two states, "this module reloads it" and "no module, so this needs an Asterisk restart"
+  (D33). The second would have an apply telling the operator to restart Asterisk over a file
+  Asterisk does not read, which is worse than a pointless reload of the module that owns
+  voicemail — and that module is being reloaded on those applies anyway, because `voicemail.conf`
+  changed with it.
+- **The script finds the mailbox in the email, and the audio in the MIME.** `app_voicemail` stamps
+  `X-Asterisk-VM-Extension` on what it composes; the subject is the fallback, and it is safe to
+  parse because *we* write that template ("in mailbox `<number>`", D126). No mailbox found means no
+  transcription: a guess would transcribe against somebody else's settings. The recording is read
+  out of the MIME part rather than off disk — the script is never told a path, and the one it could
+  work out would be a path derived from a message. wav49 is GSM-in-WAV at 8 kHz and whisper wants
+  16 kHz mono PCM, so **ffmpeg** (already a dependency, D55, D122) converts it in a temporary
+  directory that is deleted however the function returns.
+- **Synchronous, with a 300 second timeout.** `app_voicemail` already forked this into the
+  background, so the only thing waiting is the message itself, and a transcript that arrives in a
+  second email later is worse than one that arrives in the first. `maxsecs` caps a message at 300
+  seconds and the model is roughly real time, so the timeout is where something has gone wrong,
+  not where a long message gives up.
+- **Transcription never blocks the email.** Not installed, not asked for, no attachment, ffmpeg
+  missing, whisper crashed, whisper timed out, an exception nobody predicted — every one of them
+  relays the message exactly as D126 does today, with a line in syslog saying which. The relay
+  still fails closed; only the transcript fails open. A mailbox that asked for one gets
+  **`X-TNPBX-Transcribed: yes` or `no`** on the email, so "why is there no transcript" is answered
+  by looking at the message rather than by guessing.
+- **The transcript is a new `text/plain` part, before the attachment**, rather than an edit to
+  app_voicemail's body: that body is composed in whatever charset app_voicemail was configured
+  for, and appending UTF-8 speech to it would be guessing. The new part declares its own.
+- **Not verified on the lab VM.** The renderer, the schema and the script's structure are tested
+  here; what a real message proves is that `X-Asterisk-VM-Extension` is present and spelled that
+  way, that the attachment's content type arrives as `audio/*`, that ffmpeg decodes wav49 from
+  app_voicemail's own writer, and what `small.en` actually does to a 30 second voicemail recorded
+  over G.722.

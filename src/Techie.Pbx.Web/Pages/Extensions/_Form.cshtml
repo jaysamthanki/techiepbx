@@ -102,8 +102,8 @@
             <label class="form-label" for="voicemail-email">Email address</label>
             <input class="form-control" id="voicemail-email" name="voicemailEmail" value="@Model.VoicemailEmail"
                    type="email" maxlength="128" autocomplete="off" />
-            <div class="form-text text-warning-emphasis">
-                Stored, but <strong>no email is sent yet</strong>: voicemail to email is still to be built.
+            <div class="form-text">
+                Each new message is emailed here, through the relay on the Email tab.
             </div>
         </div>
 
@@ -111,6 +111,22 @@
             <input class="form-check-input" type="checkbox" id="voicemail-attach" name="voicemailAttachRecording" value="true"
                    checked="@(Model.VoicemailAttachRecording ? "checked" : null)" />
             <label class="form-check-label" for="voicemail-attach">Attach the recording to the email</label>
+        </div>
+
+        @*
+            Transcription (D128). Per mailbox rather than a system setting: it costs roughly the
+            length of the message in CPU time on this server, so the one person who wants readable
+            voicemail does not make every other extension pay for it.
+        *@
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="voicemail-transcribe" name="voicemailTranscribe" value="true"
+                   checked="@(Model.VoicemailTranscribe ? "checked" : null)" />
+            <label class="form-check-label" for="voicemail-transcribe">Put a transcript of the message in the email</label>
+            <div class="form-text">
+                Transcribed on this server, so nothing is sent anywhere to do it. Needs an email
+                address above, takes about as long as the message itself, and is quietly skipped if
+                speech recognition was not installed on this box.
+            </div>
         </div>
 
         <div class="form-check mb-4">

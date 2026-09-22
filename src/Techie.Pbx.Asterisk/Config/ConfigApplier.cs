@@ -254,6 +254,13 @@ namespace Techie.Pbx.Asterisk.Config
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
                     this.Timezone, this.parking, allMohClasses)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
+                // Not an Asterisk file at all: what the mailcmd script should do with a message
+                // per mailbox, which app_voicemail has no way to tell it (D128). It is listed
+                // against app_voicemail anyway, because the alternative — a null module — means
+                // "only a restart applies this", which would have an apply asking for an Asterisk
+                // restart over a file Asterisk does not read. A reload of the module that owns
+                // voicemail costs nothing and happens on the same applies as voicemail.conf.
+                new(VoicemailOptionsRenderer.FileName, VoicemailModule, VoicemailOptionsRenderer.Render(all)),
 
                 // Call parking (D119). features.conf carries the DTMF that parks a call,
                 // musiconhold.conf the classes — one of which a parked caller might hear (D122) —

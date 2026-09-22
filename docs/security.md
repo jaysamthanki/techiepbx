@@ -76,11 +76,19 @@ software.
   re-asserts this *after* its `chown -R tnpbx`, so a deploy cannot hand it to the web user.
 - **No arguments, no environment, no shell.** app_voicemail runs it as
   `( mailcmd < tmpfile ; rm -f tmpfile ) &`, so there is no command line to inject into. It reads
-  two fixed paths — its config and stdin — and executes nothing.
+  fixed paths only — its config, the generated transcription options, and stdin — and no path
+  ever comes from the message or from the environment, `PATH` included.
 - **Fails closed.** A missing, unreadable, malformed or incomplete config is exit 1 with a sentence
   on stderr. There is no fallback path that sends mail some other way.
 - **Never submits the relay password in the clear**: implicit TLS on 465, STARTTLS elsewhere, and
   it hangs up rather than authenticating to a relay that offers neither.
+- **Transcription (D128) is the only thing it executes**, and only two programs: `ffmpeg` at one of
+  two fixed paths and `/opt/tnpbx/bin/whisper-cli`, each with an argument list and never a shell
+  string. Both are handed a temporary file the script wrote itself from the MIME attachment —
+  never a path from the message — in a 0700 directory it deletes however it returns, so a
+  customer's recording does not linger in `/tmp`. `whisper-cli` and its model are root-owned for
+  the same reason this script is. Where the relay fails closed, transcription **fails open**: every
+  way it can go wrong relays the voicemail exactly as app_voicemail composed it.
 
 ## Known gaps
 

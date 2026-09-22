@@ -125,6 +125,13 @@ directories.
   a mail setting is saved, and fails closed when that file is missing or incomplete. It replaces
   the `From` header with `Mail.FromAddress`, and refuses to authenticate to a relay that will not
   offer TLS. **SMTP only** — Graph is not available to it (D126).
+- Voicemail **transcription**, per extension. **Done**: the same script runs whisper.cpp
+  (`small.en`) on the recording before relaying it and puts the text in the email. Entirely on the
+  box — no transcription service, no API key, nothing leaves the server — and entirely optional:
+  the engine is built by `install.sh` in a section that only ever warns, and a box without it
+  emails voicemail exactly as it did before. The extension's choice reaches the script through a
+  generated `/etc/asterisk/tnpbx-voicemail-options.json`, because `app_voicemail` has no option
+  for it and no way to pass one (D128).
 - System alerts worth considering: trunk registration lost, many failed SIP logins or blocked
   IPs, disk space low, config apply failed. The template and the sender are ready for these; what
   is missing is deciding which are worth an email and what raises them.

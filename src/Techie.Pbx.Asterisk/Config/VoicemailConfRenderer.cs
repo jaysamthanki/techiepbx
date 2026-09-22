@@ -11,6 +11,11 @@ namespace Techie.Pbx.Asterisk.Config
     /// the <c>mailcmd</c> that hands the finished email to our own relay script. Nothing about the
     /// relay itself is here — no host, no credential — so this stays a pure function of the
     /// extensions, and a mail setting changing needs no apply.
+    ///
+    /// Transcription (D128) is deliberately <b>not</b> here: app_voicemail has no such option, and
+    /// an invented one would be a warning per mailbox on every reload rather than a message to our
+    /// own script. The per-mailbox choice is rendered next door by
+    /// <see cref="VoicemailOptionsRenderer"/>, which explains why.
     /// </summary>
     public static class VoicemailConfRenderer
     {
