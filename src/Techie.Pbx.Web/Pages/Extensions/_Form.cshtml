@@ -62,6 +62,26 @@
         </div>
     </div>
 
+    @*
+        Forwarding (D130). One field, space separated, and it replaces the extension's own phone
+        rather than being tried after it — which is the one thing the hint below has to say plainly,
+        because "my desk phone stopped ringing" is what a user notices otherwise.
+    *@
+    <div class="mb-3">
+        <label class="form-label" for="extension-forwarding">Forwarding</label>
+        <input class="form-control font-monospace" id="extension-forwarding" name="forwarding"
+               value="@Model.Forwarding" maxlength="64" autocomplete="off" spellcheck="false"
+               placeholder="103 7146085242 (space-separated; extensions or full numbers)" />
+        <div class="form-text">
+            Where calls to this extension ring — up to four places, all at once, separated by spaces.
+            Each one is either another extension or a full phone number that goes out through the
+            outbound routes. <strong>This replaces this extension's own phone</strong>: to keep your
+            own handset ringing as well, put its number in the list too. <strong>Leave it blank for
+            normal ringing.</strong> The ring time and what happens when nobody answers — voicemail,
+            if it is on below — are unchanged.
+        </div>
+    </div>
+
     <div class="mb-3">
         <label class="form-label" for="extension-secret">SIP password</label>
         <input class="form-control font-monospace" id="extension-secret" name="secret" value="@Model.Secret"

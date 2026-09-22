@@ -7,7 +7,7 @@ namespace Techie.Pbx.Core.Data
     public class ExtensionRepository
     {
         private const string Columns =
-            "ExtensionID, Number, Name, Secret, Enabled, OutboundCallerID, " +
+            "ExtensionID, Number, Name, Secret, Enabled, OutboundCallerID, Forwarding, " +
             "VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail, " +
             "VoicemailTranscribe";
         private const int SqliteConstraintError = 19;
@@ -49,15 +49,15 @@ namespace Techie.Pbx.Core.Data
 
         public long Insert(Extension extension)
         {
-            ThrowIfInvalid(extension);
+            this.ThrowIfInvalid(extension);
 
             using var connection = this.database.Open();
             try
             {
                 extension.ExtensionID = connection.ExecuteScalar<long>(
                     "INSERT INTO Extensions " +
-                    "(Number, Name, Secret, Enabled, OutboundCallerID, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail, VoicemailTranscribe) " +
-                    "VALUES (@Number, @Name, @Secret, @Enabled, @OutboundCallerID, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail, @VoicemailTranscribe); " +
+                    "(Number, Name, Secret, Enabled, OutboundCallerID, Forwarding, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail, VoicemailTranscribe) " +
+                    "VALUES (@Number, @Name, @Secret, @Enabled, @OutboundCallerID, @Forwarding, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail, @VoicemailTranscribe); " +
                     "SELECT last_insert_rowid();",
                     extension);
 
@@ -72,7 +72,7 @@ namespace Techie.Pbx.Core.Data
 
         public void Update(Extension extension)
         {
-            ThrowIfInvalid(extension);
+            this.ThrowIfInvalid(extension);
 
             using var connection = this.database.Open();
             try
@@ -80,7 +80,7 @@ namespace Techie.Pbx.Core.Data
                 var rows = connection.Execute(
                     "UPDATE Extensions SET " +
                     "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +
-                    "OutboundCallerID = @OutboundCallerID, " +
+                    "OutboundCallerID = @OutboundCallerID, Forwarding = @Forwarding, " +
                     "VoicemailEnabled = @VoicemailEnabled, VoicemailPin = @VoicemailPin, VoicemailEmail = @VoicemailEmail, " +
                     "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail, " +
                     "VoicemailTranscribe = @VoicemailTranscribe " +
@@ -97,9 +97,41 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
-        private static void ThrowIfInvalid(Extension extension)
+        /// <summary>
+        /// The model's own rules, plus the one that needs the other rows: a forwarding target that
+        /// looks like an extension number has to be an extension that exists and is switched on
+        /// (D130).
+        ///
+        /// Short numbers are extensions here, which is the rule dialling from a phone already
+        /// follows — the internal context matches the extensions before it tries an outbound route
+        /// — so a mistyped 104 is a mistake to report rather than a number to send to a provider.
+        /// An extension's own number is deliberately allowed: that is how somebody keeps their own
+        /// handset in the ring while adding a mobile to it.
+        /// </summary>
+        private void ThrowIfInvalid(Extension extension)
         {
             var errors = extension.Validate();
+
+            var targets = extension.ForwardingList()
+                .Where(t => Extension.IsForwardingTarget(t) && Extension.IsValidNumber(t))
+                .Where(t => !string.Equals(t, extension.Number, StringComparison.Ordinal))
+                .ToList();
+
+            if (targets.Count > 0)
+            {
+                var all = this.GetAll();
+
+                foreach (var target in targets)
+                {
+                    var other = all.FirstOrDefault(e => string.Equals(e.Number, target, StringComparison.Ordinal));
+
+                    if (other == null)
+                        errors.Add($"There is no extension {target} to forward to.");
+                    else if (!other.Enabled)
+                        errors.Add($"Extension {target} is disabled, so it would never ring.");
+                }
+            }
+
             if (errors.Count > 0)
                 throw new ValidationFailedException(errors);
         }

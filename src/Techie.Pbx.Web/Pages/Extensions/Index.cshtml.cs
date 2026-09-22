@@ -56,6 +56,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             {
                 Enabled = extension.Enabled,
                 ExtensionID = extension.ExtensionID,
+                Forwarding = extension.Forwarding,
                 Name = extension.Name,
                 Number = extension.Number,
                 OutboundCallerID = extension.OutboundCallerID,
@@ -129,6 +130,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 return this.NotFound();
 
             extension.Enabled = form.Enabled;
+            extension.Forwarding = Text(form.Forwarding);
             extension.Name = Text(form.Name);
             extension.Number = Text(form.Number);
             extension.OutboundCallerID = Text(form.OutboundCallerID);

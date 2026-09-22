@@ -231,7 +231,11 @@ namespace Techie.Pbx.Asterisk.Config
         {
             parking.ThrowIfInvalid();
 
-            var enabled = ConfText.EnabledInOrder(extensions);
+            // The rows as given as well as the render order: a forwarding target is matched against
+            // every extension, switched on or not, so a target that has since been switched off is
+            // a phone that does not ring rather than a number handed to the outbound routes (D130).
+            var allExtensions = extensions.ToList();
+            var enabled = ConfText.EnabledInOrder(allExtensions);
             var trunkList = PjsipConfRenderer.TrunkRenderOrder(trunks);
             var routeList = RouteRenderOrder(routes, trunkList);
             var inboundList = InboundRenderOrder(inbound, trunkList);
@@ -299,13 +303,22 @@ namespace Techie.Pbx.Asterisk.Config
                 var number = ConfText.Safe(extension.Number, "number");
                 var name = ConfText.Safe(extension.Name, "name");
 
+                // Normally the extension's own phone, and then this is the line it always was.
+                // A forwarding list replaces it, and nothing else about the entry changes (D130).
+                var forwarding = extension.ForwardingList();
+                var dial = $"Dial({DialTargets(extension, allExtensions)},30,{internalDialOptions})";
+
                 sb.Append('\n');
                 sb.Append($"; {name}\n");
+
+                if (forwarding.Count > 0)
+                    sb.Append($"; Forwarding rings {ConfText.Safe(string.Join(" ", forwarding), "forwarding")} instead of this extension's own phone (D130)\n");
 
                 // The hint is what a BLF key on another phone subscribes to: it is how a lamp
                 // knows this extension is ringing or busy (D121). One per extension, whether or
                 // not any phone is watching it — a hint costs a dialplan line and nothing else,
-                // and a key assigned later must not need an apply to light up.
+                // and a key assigned later must not need an apply to light up. It watches the
+                // phone even when the calls are forwarded elsewhere: the lamp is the handset.
                 sb.Append($"exten => {number},hint,PJSIP/{number}\n");
 
                 // The hold music takes priority 1 when there is a class to name, which makes the
@@ -315,11 +328,11 @@ namespace Techie.Pbx.Asterisk.Config
                 if (internalMusic.Length > 0)
                 {
                     sb.Append($"exten => {number},1,{internalMusic}\n");
-                    sb.Append($" same => n,Dial(PJSIP/{number},30,{internalDialOptions})\n");
+                    sb.Append($" same => n,{dial}\n");
                 }
                 else
                 {
-                    sb.Append($"exten => {number},1,Dial(PJSIP/{number},30,{internalDialOptions})\n");
+                    sb.Append($"exten => {number},1,{dial}\n");
                 }
 
                 if (extension.VoicemailEnabled)
@@ -1031,6 +1044,51 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         private static MohClass? DefaultOf(List<MohClass> mohClasses) =>
             mohClasses.Where(c => c.IsDefault).OrderBy(c => c.MohClassID).FirstOrDefault();
+
+        /// <summary>
+        /// What a call to this extension rings, as the one string its <c>Dial</c> takes (D130).
+        ///
+        /// Normally the extension's own endpoint, and then this is exactly the text that was
+        /// written before forwarding existed. When the extension has a forwarding list, that list
+        /// <b>replaces</b> the phone — the field is the whole ring, so somebody who wants their own
+        /// handset to keep ringing puts their own number in it. Everything around the Dial is
+        /// untouched: one Dial rather than several, so every target rings at once, and the ring
+        /// time and the no-answer fallthrough behind it are the extension's own.
+        ///
+        /// A target that is an extension is dialled as that extension's endpoint. Anything else is
+        /// a number to dial out and goes through a <c>Local</c> channel into
+        /// <see cref="InternalContext"/> — the context a phone dials from — so it meets the same
+        /// outbound routes in the same order, the same caller ID lines (D125) and the same
+        /// "no route matched, so this call does not go out" (D45) that a manually dialled number
+        /// meets. Re-implementing any of that here would be a second copy to keep in step.
+        ///
+        /// The <c>/n</c> is not optional. Without it Asterisk optimises the Local pair out of the
+        /// call once it is up, taking with it the channel that ran the route's dialplan; with it,
+        /// the channel stays and the call is what it looks like here.
+        /// </summary>
+        /// <param name="extensions">
+        /// Every extension row, switched on or not. A target that is a switched-off extension is
+        /// still written as that endpoint — a phone that does not answer — rather than falling
+        /// through to the Local form and being offered to the outbound routes.
+        /// </param>
+        private static string DialTargets(Extension extension, List<Extension> extensions)
+        {
+            var forwarding = extension.ForwardingList();
+
+            if (forwarding.Count == 0)
+                return $"PJSIP/{ConfText.Safe(extension.Number, "number")}";
+
+            var targets = forwarding.Select(target =>
+            {
+                var safe = ConfText.Safe(target, "forwarding target");
+
+                return extensions.Any(e => string.Equals(e.Number, target, StringComparison.Ordinal))
+                    ? $"PJSIP/{safe}"
+                    : $"Local/{safe}@{InternalContext}/n";
+            });
+
+            return string.Join("&", targets);
+        }
 
         /// <summary>
         /// The options a Dial to a phone in this building carries. The shared

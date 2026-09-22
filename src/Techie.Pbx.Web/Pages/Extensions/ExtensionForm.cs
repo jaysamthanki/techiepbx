@@ -14,6 +14,14 @@ namespace Techie.Pbx.Web.Pages.Extensions
         public bool Enabled { get; set; } = true;
         public List<string> Errors { get; set; } = new();
         public long ExtensionID { get; set; }
+
+        /// <summary>
+        /// Where calls to this extension ring, space separated, or blank for its own phone (D130).
+        /// The list is the whole ring, so somebody who wants their own handset to keep ringing puts
+        /// their own number in it.
+        /// </summary>
+        public string? Forwarding { get; set; } = "";
+
         public bool IsNew => this.ExtensionID == 0;
         public string? Name { get; set; } = "";
         public string? Number { get; set; } = "";

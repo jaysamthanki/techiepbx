@@ -2677,3 +2677,62 @@ arrives**.
   `Orig-time`), which end of the message-number off-by-one is real, that the web user can read the
   spool, that ffmpeg makes a playable MP3 out of app_voicemail's wav49, and that the whole callback
   finishes inside a caller's patience.
+
+### D130. Forwarding: a list of places that replaces the extension's own phone (2026-09-21)
+F2b, "follow me", built as **one field on the extension** rather than as a feature of its own.
+`Extensions.Forwarding` (schema `024`) is a space-separated list of places to ring; when it is not
+empty it **replaces** the extension's own phone in the ring, and when it is empty the dialplan is
+byte for byte what it was before this existed.
+
+- **The field is the whole ring, not an addition to it.** Someone who wants their handset to keep
+  ringing puts their own number in the list — `1001 7146085242` rings the desk and the mobile
+  together. This is the one thing the UI hint says in bold, because "my desk phone stopped ringing"
+  is what a user notices otherwise. The alternative, an implicit self-ring plus a checkbox to turn
+  it off, is a second control to explain and a second state to render; one field that means exactly
+  what it lists is smaller in every direction.
+- **Ring all, one `Dial`.** The targets are joined with `&` into the extension's existing `Dial`,
+  so they ring simultaneously and the first to answer takes the call. **Everything around that line
+  is untouched**: the same 30 second ring time, the same `tTkKr` / `U(sub-setmoh)` options (D119,
+  D122, D127), the same hint on the extension (D121), and the same no-answer fallthrough to
+  voicemail or hangup behind it (D29). Forwarding changes what rings and nothing else.
+- **Sequential ringing, per-step timers and "press 1 to accept" are deliberately not here.** F2b
+  lists them; each one is a chain of `Dial`s, a set of timers to explain and — for the confirmation
+  — `app_dial`'s `M()` macro plus a subroutine and a prompt to record. Ring-all with one timer
+  covers the case that was actually asked for ("ring my cell as well"), and the rest can be added
+  later against a real request rather than guessed at now.
+- **An external target is a `Local` channel into `[internal]`, not a second dial-out
+  implementation.** `Local/7146085242@internal/n` enters exactly the context a phone dials from, so
+  the number meets the outbound routes in the same order (D46), the caller ID lines those contexts
+  carry (D125), and the same `[outbound-blocked]` refusal when nothing matched (D45). Dialling a
+  trunk from here would have been a second copy of all of that, drifting from the first the day
+  anyone edits a route. The `/n` stops Asterisk optimising the Local pair out of the call and
+  taking the channel that ran the route's dialplan with it.
+  - The consequence worth knowing: `TNPBX_CID` is a plain channel variable, and plain variables are
+    not inherited across a `Local` channel, so a forwarded call goes out as the **route's** caller
+    ID, or the trunk's — not as the original caller's claim. That is the safer of the two
+    behaviours and it is one of the things the lab should confirm.
+- **An extension target is that extension's endpoint**, `PJSIP/<number>`, matched against **every**
+  extension row rather than the enabled ones: a target that has since been switched off is then a
+  phone that does not ring, rather than a number that falls through to the `Local` form and gets
+  offered to the outbound routes.
+- **The toll-fraud rule is the outbound routes', reused.** A target is digits only, 2 to 15 of
+  them, and **may not start with 0** — 00 and 011 are international dialling (D47, D109) — and
+  `OutboundRoute.InternationalPrefix` is now the one place that digit is written down. At most four
+  targets, no duplicates, and **spaces are the only separator**: `103,7146085242` is one token, so
+  it fails and is named in the error rather than being quietly read as two numbers. One
+  consequence: an extension whose own number begins with 0 cannot be a forwarding target, which is
+  a number nobody should be handing out anyway.
+- **"Is that really an extension?" belongs to the repository**, as it does for a ring group's
+  members (D53): a target 2 to 6 digits long is an extension number, and if no enabled extension
+  has it the save is refused. That is the rule dialling from a phone already follows — `[internal]`
+  matches the extensions before it tries a route — so a mistyped `104` is a mistake to report, not
+  a number to hand to a provider. An extension's **own** number is explicitly allowed.
+- **A ring group still dials its members directly**, so a member's forwarding does not apply to
+  group calls. Anything that reaches an extension through the internal context — a direct dial, an
+  inbound route, an IVR key, a time condition — does get the forwarding, because they all arrive by
+  the one door the extension's entry provides (D12, D36).
+- **Not verified on the lab VM.** What a real call proves: that a `Local` leg in a ring-all `Dial`
+  really does reach the outbound route and ring a mobile, which caller ID the provider is shown,
+  that the mobile's own voicemail answering does not steal the call in a way that surprises anyone
+  (it will — that is what the "press 1 to accept" option above exists for, if it turns out to
+  matter), and that answering on the desk phone cleanly cancels the mobile leg.

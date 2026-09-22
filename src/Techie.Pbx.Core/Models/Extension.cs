@@ -8,8 +8,38 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public partial class Extension
     {
+        /// <summary>
+        /// The longest the forwarding field may be, which is four 15-digit numbers and the spaces
+        /// between them. A cap on the raw text as well as on the tokens, so a pasted essay is one
+        /// tidy error rather than an error quoting the essay back.
+        /// </summary>
+        public const int MaxForwardingLength = 64;
+
+        /// <summary>
+        /// How many places one extension may ring at once (D130). Four is more phones than anyone
+        /// has and few enough that a mistyped list cannot become a broadcast.
+        /// </summary>
+        public const int MaxForwardingTargets = 4;
+
         public bool Enabled { get; set; } = true;
         public long ExtensionID { get; set; }
+
+        /// <summary>
+        /// Where a call to this extension rings, or empty for the extension's own phone (D130).
+        /// Space separated, and it <b>replaces</b> the phone rather than being tried after it: the
+        /// field is the whole ring, so somebody who wants their own handset to keep ringing puts
+        /// their own <see cref="Number"/> in the list.
+        ///
+        /// Each token is either the <see cref="Number"/> of an extension or a number to dial out.
+        /// Which one it is, the renderer decides by looking: an extension becomes its endpoint, and
+        /// anything else becomes a <c>Local</c> channel into the context a phone dials from, so the
+        /// outbound routes and their toll rules are the ones a manually dialled call gets.
+        ///
+        /// The shape is checked here; whether a token that looks like an extension number really is
+        /// one needs the other rows, so <c>ExtensionRepository</c> checks that.
+        /// </summary>
+        public string Forwarding { get; set; } = "";
+
         public string Name { get; set; } = "";
         public string Number { get; set; } = "";
 
@@ -55,6 +85,63 @@ namespace Techie.Pbx.Core.Models
         public bool VoicemailTranscribe { get; set; }
 
         /// <summary>
+        /// What is wrong with the forwarding field, if anything (D130). Its own method because it
+        /// is four rules rather than one, and because every one of them is about a value that ends
+        /// up inside a <c>Dial</c>.
+        /// </summary>
+        private List<string> ForwardingErrors()
+        {
+            var errors = new List<string>();
+
+            if (this.Forwarding.Length > MaxForwardingLength)
+            {
+                errors.Add($"Forwarding must be {MaxForwardingLength} characters or fewer.");
+                return errors;
+            }
+
+            var targets = this.ForwardingList();
+
+            if (targets.Count > MaxForwardingTargets)
+                errors.Add($"Forwarding may ring at most {MaxForwardingTargets} places at once.");
+
+            foreach (var target in targets.Where(t => !IsForwardingTarget(t)))
+            {
+                // The leading zero gets its own message, because it is the one refusal here that
+                // is about money rather than about typing (D47, D130).
+                if (target.Length > 1 && target[0] == OutboundRoute.InternationalPrefix && target.All(char.IsAsciiDigit))
+                    errors.Add($"Forwarding to '{target}' is refused: a number may not start with 0, because 00 and 011 are international dialling.");
+                else
+                    errors.Add($"'{target}' is not somewhere this system can ring. Forwarding takes extension numbers and full phone numbers, 2 to 15 digits each, separated by spaces.");
+            }
+
+            if (targets.Count != targets.Distinct(StringComparer.Ordinal).Count())
+                errors.Add("Forwarding can only ring the same place once.");
+
+            return errors;
+        }
+
+        /// <summary>
+        /// The forwarding targets, in order, as the list the renderer rings (D130). Split on
+        /// whitespace and nothing else: a comma is not a separator here, so "103,7146085242"
+        /// is one token, fails the shape check, and is named in the error rather than being
+        /// quietly read as two numbers.
+        /// </summary>
+        public List<string> ForwardingList() =>
+            this.Forwarding.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).ToList();
+
+        /// <summary>
+        /// Whether this is something a forwarding list may ring: digits only, 2 to 15 of them, and
+        /// never starting with 0 (D130).
+        ///
+        /// One pattern for both kinds of token, because both end up in the same Dial. It is wide
+        /// enough for any extension number (<see cref="IsValidNumber"/>) and for an external number
+        /// up to E.164's own limit, and the leading digit is the outbound routes' toll-fraud rule
+        /// arriving from the other side: 00 and 011 are international dialling, so a number
+        /// starting with 0 is refused rather than guessed about (<see cref="OutboundRoute.InternationalPrefix"/>).
+        /// </summary>
+        public static bool IsForwardingTarget(string target) => ForwardingTargetPattern().IsMatch(target);
+
+        /// <summary>
         /// What counts as an extension number. Public because a destination points at one, and
         /// two places deciding what a number looks like is one place too many.
         /// </summary>
@@ -88,6 +175,11 @@ namespace Techie.Pbx.Core.Models
             if (outboundCallerID != null)
                 errors.Add(outboundCallerID);
 
+            // Where calls to this extension ring, if it is not this extension's own phone (D130).
+            // Everything here is about the shape of the list; the repository decides whether a
+            // token that looks like an extension number is one, because only it can see.
+            errors.AddRange(this.ForwardingErrors());
+
             // The PIN only has to be there when there is a mailbox to unlock; the other voicemail
             // settings are kept whether the mailbox is on or off, so a switched-off box that is
             // switched back on is the one it was.
@@ -107,6 +199,10 @@ namespace Techie.Pbx.Core.Models
 
         [GeneratedRegex(@"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")]
         private static partial Regex EmailPattern();
+
+        /// <summary>2 to 15 digits, the first of which is not a 0.</summary>
+        [GeneratedRegex(@"^[1-9][0-9]{1,14}$")]
+        private static partial Regex ForwardingTargetPattern();
 
         [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
         private static partial Regex NamePattern();

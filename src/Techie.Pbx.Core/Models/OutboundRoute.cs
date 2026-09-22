@@ -8,6 +8,14 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public partial class OutboundRoute
     {
+        /// <summary>
+        /// The digit nothing this system dials out may start with: 011 (North America) and 00
+        /// (most of the rest) are the international prefixes, so a leading 0 is refused rather than
+        /// guessed about (D47). A route's pattern, a route's prepend digits (D109) and an
+        /// extension's forwarding list (D130) all make the same refusal, so they all name it here.
+        /// </summary>
+        public const char InternationalPrefix = '0';
+
         /// <summary>Highest priority number allowed; 1 is tried first.</summary>
         public const int MaxPriority = 999;
 
@@ -101,7 +109,7 @@ namespace Techie.Pbx.Core.Models
 
             // 011 (North America) and 00 (most of the rest) are the international prefixes, so a
             // pattern that starts with a 0 at all is refused rather than guessed about.
-            if (body[0] == '0')
+            if (body[0] == InternationalPrefix)
                 return "An outbound route may not start with 0: 00 and 011 are international dialling.";
 
             // A wildcard that can match 0 matches those prefixes too, which is the classic
@@ -193,7 +201,7 @@ namespace Techie.Pbx.Core.Models
             {
                 if (PrependDigits.Length > 10 || !PrependDigits.All(char.IsAsciiDigit))
                     errors.Add("Prepend digits must be 1 to 10 digits, or empty.");
-                else if (PrependDigits[0] == '0')
+                else if (PrependDigits[0] == InternationalPrefix)
                     errors.Add("Prepend digits may not start with 0: 00 and 011 are international dialling.");
             }
 

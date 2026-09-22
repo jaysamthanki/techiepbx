@@ -1,0 +1,19 @@
+-- D130. Where a call to this extension rings, when it is not this extension's own phone.
+--
+-- Follow me, done as one field (F2b): a space-separated list of places to ring, which REPLACES
+-- the extension's own phone rather than being tried after it. Ring all, one Dial, the extension's
+-- existing ring time, and the existing no-answer fallthrough — voicemail or hangup — untouched
+-- behind it. A user who wants their own handset to keep ringing puts their own number in the
+-- list, which is the whole reason the field reads as the entire ring and not as an addition to it.
+--
+-- Empty is every extension until somebody sets one, and empty renders exactly the dialplan that
+-- was rendered before this column existed.
+--
+-- A token is either the Number of an extension, which is dialled as that extension's endpoint, or
+-- a number to dial out, which is dialled through a Local channel into the context a phone dials
+-- from — so outbound routes, caller ID and the toll rules are the ones a manually dialled call
+-- gets rather than a second copy of them. Four tokens at most, digits only, 2 to 15 of them, and
+-- never starting with 0: 00 and 011 are international dialling, and that refusal is the same one
+-- outbound routes make (D47, D109). The checks live in Extension.Validate and, for "is that
+-- really an extension", in ExtensionRepository, which can see the other rows.
+ALTER TABLE Extensions ADD COLUMN Forwarding TEXT NOT NULL DEFAULT '';
