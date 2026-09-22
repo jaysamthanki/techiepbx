@@ -210,7 +210,7 @@ namespace Techie.Pbx.Web.Pages.Phones
                 NtpServer = AsteriskSettings.NtpServer(stored),
                 Phone = phone,
                 ProvisioningPassword = (password ?? "").Trim(),
-                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + "yealink",
+                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + YealinkController.RoutePrefix,
                 ProvisioningUsername = (username ?? "").Trim(),
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
