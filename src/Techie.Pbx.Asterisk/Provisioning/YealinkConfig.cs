@@ -15,6 +15,13 @@ namespace Techie.Pbx.Asterisk.Provisioning
     public class YealinkConfig
     {
         /// <summary>
+        /// The Yealink web UI's <c>admin</c> account password, from <c>Provisioning.AdminPassword</c>
+        /// — the same setting Polycom's comes from — or empty when nobody has set one. Empty means
+        /// the line is left out of the file rather than written blank (D85).
+        /// </summary>
+        public string AdminPassword { get; set; } = "";
+
+        /// <summary>
         /// The assignable keys, already reduced to the ones that can work by
         /// <see cref="PhoneButton.Usable"/>: this renderer writes what it is given rather than
         /// deciding whether a target is still there. The line keys among them are the accounts
@@ -65,6 +72,12 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// see <see cref="TimeZoneOffsetFor"/>.
         /// </summary>
         public string TimeZoneOffset { get; set; } = "0";
+
+        /// <summary>
+        /// The Yealink web UI's <c>user</c> account password, from <c>Provisioning.UserPassword</c>,
+        /// or empty when nobody has set one (D85).
+        /// </summary>
+        public string UserPassword { get; set; } = "";
 
         /// <summary>
         /// The offset a Yealink phone's <c>local_time.time_zone</c> wants: hours east of UTC as

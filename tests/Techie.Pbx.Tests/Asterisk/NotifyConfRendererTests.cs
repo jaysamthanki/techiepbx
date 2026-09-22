@@ -35,6 +35,19 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// The Yealink type reboots, as its name says (D134): a Yealink phone reads the
+        /// <c>reboot=</c> parameter, and the web passwords it is given only apply at boot.
+        /// </summary>
+        [Fact]
+        public void The_yealink_type_reboots_the_phone()
+        {
+            var actual = NotifyConfRenderer.Render();
+
+            Assert.Contains($"[{NotifyConfRenderer.YealinkReboot}]\nEvent = check-sync;reboot=true\n", actual);
+            Assert.DoesNotContain("reboot=false", actual);
+        }
+
+        /// <summary>
         /// Asterisk 22's res_pjsip_notify refuses the whole file if it has a [general] section —
         /// found on the lab VM, and the reason there is a test for the absence of something.
         /// </summary>

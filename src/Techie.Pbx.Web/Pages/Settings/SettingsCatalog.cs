@@ -149,12 +149,12 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The password for the Polycom web UI's built-in \"Polycom\" (admin) account, written into every phone's config. This app also uses it to push a config reload or reboot to a phone over that same web UI when you save or ask for one. Stored here; the table shows dots, the edit form shows it.",
+                Description = "The password for a desk phone's built-in admin web UI account — Polycom's \"Polycom\" account and Yealink's \"admin\" — written into every phone's config. A phone applies it at boot. This app also uses it to push a config reload to a Polycom phone over that same web UI when you save one. Stored here; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.ProvisioningAdminPassword,
             },
             new SettingDescriptor
             {
-                Description = "The password for the Polycom web UI's built-in \"User\" account, written into every phone's config. Stored here; the table shows dots, the edit form shows it.",
+                Description = "The password for a desk phone's built-in user web UI account — Polycom's \"User\" account and Yealink's \"user\" — written into every phone's config. A phone applies it at boot. Stored here; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.ProvisioningUserPassword,
             },
             new SettingDescriptor

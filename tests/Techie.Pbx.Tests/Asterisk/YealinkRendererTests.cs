@@ -47,6 +47,7 @@ namespace Techie.Pbx.Tests.Asterisk
         /// <summary>A phone that registers and has no other key on it.</summary>
         private static YealinkConfig SampleConfig() => new()
         {
+            AdminPassword = "AdminPass2026",
             Buttons = new List<PhoneButton> { SampleLine() },
             Codecs = new List<string> { "ulaw", "alaw", "gsm" },
             Extensions = SampleExtensions(),
@@ -61,6 +62,7 @@ namespace Techie.Pbx.Tests.Asterisk
             // Pinned rather than computed, so this test does not drift with DST (mirrors how the
             // Polycom golden tests pin GmtOffsetSeconds instead of calling GmtOffsetFor).
             TimeZoneOffset = "-7",
+            UserPassword = "UserPass2026",
         };
 
         private static Phone SamplePhone() => new()
@@ -75,8 +77,23 @@ namespace Techie.Pbx.Tests.Asterisk
             PhoneID = 1,
         };
 
+        /// <summary>The dial-now rules a rendered file carries, in rule-number order.</summary>
+        private static List<string> DialNowRules(string rendered) => rendered
+            .Split('\n')
+            .Where(line => line.StartsWith("dialplan.dialnow.rule.", StringComparison.Ordinal))
+            .OrderBy(line => int.Parse(line["dialplan.dialnow.rule.".Length..line.IndexOf(' ')], System.Globalization.CultureInfo.InvariantCulture))
+            .Select(line => line[(line.IndexOf(" = ", StringComparison.Ordinal) + 3)..])
+            .ToList();
+
         private static string Expected(string fileName) =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Expected", fileName)).ReplaceLineEndings("\n");
+
+        /// <summary>
+        /// Whether a dial-now rule fully matches these digits, read the way the phone reads it:
+        /// <c>x</c> is any one digit, <c>[2-9]</c> a range, anything else itself.
+        /// </summary>
+        private static bool FullMatch(string rule, string digits) =>
+            System.Text.RegularExpressions.Regex.IsMatch(digits, "^" + rule.Replace("x", "[0-9]") + "$");
 
         [Fact]
         public void The_boot_file_matches_expected_file()
@@ -170,22 +187,121 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// Yealink is given no dial plan of its own: no <c>dialplan.</c> and no <c>dialnow</c>
-        /// rules, so the handset dials on its own Send key and its own timers. The digit map that
-        /// had to be redesigned is Polycom's (D124), and there is nothing here to redesign — a
-        /// Yealink dial-now rule set is a piece to justify on its own, and until it exists this
-        /// test is what says the file really carries none.
+        /// The dial-now rules, in order: the N11 services, the ten-digit number and the
+        /// eleven-digit one (D135). Nothing else — no line_id, no delay, no other dial plan.
         /// </summary>
         [Fact]
-        public void No_dial_plan_is_written_for_a_yealink()
+        public void The_dial_now_rules_are_the_eager_safe_ones_in_order()
+        {
+            var actual = YealinkConfigRenderer.Render(SampleConfig());
+
+            Assert.Equal(new[] { "[2-9]11", "[2-9]xxxxxxxxx", "1xxxxxxxxxx" }, DialNowRules(actual));
+            Assert.DoesNotContain("dialplan.dialnow.line_id", actual);
+            Assert.DoesNotContain("dialnow_delay", actual);
+        }
+
+        /// <summary>
+        /// The bug D124 fixed on Polycom, asked of Yealink's rules the way the phone reads them: a
+        /// rule is a full match, and the phone sends the moment one matches. So no rule may match
+        /// a strict prefix of anything dialable — a ten- or eleven-digit number, an international
+        /// one, an extension, a seven-digit local number or a feature code — or that number goes
+        /// out cut short. Each number also has to reach the end, so the check is seen to run.
+        /// </summary>
+        [Theory]
+        [InlineData("7145551234")]
+        [InlineData("17145551234")]
+        [InlineData("18005551234")]
+        [InlineData("011442071234567")]
+        [InlineData("5551234")]
+        [InlineData("1001")]
+        [InlineData("100")]
+        [InlineData("*97")]
+        [InlineData("*81001")]
+        [InlineData("911")]
+        public void No_dial_now_rule_sends_a_number_before_it_is_finished(string number)
+        {
+            var rules = DialNowRules(YealinkConfigRenderer.Render(SampleConfig()));
+
+            for (var length = 1; length < number.Length; length++)
+            {
+                var prefix = number[..length];
+                Assert.False(rules.Any(rule => FullMatch(rule, prefix)), $"'{prefix}' would be sent before the rest of {number}.");
+            }
+        }
+
+        /// <summary>The numbers the rules exist for really are sent at once, all three kinds.</summary>
+        [Theory]
+        [InlineData("911")]
+        [InlineData("7145551234")]
+        [InlineData("17145551234")]
+        public void A_complete_number_matches_a_dial_now_rule(string number)
+        {
+            var rules = DialNowRules(YealinkConfigRenderer.Render(SampleConfig()));
+
+            Assert.Contains(rules, rule => FullMatch(rule, number));
+        }
+
+        /// <summary>
+        /// A phone nobody has assigned yet still gets the dial-now rules and the web passwords:
+        /// both are the phone's, not an extension's, and a factory-fresh handset is exactly the one
+        /// sitting on the "set a new admin password" prompt (D133).
+        /// </summary>
+        [Fact]
+        public void A_phone_with_no_extension_still_gets_passwords_and_dial_now_rules()
         {
             var config = SampleConfig();
-            config.Buttons = SampleButtons();
+            config.Buttons = new List<PhoneButton>();
 
             var actual = YealinkConfigRenderer.Render(config);
 
-            Assert.DoesNotContain("dialplan", actual);
-            Assert.DoesNotContain("dialnow", actual);
+            Assert.Contains("security.user_password = admin:AdminPass2026\n", actual);
+            Assert.Contains("dialplan.dialnow.rule.1 = ", actual);
+        }
+
+        /// <summary>
+        /// One <c>security.user_password</c> line per built-in account, in Yealink's
+        /// <c>account:password</c> form (D133).
+        /// </summary>
+        [Fact]
+        public void Each_web_account_gets_exactly_one_password_line()
+        {
+            var lines = YealinkConfigRenderer.Render(SampleConfig())
+                .Split('\n')
+                .Where(line => line.StartsWith("security.user_password", StringComparison.Ordinal))
+                .ToList();
+
+            Assert.Equal(2, lines.Count);
+            Assert.Single(lines, line => line == "security.user_password = admin:AdminPass2026");
+            Assert.Single(lines, line => line == "security.user_password = user:UserPass2026");
+        }
+
+        /// <summary>
+        /// Unset means left out rather than written blank, and the two are independent — the same
+        /// rule Polycom's device passwords follow (D85).
+        /// </summary>
+        [Fact]
+        public void Only_the_web_passwords_that_are_set_are_written()
+        {
+            var config = SampleConfig();
+            config.UserPassword = "";
+
+            var actual = YealinkConfigRenderer.Render(config);
+
+            Assert.Contains("security.user_password = admin:AdminPass2026\n", actual);
+            Assert.DoesNotContain("security.user_password = user:", actual);
+
+            config.AdminPassword = "";
+            Assert.DoesNotContain("security.user_password", YealinkConfigRenderer.Render(config));
+        }
+
+        /// <summary>A password ConfText.Safe refuses must not reach the file.</summary>
+        [Fact]
+        public void An_unsafe_web_password_is_refused_rather_than_written()
+        {
+            var config = SampleConfig();
+            config.AdminPassword = "pass\nsecurity.user_password = admin:other";
+
+            Assert.Throws<InvalidOperationException>(() => YealinkConfigRenderer.Render(config));
         }
 
         /// <summary>

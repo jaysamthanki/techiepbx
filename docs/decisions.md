@@ -1272,6 +1272,9 @@ SIP NOTIFY through AMI PJSIPSendNotify to the linked extension's endpoint; an un
 cannot be notified and the push is skipped with a warning. Polling (D79) remains the safety
 net for both brands.
 
+> **Amended by D134**: Yealink now has the reboot button too, sending `check-sync;reboot=true`.
+> Saving a Yealink phone still sends the config re-read (`reboot=false`).
+
 ### D91. pjsip_notify.conf is a generated conf, and res_pjsip_notify joins the allowlist (2026-09-21)
 The NOTIFY categories (tnpbx-check-cfg = Event: check-sync, tnpbx-reboot = check-sync;reboot=true)
 are generated into **pjsip_notify.conf** — the file Asterisk 22's res_pjsip_notify actually reads
@@ -2340,7 +2343,8 @@ a call from.
   send then fails.
 - **Yealink's reboot button is not built.** The Yealink NOTIFY in the file is the config re-read,
   which is what saving a Yealink phone sends; whether its reboot button should send
-  `reboot=true` is the user's call when that piece comes.
+  `reboot=true` is the user's call when that piece comes. **Decided in D134**: it does, the
+  button is built, and `[yealink-reboot]` in the file is now `check-sync;reboot=true`.
 - **The HTTP push stays for the config reload only** (D86). The only NOTIFY a Polycom phone
   understands reboots it, and rebooting a handset because somebody renamed it would be worse than
   waiting for the poll. `PolycomPusher.PushReboot` is gone with the button that called it.
@@ -2379,6 +2383,8 @@ not stop it. The map is now built per system by `PolycomDigitMap.For(extensions)
   stop, so the test can be seen to see the bug.
 - **Yealink gets no dial plan at all**, and now has a test saying so. It dials on its own Send key
   and its own timers; `dialnow` rules for a Yealink are a piece to justify on their own.
+  **Amended by D135**: Yealink now gets the eager patterns above as `dialplan.dialnow.rule.1..3`,
+  and nothing else.
 
 ### D125. Outbound caller ID: trunk, then route, then extension — and the route's hold music (2026-09-21)
 
@@ -2791,3 +2797,80 @@ the way it reloads `logger` and `features` — a module reload, not an Asterisk 
 North America and a setting is surface area nobody has asked for. If a site elsewhere needs
 its own ringing and busy tones, a country setting (one value choosing among the stock zones)
 is the obvious future knob; it would be decided then, not now.
+
+### D133. Yealink phones get the web UI passwords too: `security.user_password`, from the same two settings (2026-09-22)
+
+The user has a brand-new Yealink handset on their desk sitting on the factory "please set a new
+admin password" prompt, and asked for Yealink to be set up like the Polycom phones. That prompt
+is what this removes: a Yealink phone now gets its web UI passwords from provisioning, the same
+way a Polycom phone has since D85.
+
+- **The parameter is colon-form, one line per web account** (Yealink V86 admin guide,
+  T2/T3/T4/T5/CP92X): `security.user_password = admin:<password>` and
+  `security.user_password = user:<password>`. Yealink names its two built-in accounts `admin` and
+  `user`; as with Polycom, only the password is ours to set.
+- **The same two settings, no new keys.** `Provisioning.AdminPassword` and
+  `Provisioning.UserPassword` already describe "the phone's web UI admin and user passwords";
+  a second pair per brand would be two more secrets to keep in step for no benefit.
+- **The same rules as D85.** Either one unset is left out rather than written blank, the two
+  are independent, and both go through `ConfText.Safe`. They are phone-level, so a phone with no
+  line key gets them too — the factory-fresh handset is exactly the one that has none yet.
+- **They apply at boot**, not when the phone reads the file, which is why the Yealink reboot
+  button (D134) sends a real reboot.
+- The admin password is **not** a push credential for Yealink the way it is for Polycom (D85):
+  Yealink has no HTTP push here (D90), so it is only ever the password on the phone's own web UI.
+
+### D134. Yealink gets a reboot button, and `yealink-reboot` really reboots (2026-09-22)
+
+Amends D90 and closes the question D123 left open ("whether its reboot button should send
+`reboot=true` is the user's call"). The user asked for Yealink to match the Polycom phones, and
+the web passwords of D133 only apply at boot, so a Yealink phone needs a reboot button that
+reboots.
+
+- **The button is the Polycom one, unchanged**: the same `OnPostReboot` handler, the same
+  confirm, the same best-effort toast, and the same disabled-with-a-reason when the phone has no
+  line key or its extension has no registered contact (D123). All that changed is that
+  `RebootHint` no longer refuses every Yealink phone. `PhoneNotifier.NotifyReboot` already sent
+  `Event: check-sync;reboot=true` to a Yealink endpoint; nothing on the page called it for one.
+- **`pjsip_notify.conf`'s `[yealink-reboot]` is now `Event = check-sync;reboot=true`.** It was
+  `reboot=false` — a config re-read under a name that said reboot. The file is only for the CLI
+  (`pjsip send notify yealink-reboot endpoint 1001`); the app sends its NOTIFYs over AMI with the
+  headers spelled out (D123). So both types in the file now do what their names say.
+- **Saving a Yealink phone still sends the re-read, not a reboot** (`reboot=false`, over AMI
+  only, D90). Rebooting a handset because somebody relabelled a key would be worse than waiting,
+  the same reasoning D123 gives for Polycom. A changed web password therefore reaches a Yealink
+  phone at its next boot — the button, or a power cycle.
+- `pjsip_notify.conf` changing means one Asterisk restart on the next apply (D123: it is in the
+  startup set); after that it is fixed again.
+
+### D135. Yealink gets dial-now rules: the eager-safe subset of D124, and nothing else (2026-09-22)
+
+Amends D124's "Yealink gets no dial plan at all". The user asked for Yealink to be set up like
+the Polycom phones, and a Yealink that waits for Send or its timer on a ten-digit number is the
+most visible difference left.
+
+- **Yealink's mechanism is eager-send only** (support.yealink.com, Dial Plan): each
+  `dialplan.dialnow.rule.N` is a full-match pattern, up to 20, and when the digits typed match
+  one the phone sends at once. There is no Yealink equivalent of Polycom's `T` — a rule is
+  either eager or not written.
+- **So only D124's eager patterns are ported**, in this order: `[2-9]11`, `[2-9]xxxxxxxxx`,
+  `1xxxxxxxxxx`. The rule is D124's, unchanged: a pattern may be eager only when nothing dialable
+  is longer than it and starts with it. N11 is safe because no area code is N11; ten digits is as
+  long as a number without the 1 gets; eleven is as long as anything gets.
+- **Not ported:** the extensions, seven-digit local and the feature codes, which are all the
+  start of something longer, and the operator `0` — it is also how `011` international starts,
+  and Polycom only has it timed (`0T`). All of those stay on the phone's own Send key and
+  inter-digit timer, exactly as before.
+- **No `dialplan.dialnow.line_id.N`**, so the rules apply to every account, and **no
+  `phone_setting.dialnow_delay`**: the phone's one-second default is fine.
+- **Fixed, not built per system.** Polycom's map is built from the extension list only because
+  its timed extension patterns need to be (D124); every Yealink rule is independent of the
+  extensions, so the list is a constant in the renderer. Phone-level, so an unassigned phone
+  gets them too.
+- **The test asks the question, not only the string**: it reads the rules back out of the
+  rendered file, matches them the way the phone does, and asserts that no strict prefix of a
+  ten-, eleven- or international number, an extension, a seven-digit number or a feature code is
+  ever sent on its own.
+- **Same caveat as D124:** a four- to six-digit extension that starts with an N11 — `2110`, say —
+  would be sent as its first three digits. The Polycom map has shipped with the same eager
+  `[2-9]11` since D124; a site numbered that way needs the rule revisited for both brands.

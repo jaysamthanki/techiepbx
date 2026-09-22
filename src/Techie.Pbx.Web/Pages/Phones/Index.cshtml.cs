@@ -176,11 +176,12 @@ namespace Techie.Pbx.Web.Pages.Phones
             var usable = PhoneButton.Usable(
                 this.buttons.GetForPhone(phoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
+            // The web UI passwords are the same two settings for either brand (D85).
+            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
+            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
+
             if (phone.MatchesBrand(PhoneBrand.Polycom))
             {
-                stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
-                stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
-
                 var config = new PolycomConfig
                 {
                     AdminPassword = (adminPassword ?? "").Trim(),
@@ -202,6 +203,7 @@ namespace Techie.Pbx.Web.Pages.Phones
 
             var yealink = new YealinkConfig
             {
+                AdminPassword = (adminPassword ?? "").Trim(),
                 Buttons = usable,
                 Codecs = transport.Codecs,
                 Extensions = allExtensions,
@@ -213,6 +215,7 @@ namespace Techie.Pbx.Web.Pages.Phones
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
                 TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
+                UserPassword = (userPassword ?? "").Trim(),
             };
 
             return this.Content(YealinkConfigRenderer.Render(yealink), "text/plain");
@@ -405,15 +408,13 @@ namespace Techie.Pbx.Web.Pages.Phones
         /// <summary>
         /// Why the Reboot button is disabled, or empty when it is not (D123). A reboot is a NOTIFY
         /// to the contact the phone registered, so it needs a line key to address and a phone that
-        /// has actually registered on it. An AMI we could not ask answers Unknown for every
+        /// has actually registered on it. The same for both brands: only the NOTIFY differs, and
+        /// <see cref="PhoneNotifier.NotifyReboot"/> picks it (D134). An AMI we could not ask answers Unknown for every
         /// extension, and not knowing is no reason to take the button away — the toast says so if
         /// the send then fails.
         /// </summary>
         private string RebootHint(Phone phone, IEnumerable<PhoneButton> assigned)
         {
-            if (!phone.MatchesBrand(PhoneBrand.Polycom))
-                return "Rebooting a Yealink phone from here is not built yet.";
-
             var number = PhoneButton.LineNumber(assigned);
             if (number == null)
                 return "This phone registers as nothing, so there is no contact to send a reboot to. Put an extension on key 1.";

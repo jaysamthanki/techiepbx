@@ -95,7 +95,8 @@ namespace Techie.Pbx.Core.Data
         /// <summary>
         /// The Polycom web UI's built-in "Polycom" (admin) account password. Polycom fixes the
         /// username on both its device accounts, so only the password is ours to set. Written into
-        /// every generated phone config as <c>device.auth.localAdminPassword</c>, and reused as the
+        /// every generated Polycom config as <c>device.auth.localAdminPassword</c> and every Yealink
+        /// one as <c>security.user_password = admin:...</c> (D133), and reused as the
         /// credential this app authenticates with when it pushes a config reload or reboot to a
         /// phone over that same web UI (D84).
         /// </summary>
@@ -103,7 +104,8 @@ namespace Techie.Pbx.Core.Data
 
         /// <summary>
         /// The Polycom web UI's built-in "User" account password, written into every generated
-        /// phone config as <c>device.auth.localUserPassword</c> (D84).
+        /// Polycom config as <c>device.auth.localUserPassword</c> (D84) and every Yealink one as
+        /// <c>security.user_password = user:...</c> (D133).
         /// </summary>
         public const string ProvisioningUserPassword = "Provisioning.UserPassword";
 

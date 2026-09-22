@@ -131,6 +131,8 @@ namespace Techie.Pbx.Web.Controllers
 
             stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var provisioningUsername);
             stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var provisioningPassword);
+            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
+            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
 
             // The assigned keys, and the extensions they name: the line keys are what this phone
             // registers as and the rest are its lamps (D121, schema 020). A key whose extension has
@@ -143,6 +145,7 @@ namespace Techie.Pbx.Web.Controllers
 
             var config = new YealinkConfig
             {
+                AdminPassword = (adminPassword ?? "").Trim(),
                 Buttons = usable,
                 Codecs = transport.Codecs,
                 Extensions = allExtensions,
@@ -154,6 +157,7 @@ namespace Techie.Pbx.Web.Controllers
                 ServerAddress = this.ServerAddress(transport.BindAddress),
                 SipPort = transport.Port,
                 TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
+                UserPassword = (userPassword ?? "").Trim(),
             };
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");

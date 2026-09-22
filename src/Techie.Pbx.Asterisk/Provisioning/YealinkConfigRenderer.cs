@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Models;
 
@@ -18,14 +19,30 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// that shows it, and every other key becomes a BLF on the first account. What the Buttons tab
     /// shows is what the handset has.
     ///
-    /// A phone with no line key still gets a valid file: the time and a provisioning poll, and no
-    /// registration. That is what lets a phone auto-register itself, sit on a desk, and start
-    /// working the moment an admin assigns it an extension and it polls again (D78, D88).
+    /// A phone with no line key still gets a valid file: the time, a provisioning poll, the web
+    /// passwords and the dial-now rules (D133, D135), and no registration. That is what lets a
+    /// phone auto-register itself, sit on a desk, and start working the moment an admin assigns it
+    /// an extension and it polls again (D78, D88).
     /// </summary>
-    public static class YealinkConfigRenderer
+    public static partial class YealinkConfigRenderer
     {
         /// <summary>The line every Yealink phone requires as the first line of a config it accepts.</summary>
         private const string VersionCookie = "#!version:1.0.0.1";
+
+        /// <summary>
+        /// What the phone sends the moment the digits typed so far fully match, without Send and
+        /// without waiting (D124's rule, applied to Yealink's <c>dialplan.dialnow.rule.N</c>). Only
+        /// the patterns nothing dialable is longer than and starts with: the N11 services, the
+        /// ten-digit number and the eleven-digit one. Everything else — extensions, seven-digit
+        /// local, feature codes, the operator (a 0 is also how 011 starts) — stays on the phone's
+        /// own Send key and timers, exactly as before these rules existed.
+        /// </summary>
+        private static readonly string[] DialNowRules =
+        {
+            "[2-9]11",
+            "[2-9]xxxxxxxxx",
+            "1xxxxxxxxxx",
+        };
 
         /// <summary>Yealink's own enum value for "expect an unencrypted UDP transport".</summary>
         private const int TransportUdp = 0;
@@ -99,6 +116,9 @@ namespace Techie.Pbx.Asterisk.Provisioning
             Line(sb, "auto_provision.dhcp_option.enable", "1");
             Line(sb, "auto_provision.repeat.enable", "1");
             Line(sb, "auto_provision.repeat.minutes", Number(ProvisioningRepeatMinutes));
+
+            WritePasswords(sb, config);
+            WriteDialNow(sb);
 
             sb.Append('\n');
             for (var account = lines.Count + 1; account <= LastAccount; account++)
@@ -213,6 +233,39 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         /// <summary>
+        /// The dial-now rules, numbered from 1 in the order they are listed. No <c>line_id</c>, so
+        /// they apply to every account, and no <c>phone_setting.dialnow_delay</c>, so the phone's
+        /// own one-second default stands. Phone-level, so an unassigned phone gets them too.
+        /// </summary>
+        private static void WriteDialNow(StringBuilder sb)
+        {
+            sb.Append('\n');
+            sb.Append("# Sent the moment the digits match, without Send: only numbers nothing longer starts with.\n");
+
+            for (var index = 0; index < DialNowRules.Length; index++)
+                Line(sb, $"dialplan.dialnow.rule.{Number(index + 1)}", SafeDialNowRule(DialNowRules[index]));
+        }
+
+        /// <summary>
+        /// A dial-now rule is a Yealink number pattern, not an Asterisk field, and its character
+        /// classes use the brackets <see cref="ConfText.Safe"/> forbids — so it gets its own gate
+        /// instead. The rules are constants written here, never user input, but the shape is still
+        /// enforced: digits, the <c>x</c> wildcard, and one bracketed digit class is all a rule
+        /// may contain, or the renderer refuses to write it.
+        /// </summary>
+        private static string SafeDialNowRule(string rule)
+        {
+            if (!DialNowFormat().IsMatch(rule))
+                throw new InvalidOperationException($"Refusing to write dial-now rule '{rule}': not a number pattern this renderer knows.");
+
+            return rule;
+        }
+
+        /// <summary>One bracketed digit class, wildcards and digits, nothing else.</summary>
+        [GeneratedRegex(@"^(\[[0-9]-[0-9]\]|[0-9x])+$")]
+        private static partial Regex DialNowFormat();
+
+        /// <summary>
         /// The keys, written as Yealink line keys (D121, schema 020). A line key shows one of the
         /// phone's own accounts and takes no value; every other key is a lamp and a quick dial —
         /// the phone SUBSCRIBEs for the key's value on the first account and dials the same value
@@ -253,6 +306,29 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 Line(sb, $"{key}.type", Number(LineKeyBlf));
                 Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions), "line key label"));
             }
+        }
+
+        /// <summary>
+        /// The web UI passwords, one <c>security.user_password</c> line per built-in account in
+        /// Yealink's <c>account:password</c> form, from the same two settings Polycom's come from
+        /// (D85). Writing the admin one is what stops a factory-fresh handset sitting on its
+        /// "please set a new admin password" prompt. Unset means left out rather than written
+        /// blank, and the two are independent, exactly as for Polycom. Phone-level, so an
+        /// unassigned phone gets them too.
+        /// </summary>
+        private static void WritePasswords(StringBuilder sb, YealinkConfig config)
+        {
+            if (config.AdminPassword.Length == 0 && config.UserPassword.Length == 0)
+                return;
+
+            sb.Append('\n');
+            sb.Append("# Web UI passwords. The phone applies them at boot, not when it reads this file.\n");
+
+            if (config.AdminPassword.Length > 0)
+                Line(sb, "security.user_password", "admin:" + ConfText.Safe(config.AdminPassword, "device admin password"));
+
+            if (config.UserPassword.Length > 0)
+                Line(sb, "security.user_password", "user:" + ConfText.Safe(config.UserPassword, "device user password"));
         }
 
         /// <summary>The Yealink name and RTP payload type for the codecs this system offers (D73).</summary>

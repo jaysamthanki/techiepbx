@@ -10,7 +10,9 @@ namespace Techie.Pbx.Asterisk.Config
     ///
     /// Two types, one per brand, because <c>check-sync</c> means something slightly different to
     /// each: a Polycom phone reboots on a bare one, and a Yealink phone takes a
-    /// <c>reboot=</c> parameter and re-reads its configuration without rebooting when it is false.
+    /// <c>reboot=</c> parameter and only reboots when it is true — which it is here, so both types
+    /// do what their names say (D134). The config re-read a Yealink phone is sent on save
+    /// (<c>reboot=false</c>) goes by AMI only and has no type in this file.
     /// Both carry <c>Content-Length: 0</c>, because the NOTIFY has no body and a phone that is sent
     /// one without that header is entitled to wait for a body that never comes.
     ///
@@ -28,7 +30,7 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>The type that reboots a Polycom phone.</summary>
         public const string PolycomReboot = "polycom-reboot";
 
-        /// <summary>The type that makes a Yealink phone re-read its configuration.</summary>
+        /// <summary>The type that reboots a Yealink phone (D134).</summary>
         public const string YealinkReboot = "yealink-reboot";
 
         public static string Render()
@@ -43,7 +45,7 @@ namespace Techie.Pbx.Asterisk.Config
 
             sb.Append('\n');
             sb.Append($"[{YealinkReboot}]\n");
-            sb.Append("Event = check-sync;reboot=false\n");
+            sb.Append("Event = check-sync;reboot=true\n");
             sb.Append("Content-Length = 0\n");
 
             return sb.ToString();
