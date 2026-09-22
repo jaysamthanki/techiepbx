@@ -57,6 +57,53 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// The sidecar is the email's source of truth (D129): what app_voicemail actually wrote —
+        /// this is a real sidecar from the lab, with the "Name" &lt;number&gt; caller line, the
+        /// duration and the arrival time — is what the email must say.
+        /// </summary>
+        [Fact]
+        public void The_sidecar_says_who_called_and_how_long()
+        {
+            var message = this.Message(".WAV", "RIFFnarrowband");
+            File.WriteAllText(message + ".txt", """
+                ;
+                ; Message Information file
+                ;
+                [message]
+                origmailbox=103
+                context=internal
+                exten=103
+                rdnis=unknown
+                priority=4
+                callerchan=PJSIP/102-0000001a
+                callerid="Michael" <102>
+                origdate=Tue Sep 22 05:24:47 AM UTC 2026
+                origtime=1790054687
+                category=
+                msg_id=1790054687-00000006
+                flag=
+                duration=42
+                """);
+
+            var facts = VoicemailRecording.Facts(message);
+
+            Assert.NotNull(facts);
+            Assert.Equal("102", facts.CallerId);
+            Assert.Equal("Michael", facts.CallerName);
+            Assert.Equal(42, facts.DurationSeconds);
+            Assert.Equal(1790054687, facts.ReceivedEpoch);
+        }
+
+        /// <summary>A missing sidecar is ordinary, not an error: the request's values stand.</summary>
+        [Fact]
+        public void A_message_without_a_sidecar_has_no_facts()
+        {
+            var message = this.Message(".WAV", "RIFFnarrowband");
+
+            Assert.Null(VoicemailRecording.Facts(message));
+        }
+
+        /// <summary>
         /// The fallback the whole design rests on: a box without ffmpeg, or an ffmpeg that will
         /// not convert this file, produces no MP3 — and the caller attaches the original instead
         /// rather than failing the email.

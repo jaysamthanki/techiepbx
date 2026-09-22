@@ -166,15 +166,19 @@ namespace Techie.Pbx.Web.Controllers
                 ? new VoicemailRecording().Transcript(request.MessagePath)
                 : null;
 
+            // The sidecar is what app_voicemail actually wrote; the request's header-derived
+            // values only fill the gaps when it is missing (D129).
+            var facts = VoicemailRecording.Facts(request.MessagePath);
+
             return new VoicemailEmail
             {
-                CallerId = MailText.Plain(request.CallerId, MaxCallerLength),
-                CallerName = MailText.Plain(request.CallerName, MaxCallerLength),
-                DurationSeconds = request.DurationSeconds,
+                CallerId = MailText.Plain(facts?.CallerId.Length > 0 ? facts.CallerId : request.CallerId, MaxCallerLength),
+                CallerName = MailText.Plain(facts?.CallerName.Length > 0 ? facts.CallerName : request.CallerName, MaxCallerLength),
+                DurationSeconds = facts?.DurationSeconds > 0 ? facts.DurationSeconds : request.DurationSeconds,
                 Hostname = Environment.MachineName,
                 Mailbox = extension.Number,
                 MailboxName = extension.Name,
-                ReceivedAt = Received(request.ReceivedEpoch),
+                ReceivedAt = Received(facts?.ReceivedEpoch > 0 ? facts.ReceivedEpoch : request.ReceivedEpoch),
                 Transcript = transcript == null ? null : MailText.Block(transcript, MaxTranscriptLength),
             };
         }

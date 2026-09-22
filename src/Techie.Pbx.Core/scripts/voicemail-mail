@@ -231,9 +231,11 @@ def details(message):
                       "application cannot read it" % (mailbox, number))
         return None
 
+    callerNumber, callerName = caller_headers(message)
+
     return {
-        "CallerId": header(message, "X-Asterisk-VM-Caller-ID-Num")[:128],
-        "CallerName": header(message, "X-Asterisk-VM-Caller-ID-Name")[:128],
+        "CallerId": callerNumber[:128],
+        "CallerName": callerName[:128],
         "DurationSeconds": seconds(header(message, "X-Asterisk-VM-Duration")),
         "Mailbox": mailbox,
         "MessagePath": path,
@@ -260,6 +262,23 @@ def ffmpeg():
 def header(message, name):
     """One header as a stripped string, or "" for a header that is not there."""
     return (message.get(name) or "").strip()
+
+
+def caller_headers(message):
+    """
+    The caller's number and name, out of the email headers, or nothing at all.
+
+    Asterisk 22 writes X-Asterisk-CallerID / X-Asterisk-CallerIDName; the X-Asterisk-VM-* spellings
+    are also accepted because they are what app_voicemail's source suggests and cost nothing. The
+    application reads the message's own sidecar first (D129), so this only ever fills the gap when
+    there is no sidecar — which is exactly what a fallback is for.
+    """
+    number = (header(message, "X-Asterisk-CallerID")
+              or header(message, "X-Asterisk-VM-Caller-ID-Num"))
+    name = (header(message, "X-Asterisk-CallerIDName")
+            or header(message, "X-Asterisk-VM-Caller-ID-Name"))
+
+    return number, name
 
 
 def load_config():

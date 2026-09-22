@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using log4net;
 
 namespace Techie.Pbx.Asterisk.Audio
@@ -19,7 +20,7 @@ namespace Techie.Pbx.Asterisk.Audio
     /// command built by concatenation — and the only path they are ever handed is one this class
     /// or <see cref="Config.VoicemailSpool"/> built (security.md).
     /// </summary>
-    public class VoicemailRecording
+    public partial class VoicemailRecording
     {
         /// <summary>The program name, resolved on PATH, exactly as <see cref="AudioConverter"/> does.</summary>
         public const string DefaultFfmpegProgram = "ffmpeg";
@@ -126,6 +127,61 @@ namespace Techie.Pbx.Asterisk.Audio
 
             return source == null ? null : Read(source);
         }
+
+        /// <summary>
+        /// What app_voicemail wrote about this message in its <c>.txt</c> sidecar — the caller it
+        /// saw, how long the recording is, and when it arrived. The email's source of truth
+        /// (D129): the HTTP request carries the same facts from the email headers, but the
+        /// headers are a guess at what app_voicemail writes and the sidecar is what it actually
+        /// wrote. Null when the sidecar is missing or unreadable, and the caller falls back to
+        /// what the request said.
+        /// </summary>
+        public static MessageFacts? Facts(string messagePath)
+        {
+            try
+            {
+                var sidecar = messagePath + ".txt";
+
+                if (!Exists(sidecar))
+                    return null;
+
+                var values = File.ReadAllLines(sidecar)
+                    .Select(line => line.Split('=', 2))
+                    .Where(parts => parts.Length == 2)
+                    .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.Ordinal);
+
+                if (!values.TryGetValue("callerid", out var callerId) || callerId.Length == 0)
+                    return null;
+
+                var caller = CallerPattern().Match(callerId);
+
+                if (!caller.Success)
+                    return null;
+
+                return new MessageFacts(
+                    caller.Groups["number"].Value,
+                    caller.Groups["name"].Value,
+                    ParseInt(values, "duration"),
+                    ParseLong(values, "origtime"));
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>A number from the sidecar, or zero when it is absent or not a number.</summary>
+        private static int ParseInt(Dictionary<string, string> values, string key) =>
+            int.TryParse(values.GetValueOrDefault(key), CultureInfo.InvariantCulture, out var value) ? value : 0;
+
+        /// <summary>An epoch from the sidecar, or zero when it is absent or not a number.</summary>
+        private static long ParseLong(Dictionary<string, string> values, string key) =>
+            long.TryParse(values.GetValueOrDefault(key), CultureInfo.InvariantCulture, out var value) ? value : 0;
+
+        /// <summary>The sidecar's caller line: <c>"Name" &lt;number&gt;</c> in any combination —
+        /// name, no name, brackets or none.</summary>
+        [GeneratedRegex("""^\s*(?:"(?<name>[^"]*)")?\s*<?\s*(?<number>[0-9]+)\s*>?\s*$""")]
+        private static partial Regex CallerPattern();
 
         /// <summary>
         /// Which file on disk holds this message's audio, or null when none of them does — a
@@ -406,4 +462,11 @@ namespace Techie.Pbx.Asterisk.Audio
             }
         }
     }
+
+    /// <summary>
+    /// What app_voicemail's sidecar says about one message (D129): who called, how long the
+    /// recording runs, and when it landed. Plain values, already split apart from the
+    /// <c>callerid="Name" &lt;number&gt;</c> line the sidecar carries.
+    /// </summary>
+    public sealed record MessageFacts(string CallerId, string CallerName, int DurationSeconds, long ReceivedEpoch);
 }
