@@ -5,7 +5,9 @@ namespace Techie.Pbx.Asterisk.Config
     /// <summary>
     /// Renders logger.conf: the console, one message log and a separate security log. The security
     /// events are what fail2ban reads now and what our own blocker will read later (D7), so they
-    /// get a file of their own as well as a place in messages.log.
+    /// get a file of their own — and only that file. Writing them to messages.log as well drowned
+    /// it in an entry per auth handshake (every BLF subscription of every phone re-auths), so a
+    /// messages.log that is for humans became one nobody would read.
     /// </summary>
     public static class LoggerConfRenderer
     {
@@ -24,7 +26,7 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append('\n');
             sb.Append("[logfiles]\n");
             sb.Append("console => notice,warning,error\n");
-            sb.Append("messages.log => notice,warning,error,security\n");
+            sb.Append("messages.log => notice,warning,error\n");
             sb.Append($"{SecurityLogFile} => security\n");
 
             return sb.ToString();

@@ -12,6 +12,17 @@ namespace Techie.Pbx.Core.Models
         public const int MaxPriority = 999;
 
         /// <summary>
+        /// What a call that matched this route calls out as, or empty for none — FreePBX's "option
+        /// CID" (D125). Either form <see cref="CallerIDFormat"/> reads: a bare number, or
+        /// <c>"Acme Sales" &lt;17141234567&gt;</c>.
+        ///
+        /// It is a fallback, not an override: the dialplan writes it guarded, so an extension that
+        /// claimed a caller ID of its own keeps it and this fills in for everyone else. Empty leaves
+        /// the trunk's own <c>callerid</c> to say who we are, exactly as before this existed.
+        /// </summary>
+        public string CallerID { get; set; } = "";
+
+        /// <summary>
         /// The Asterisk pattern, including its leading underscore, e.g. "_1NXXXXXXXXX". The
         /// underscore is what tells Asterisk this is a pattern rather than a literal number, so
         /// <see cref="NormalizePattern"/> adds it to anything that arrives without one.
@@ -19,6 +30,15 @@ namespace Techie.Pbx.Core.Models
         public string DialPattern { get; set; } = "";
 
         public bool Enabled { get; set; } = true;
+
+        /// <summary>
+        /// The music on hold class a caller who went out over this route hears whenever the far side
+        /// holds them, or null for none (D125). The outbound twin of
+        /// <see cref="InboundRoute.MohClassID"/>: a reference rather than a copy of the name, so
+        /// renaming a class renames it here at the next apply and deleting one puts this back to null.
+        /// </summary>
+        public long? MohClassID { get; set; }
+
         public string Name { get; set; } = "";
 
         /// <summary>
@@ -176,6 +196,13 @@ namespace Techie.Pbx.Core.Models
                 else if (PrependDigits[0] == '0')
                     errors.Add("Prepend digits may not start with 0: 00 and 011 are international dialling.");
             }
+
+            // The caller ID this route presents, in either of the two forms an admin might type
+            // (D125). It ends up inside a Set(CALLERID(all)=...) in the dialplan, so what is allowed
+            // is what can be written there and nothing else.
+            var callerID = CallerIDFormat.Error(CallerID, "Caller ID");
+            if (callerID != null)
+                errors.Add(callerID);
 
             if (StripDigits is < 0 or > 10)
                 errors.Add("Strip digits must be between 0 and 10.");

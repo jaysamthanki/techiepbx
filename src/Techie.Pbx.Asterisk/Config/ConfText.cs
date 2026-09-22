@@ -17,6 +17,25 @@ namespace Techie.Pbx.Asterisk.Config
         private static readonly char[] FieldSeparators = { ',', '|', '=' };
 
         /// <summary>
+        /// A caller ID written the way Asterisk's own <c>CALLERID(all)</c> reads it: <c>"Name"
+        /// &lt;number&gt;</c>, or the bare number when no name was typed (D125).
+        ///
+        /// The quotes are ours. <see cref="Safe"/> refuses a value with a quote in it, so the two
+        /// parts are checked separately and then wrapped, which is the same thing the endpoint
+        /// <c>callerid</c> lines do. A value that is not a caller ID at all is refused rather than
+        /// written: the models validate it first, and this is the last line of defence.
+        /// </summary>
+        public static string CallerID(string value, string field)
+        {
+            if (!CallerIDFormat.TryParse(value, out var name, out var number))
+                throw new InvalidOperationException($"Refusing to write unsafe value for '{field}' to Asterisk config.");
+
+            var digits = Safe(number, field);
+
+            return name.Length == 0 ? digits : $"\"{Safe(name, field)}\" <{digits}>";
+        }
+
+        /// <summary>
         /// Enabled extensions in numeric order, re-validated so a bad row can't reach a config file.
         /// </summary>
         public static List<Extension> EnabledInOrder(IEnumerable<Extension> extensions)

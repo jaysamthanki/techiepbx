@@ -17,11 +17,13 @@ namespace Techie.Pbx.Web.Pages.Routes
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly MohClassRepository mohClasses;
         private readonly OutboundRouteRepository routes;
         private readonly TrunkRepository trunks;
 
         public IndexModel()
         {
+            this.mohClasses = new MohClassRepository(PbxDatabase.Current);
             this.routes = new OutboundRouteRepository(PbxDatabase.Current);
             this.trunks = new TrunkRepository(PbxDatabase.Current);
         }
@@ -34,24 +36,25 @@ namespace Techie.Pbx.Web.Pages.Routes
         public IActionResult OnGetForm(long? outboundRouteID)
         {
             if (outboundRouteID is null or 0)
-                return this.Partial("_Form", new RouteForm { Trunks = this.UsableTrunks() });
+                return this.Partial("_Form", this.Fill(new RouteForm()));
 
             var route = this.routes.GetByID(outboundRouteID.Value);
             if (route == null)
                 return this.NotFound();
 
-            return this.Partial("_Form", new RouteForm
+            return this.Partial("_Form", this.Fill(new RouteForm
             {
+                CallerID = route.CallerID,
                 DialPattern = route.DialPattern,
                 Enabled = route.Enabled,
+                MohClassID = route.MohClassID,
                 Name = route.Name,
                 OutboundRouteID = route.OutboundRouteID,
                 PrependDigits = route.PrependDigits,
                 Priority = route.Priority,
                 StripDigits = route.StripDigits,
                 TrunkID = route.TrunkID,
-                Trunks = this.UsableTrunks(),
-            });
+            }));
         }
 
         /// <summary>The whole table, in the order the routes are tried.</summary>
@@ -107,8 +110,10 @@ namespace Techie.Pbx.Web.Pages.Routes
             if (route == null)
                 return this.NotFound();
 
+            route.CallerID = Text(form.CallerID);
             route.DialPattern = Text(form.DialPattern);
             route.Enabled = form.Enabled;
+            route.MohClassID = form.MohClassID;
             route.Name = Text(form.Name);
             route.PrependDigits = Text(form.PrependDigits);
             route.Priority = form.Priority;
@@ -125,8 +130,7 @@ namespace Techie.Pbx.Web.Pages.Routes
             catch (ValidationFailedException ex)
             {
                 form.Errors = ex.Errors.ToList();
-                form.Trunks = this.UsableTrunks();
-                return this.Partial("_Form", form);
+                return this.Partial("_Form", this.Fill(form));
             }
 
             Log.Info($"Outbound route {route.Name} {(isNew ? "created" : "updated")} by {this.User.Identity?.Name}");
@@ -152,6 +156,19 @@ namespace Techie.Pbx.Web.Pages.Routes
 
             this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
             return new StatusCodeResult(StatusCodes.Status204NoContent);
+        }
+
+        /// <summary>
+        /// The lists the form cannot know for itself: the trunks a route can send calls out over, and
+        /// the music on hold classes an outbound caller could be played while the far side holds them
+        /// (D125).
+        /// </summary>
+        private RouteForm Fill(RouteForm form)
+        {
+            form.MohClasses = this.mohClasses.GetAll();
+            form.Trunks = this.UsableTrunks();
+
+            return form;
         }
 
         private List<Trunk> UsableTrunks() =>

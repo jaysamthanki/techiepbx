@@ -9,10 +9,26 @@ namespace Techie.Pbx.Web.Pages.Routes
     /// </summary>
     public class RouteForm
     {
+        /// <summary>
+        /// What calls out over this route present as, when the extension that dialled claimed
+        /// nothing of its own (D125). Blank means none, and then the trunk says who we are.
+        /// </summary>
+        public string? CallerID { get; set; } = "";
+
         public string? DialPattern { get; set; } = "";
         public bool Enabled { get; set; } = true;
         public List<string> Errors { get; set; } = new();
         public bool IsNew => this.OutboundRouteID == 0;
+
+        /// <summary>The classes that can be chosen, filled in by the page. Not posted back.</summary>
+        public List<MohClass> MohClasses { get; set; } = new();
+
+        /// <summary>
+        /// The class a caller who went out this way hears when the far side holds them, or null for
+        /// the default — the blank first option in the dropdown (D125).
+        /// </summary>
+        public long? MohClassID { get; set; }
+
         public string? Name { get; set; } = "";
         public long OutboundRouteID { get; set; }
 

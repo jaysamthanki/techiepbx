@@ -7,7 +7,7 @@ namespace Techie.Pbx.Core.Data
     public class ExtensionRepository
     {
         private const string Columns =
-            "ExtensionID, Number, Name, Secret, Enabled, " +
+            "ExtensionID, Number, Name, Secret, Enabled, OutboundCallerID, " +
             "VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail";
         private const int SqliteConstraintError = 19;
 
@@ -55,8 +55,8 @@ namespace Techie.Pbx.Core.Data
             {
                 extension.ExtensionID = connection.ExecuteScalar<long>(
                     "INSERT INTO Extensions " +
-                    "(Number, Name, Secret, Enabled, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail) " +
-                    "VALUES (@Number, @Name, @Secret, @Enabled, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail); " +
+                    "(Number, Name, Secret, Enabled, OutboundCallerID, VoicemailEnabled, VoicemailPin, VoicemailEmail, VoicemailAttachRecording, VoicemailDeleteAfterEmail) " +
+                    "VALUES (@Number, @Name, @Secret, @Enabled, @OutboundCallerID, @VoicemailEnabled, @VoicemailPin, @VoicemailEmail, @VoicemailAttachRecording, @VoicemailDeleteAfterEmail); " +
                     "SELECT last_insert_rowid();",
                     extension);
 
@@ -79,6 +79,7 @@ namespace Techie.Pbx.Core.Data
                 var rows = connection.Execute(
                     "UPDATE Extensions SET " +
                     "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +
+                    "OutboundCallerID = @OutboundCallerID, " +
                     "VoicemailEnabled = @VoicemailEnabled, VoicemailPin = @VoicemailPin, VoicemailEmail = @VoicemailEmail, " +
                     "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail " +
                     "WHERE ExtensionID = @ExtensionID",

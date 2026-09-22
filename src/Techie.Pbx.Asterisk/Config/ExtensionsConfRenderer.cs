@@ -371,7 +371,12 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var trunk in trunkList)
                 AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList(), mohClassList);
 
-            AppendOutboundRoutes(sb, routeList, trunkList);
+            // Whether any route context has to carry the line that applies an extension's own claim
+            // (D125). None of them do on a system where no extension has a caller ID of its own,
+            // which is every system until somebody sets one.
+            var claimed = enabled.Any(e => e.OutboundCallerID.Length > 0);
+
+            AppendOutboundRoutes(sb, routeList, trunkList, mohClassList, claimed);
 
             return sb.ToString();
         }
@@ -1079,6 +1084,31 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
+        /// The name of the class a route named, ready to write, or a refusal. Shared by the inbound
+        /// routes (D122 amended) and the outbound ones (D125), because "a route names a class by ID
+        /// and the dialplan needs its name" is one job whichever direction the call is going.
+        ///
+        /// A class this renderer was not given is refused rather than guessed at, and so is one
+        /// called <c>default</c>: that is the name Asterisk keeps for its own fallback, which is what
+        /// this system's silence is made of (D119).
+        /// </summary>
+        /// <param name="what">
+        /// The route, as an error message should name it, e.g. "Inbound route '17771234567'".
+        /// </param>
+        private static string MohClassName(long mohClassID, string what, List<MohClass> mohClasses)
+        {
+            var mohClass = mohClasses.FirstOrDefault(c => c.MohClassID == mohClassID);
+
+            if (mohClass == null)
+                throw new InvalidOperationException($"{what} plays music on hold class {mohClassID}, which the renderer was not given.");
+
+            if (!MohClass.IsValidName(mohClass.Name))
+                throw new InvalidOperationException($"{what} plays music on hold class '{mohClass.Name}', which is not a name Asterisk could match.");
+
+            return ConfText.Safe(mohClass.Name.Trim(), "music on hold class");
+        }
+
+        /// <summary>
         /// What this route's caller hears while anybody has them on hold, as the one dialplan line
         /// that says it (D122 amended): the class is set on the channel here, before the call is
         /// handed on, so it is already in place whoever holds them and wherever the call has been
@@ -1102,17 +1132,43 @@ namespace Techie.Pbx.Asterisk.Config
                 return "";
 
             var what = route.CatchAll ? "catch-all" : route.DID;
-            var mohClass = mohClasses.FirstOrDefault(c => c.MohClassID == mohClassID);
-
-            if (mohClass == null)
-                throw new InvalidOperationException($"Inbound route '{what}' plays music on hold class {mohClassID}, which the renderer was not given.");
-
-            if (!MohClass.IsValidName(mohClass.Name))
-                throw new InvalidOperationException($"Inbound route '{what}' plays music on hold class '{mohClass.Name}', which is not a name Asterisk could match.");
-
-            var name = ConfText.Safe(mohClass.Name.Trim(), "music on hold class");
+            var name = MohClassName(mohClassID, $"Inbound route '{what}'", mohClasses);
 
             return $" same => n,Set(CHANNEL(musicclass)={name})\n";
+        }
+
+        /// <summary>
+        /// The line that turns an extension's claim into the caller ID the provider is sent (D125):
+        /// whatever the extension's endpoint put in the variable becomes <c>CALLERID(all)</c>, and
+        /// nothing at all happens when it is empty.
+        ///
+        /// It lives in the outbound route contexts and nowhere else, which is the whole reason a
+        /// <c>set_var</c> can be this blunt: an internal call never enters one of these contexts, so
+        /// a colleague still sees the extension's own name and number, and a call that arrived on a
+        /// trunk cannot reach one either — a trunk's context includes nothing (D50).
+        /// </summary>
+        private static string OutboundCallerIDClaimLine()
+        {
+            var claimed = $"${{{PjsipConfRenderer.OutboundCallerIDVariable}}}";
+
+            return $"ExecIf($[\"{claimed}\" != \"\"]?Set(CALLERID(all)={claimed}))";
+        }
+
+        /// <summary>
+        /// The route's own caller ID, written as the fallback it is (D125): it fills in only when the
+        /// extension that dialled claimed nothing, so the precedence is trunk &lt; route &lt;
+        /// extension with one guard and no route needing to know which extensions exist.
+        ///
+        /// Guarded even on a system where no extension has a caller ID at all — the variable is
+        /// simply empty there, so the <c>ExecIf</c> always fires — because the alternative is a line
+        /// whose meaning changes the day somebody gives an extension a DID.
+        /// </summary>
+        /// <param name="callerID">The caller ID, already through <see cref="ConfText.CallerID"/>.</param>
+        private static string OutboundCallerIDFallbackLine(string callerID)
+        {
+            var claimed = $"${{{PjsipConfRenderer.OutboundCallerIDVariable}}}";
+
+            return $"ExecIf($[\"{claimed}\" = \"\"]?Set(CALLERID(all)={callerID}))";
         }
 
         /// <summary>
@@ -1120,8 +1176,26 @@ namespace Techie.Pbx.Asterisk.Config
         /// searches includes in the order they are written but picks its own idea of the best
         /// match within a single context (D46). The blocked context is included last, so a number
         /// only reaches it when every route has been tried.
+        ///
+        /// A route's entry is its <c>Dial</c> and, ahead of it, only the lines it actually needs
+        /// (D125): the caller ID the call goes out as, and the class its caller hears if the far side
+        /// holds them. A route with neither renders exactly the one line and one Hangup it did before
+        /// either column existed.
         /// </summary>
-        private static void AppendOutboundRoutes(StringBuilder sb, List<OutboundRoute> routes, List<Trunk> trunks)
+        /// <param name="mohClasses">
+        /// The classes, so a route naming one is written as the class's name rather than its ID. A
+        /// route naming a class that is not in this list is refused, as everywhere else.
+        /// </param>
+        /// <param name="extensionsClaimCallerID">
+        /// Whether any enabled extension has an outbound caller ID of its own, which is the only
+        /// reason to write the line that applies one.
+        /// </param>
+        private static void AppendOutboundRoutes(
+            StringBuilder sb,
+            List<OutboundRoute> routes,
+            List<Trunk> trunks,
+            List<MohClass> mohClasses,
+            bool extensionsClaimCallerID)
         {
             if (routes.Count == 0)
                 return;
@@ -1148,12 +1222,49 @@ namespace Techie.Pbx.Asterisk.Config
                 // is what the file said before either field existed.
                 var sent = route.StripDigits > 0 ? $"${{EXTEN:{route.StripDigits}}}" : "${EXTEN}";
 
+                // Everything this route does before it dials, in order, and nothing it does not
+                // (D125). The applications are collected first because the first of them takes
+                // priority 1: a route with no caller ID and no class of its own is then the single
+                // Dial line it has always been.
+                var applications = new List<string>();
+
+                if (extensionsClaimCallerID)
+                    applications.Add(OutboundCallerIDClaimLine());
+
+                if (route.CallerID.Length > 0)
+                    applications.Add(OutboundCallerIDFallbackLine(ConfText.CallerID(route.CallerID, "route caller ID")));
+
+                // Unguarded, unlike the internal backfill: an outbound caller's channel has never
+                // been through a context that could have named a class, so there is nothing here to
+                // avoid clobbering. What it buys is music while the far side holds *us* (D125).
+                if (route.MohClassID is { } mohClassID)
+                    applications.Add($"Set(CHANNEL(musicclass)={MohClassName(mohClassID, $"Outbound route '{route.Name}'", mohClasses)})");
+
+                // The full URI form is required: chan_pjsip treats a bare dialstring as a literal
+                // URI and rejects it ("Could not create dialog to invalid URI").
+                applications.Add($"Dial(PJSIP/{trunkName}/sip:{prepend}{sent}@{trunkHost},{OutboundRingSeconds},{DialOptions})");
+
                 sb.Append('\n');
                 sb.Append($"[{ConfText.Safe(route.Context, "route context")}]\n");
                 sb.Append($"; {name} ({route.Priority}) out over {trunkName}\n");
-                // The full URI form is required: chan_pjsip treats a bare dialstring as a literal
-                // URI and rejects it ("Could not create dialog to invalid URI").
-                sb.Append($"exten => {pattern},1,Dial(PJSIP/{trunkName}/sip:{prepend}{sent}@{trunkHost},{OutboundRingSeconds},{DialOptions})\n");
+
+                if (route.CallerID.Length > 0)
+                {
+                    sb.Append("; Caller ID: this route's own, and only where the extension that dialled claimed\n");
+                    sb.Append("; none of its own. Trunk < route < extension, and the trunk's callerid in\n");
+                    sb.Append("; pjsip.conf is what is left when neither named one (D125).\n");
+                }
+                else if (extensionsClaimCallerID)
+                {
+                    sb.Append("; Caller ID: whatever the extension that dialled claimed, if it claimed anything.\n");
+                    sb.Append("; This route names none, so everyone else goes out as the trunk's callerid (D125).\n");
+                }
+
+                sb.Append($"exten => {pattern},1,{applications[0]}\n");
+
+                foreach (var application in applications.Skip(1))
+                    sb.Append($" same => n,{application}\n");
+
                 sb.Append(" same => n,Hangup()\n");
             }
 

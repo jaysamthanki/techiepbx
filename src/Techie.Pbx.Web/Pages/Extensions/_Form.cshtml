@@ -44,6 +44,24 @@
         <div class="form-text">Shown as the caller ID name on internal calls.</div>
     </div>
 
+    @*
+        The user's own outbound caller ID (D125): a direct DID calls out as itself, and it beats
+        whatever the outbound route says. Blank is the normal case and leaves it to the route and
+        the trunk. A per-user property like the voicemail PIN, so it belongs here.
+    *@
+    <div class="mb-3">
+        <label class="form-label" for="extension-outbound-caller-id">Outbound caller ID</label>
+        <input class="form-control font-monospace" id="extension-outbound-caller-id" name="outboundCallerID"
+               value="@Model.OutboundCallerID" maxlength="52" autocomplete="off"
+               placeholder="&quot;Jane Smith&quot; &lt;17141234567&gt;" />
+        <div class="form-text">
+            What this extension's calls to the outside present as — their own direct DID, as a number
+            on its own or as <code>"Jane Smith" &lt;17141234567&gt;</code>. Blank leaves it to the
+            outbound route and then the trunk. <strong>Internal calls are unaffected</strong>: those
+            always show the name and number above.
+        </div>
+    </div>
+
     <div class="mb-3">
         <label class="form-label" for="extension-secret">SIP password</label>
         <input class="form-control font-monospace" id="extension-secret" name="secret" value="@Model.Secret"

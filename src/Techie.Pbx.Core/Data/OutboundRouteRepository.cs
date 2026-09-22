@@ -7,7 +7,8 @@ namespace Techie.Pbx.Core.Data
     public class OutboundRouteRepository
     {
         private const string Columns =
-            "OutboundRouteID, Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled";
+            "OutboundRouteID, Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled, " +
+            "CallerID, MohClassID";
         private const int SqliteConstraintError = 19;
 
         private readonly Database database;
@@ -50,8 +51,10 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 route.OutboundRouteID = connection.ExecuteScalar<long>(
-                    "INSERT INTO OutboundRoutes (Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled) " +
-                    "VALUES (@Name, @DialPattern, @PrependDigits, @StripDigits, @TrunkID, @Priority, @Enabled); SELECT last_insert_rowid();",
+                    "INSERT INTO OutboundRoutes " +
+                    "(Name, DialPattern, PrependDigits, StripDigits, TrunkID, Priority, Enabled, CallerID, MohClassID) " +
+                    "VALUES (@Name, @DialPattern, @PrependDigits, @StripDigits, @TrunkID, @Priority, @Enabled, " +
+                    "@CallerID, @MohClassID); SELECT last_insert_rowid();",
                     route);
 
                 this.pending.Raise();
@@ -74,7 +77,8 @@ namespace Techie.Pbx.Core.Data
                 var rows = connection.Execute(
                     "UPDATE OutboundRoutes SET Name = @Name, DialPattern = @DialPattern, " +
                     "PrependDigits = @PrependDigits, StripDigits = @StripDigits, TrunkID = @TrunkID, " +
-                    "Priority = @Priority, Enabled = @Enabled WHERE OutboundRouteID = @OutboundRouteID",
+                    "Priority = @Priority, Enabled = @Enabled, CallerID = @CallerID, MohClassID = @MohClassID " +
+                    "WHERE OutboundRouteID = @OutboundRouteID",
                     route);
                 if (rows == 0)
                     throw new ValidationFailedException($"OutboundRouteID {route.OutboundRouteID} does not exist.");
@@ -88,8 +92,10 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
-        /// The model's own rules, plus the one that needs the database: a route has to point at a
-        /// trunk that exists and is switched on, or it is a route to nowhere.
+        /// The model's own rules, plus the two that need the database: a route has to point at a
+        /// trunk that exists and is switched on, or it is a route to nowhere, and the music on hold
+        /// class it names, when it names one, has to be a class that is there (D125) — the renderer
+        /// writes the name into the dialplan and refuses one it cannot find.
         /// </summary>
         private void ThrowIfInvalid(OutboundRoute route)
         {
@@ -105,6 +111,9 @@ namespace Techie.Pbx.Core.Data
                     errors.Add($"The {trunk.Name} trunk is disabled, so no calls could go out over it.");
             }
 
+            if (route.MohClassID is { } mohClassID && new MohClassRepository(this.database).GetByID(mohClassID) == null)
+                errors.Add("That music on hold class is not there any more. Choose another.");
+
             if (errors.Count > 0)
                 throw new ValidationFailedException(errors);
         }
@@ -116,6 +125,7 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         private static void Normalize(OutboundRoute route)
         {
+            route.CallerID = route.CallerID.Trim();
             route.DialPattern = OutboundRoute.NormalizePattern(route.DialPattern);
             route.Name = route.Name.Trim();
             route.PrependDigits = route.PrependDigits.Trim();

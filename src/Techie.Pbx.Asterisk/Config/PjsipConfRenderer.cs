@@ -11,6 +11,20 @@ namespace Techie.Pbx.Asterisk.Config
     public static class PjsipConfRenderer
     {
         /// <summary>
+        /// The channel variable an extension's own outbound caller ID travels on (D125). Written on
+        /// the endpoint as <c>set_var</c>, which chan_pjsip puts on every channel that phone creates,
+        /// and read by the outbound route contexts in extensions.conf: the extension claims here, the
+        /// route applies it, and a route with a caller ID of its own only fills in when this is empty.
+        ///
+        /// <c>set_var</c> rather than changing the endpoint's <c>callerid</c>, which is the
+        /// extension's identity on an internal call and has to stay the name and number colleagues
+        /// see. It is a plain channel variable — <c>ast_set_variables</c> sets variables, not
+        /// dialplan functions — so something in the dialplan has to apply it, and only the outbound
+        /// route contexts do.
+        /// </summary>
+        public const string OutboundCallerIDVariable = "TNPBX_CID";
+
+        /// <summary>
         /// What a trunk's registration section is called: the trunk name plus this. The AMI
         /// status lookup reads it back off the object name, so both ends use this constant.
         /// </summary>
@@ -110,6 +124,17 @@ namespace Techie.Pbx.Asterisk.Config
                 sb.Append($"auth = {number}-auth\n");
                 sb.Append($"aors = {number}\n");
                 sb.Append($"callerid = \"{name}\" <{number}>\n");
+
+                // The extension's own outbound caller ID, claimed on every channel this phone
+                // creates (D125). Only the outbound route contexts read it, so the callerid above is
+                // still what an internal call shows. Nothing is written for an extension that has
+                // none, which is every extension until somebody gives one a DID of their own.
+                if (extension.OutboundCallerID.Length > 0)
+                {
+                    var claim = ConfText.CallerID(extension.OutboundCallerID, "outbound caller ID");
+                    sb.Append($"set_var = {OutboundCallerIDVariable}={claim}\n");
+                }
+
                 sb.Append("direct_media = no\n");
                 sb.Append("rtp_symmetric = yes\n");
                 sb.Append("force_rport = yes\n");

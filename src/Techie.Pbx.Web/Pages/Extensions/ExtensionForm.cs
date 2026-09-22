@@ -19,6 +19,13 @@ namespace Techie.Pbx.Web.Pages.Extensions
         public string? Number { get; set; } = "";
 
         /// <summary>
+        /// What this extension's outside calls present as, or blank to leave it to the outbound route
+        /// and the trunk (D125). A per-user property like the voicemail PIN, so it lives on the main
+        /// part of the form rather than anywhere administrative.
+        /// </summary>
+        public string? OutboundCallerID { get; set; } = "";
+
+        /// <summary>
         /// The SIP password, shown in the clear in the form for new and existing extensions
         /// alike (D112). Blank on an existing extension keeps the current one; Regenerate
         /// makes a new one.

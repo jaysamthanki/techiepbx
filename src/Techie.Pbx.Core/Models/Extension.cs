@@ -12,6 +12,19 @@ namespace Techie.Pbx.Core.Models
         public long ExtensionID { get; set; }
         public string Name { get; set; } = "";
         public string Number { get; set; } = "";
+
+        /// <summary>
+        /// What this extension's calls to the outside world present as, or empty for none (D125):
+        /// the user with a direct DID of their own calls out as that DID. Either form
+        /// <see cref="CallerIDFormat"/> reads, and it beats everything — the endpoint carries it as
+        /// <c>set_var = TNPBX_CID=...</c>, so every channel this phone creates claims it before any
+        /// outbound route is reached.
+        ///
+        /// Internal calls are untouched: they show <see cref="Name"/> and <see cref="Number"/> from
+        /// the endpoint's own <c>callerid</c>, and nothing internal reads the variable.
+        /// </summary>
+        public string OutboundCallerID { get; set; } = "";
+
         public string Secret { get; set; } = "";
 
         /// <summary>Attach the recording to the email. Only means anything once F4 sends them.</summary>
@@ -60,6 +73,13 @@ namespace Techie.Pbx.Core.Models
 
             if (!SecretPattern().IsMatch(Secret))
                 errors.Add("Secret must be 16 to 64 letters or digits.");
+
+            // The caller ID this extension calls out as, if it has one of its own (D125). It is
+            // written into pjsip.conf as a channel variable and read by the outbound route contexts,
+            // so it is checked here the way everything that reaches a conf file is.
+            var outboundCallerID = CallerIDFormat.Error(OutboundCallerID, "Outbound caller ID");
+            if (outboundCallerID != null)
+                errors.Add(outboundCallerID);
 
             // The PIN only has to be there when there is a mailbox to unlock; the other voicemail
             // settings are kept whether the mailbox is on or off, so a switched-off box that is
