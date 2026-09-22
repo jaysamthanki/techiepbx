@@ -6,8 +6,8 @@ namespace Techie.Pbx.Asterisk.Ami
 {
     /// <summary>
     /// Reads a Cdr event into a <see cref="Cdr"/> (F5). The header names are cdr_manager's in
-    /// Asterisk 22 — Source, Destination, DestinationContext, BillableSeconds — plus the LinkedID and
-    /// Sequence that cdr_manager.conf maps onto the event. Each field also answers to the name the
+    /// Asterisk 22 — Source, Destination, DestinationContext, BillableSeconds — plus the LinkedID,
+    /// Sequence and Did that cdr_manager.conf maps onto the event. Each field also answers to the name the
     /// CDR engine itself uses for it (Src, Dst, DContext, BillSec and so on), so a mapping or a
     /// version that spells them that way still lands in the right column.
     ///
@@ -51,6 +51,7 @@ namespace Techie.Pbx.Asterisk.Ami
                 CallerID = Text(message, "CallerID", "Clid"),
                 Channel = Text(message, "Channel") ?? "",
                 Dcontext = Text(message, "DestinationContext", "DContext") ?? "",
+                Did = Text(message, "Did", "UserField"),
                 DestinationChannel = Text(message, "DestinationChannel", "DstChannel"),
                 Disposition = Text(message, "Disposition") ?? "",
                 Dst = Text(message, "Destination", "Dst") ?? "",

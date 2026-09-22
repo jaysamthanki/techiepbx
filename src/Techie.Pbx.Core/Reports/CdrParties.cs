@@ -22,8 +22,9 @@ namespace Techie.Pbx.Core.Reports
         public string? FromExtension { get; set; }
 
         /// <summary>
-        /// The number the call used on the trunk: the number dialled, for an inbound call, and the
-        /// caller ID it went out with, for an outbound one. Null for an internal call.
+        /// The number the call used on the trunk: the DID the caller dialled, for an inbound call,
+        /// and the caller ID it went out with, for an outbound one. Null for an internal call. An
+        /// inbound record from before the DID was collected has only Dst, which is the best there is.
         /// </summary>
         public string? Line { get; set; }
 
@@ -64,7 +65,7 @@ namespace Techie.Pbx.Core.Reports
                 FromExtension = fromExtension,
                 Line = direction switch
                 {
-                    CallDirection.Inbound => NullIfEmpty(cdr.Dst),
+                    CallDirection.Inbound => cdr.Did ?? NullIfEmpty(cdr.Dst),
                     CallDirection.Outbound => NullIfEmpty(cdr.Src),
                     _ => null,
                 },

@@ -8,7 +8,7 @@ namespace Techie.Pbx.Core.Reports
     /// The call report as CSV (F5): RFC 4180, CRLF line ends, a field quoted only when it has to
     /// be. The columns are the stored record plus what the page works out from it — direction, trunk,
     /// and the parties as the list shows them (<see cref="CdrParties"/>) — so a spreadsheet can be
-    /// filtered the same way the page is. The raw Src and Dst stay, beside the readable ones.
+    /// filtered the same way the page is. The raw Src, Dst and Did stay, beside the readable ones.
     ///
     /// Caller ID comes from outside, so a caller can choose what lands in a cell. A value a
     /// spreadsheet would read as a formula gets an apostrophe in front of it, which the spreadsheet
@@ -19,7 +19,7 @@ namespace Techie.Pbx.Core.Reports
     {
         private static readonly string[] Header =
         {
-            "StartUtc", "AnswerUtc", "EndUtc", "Direction", "Trunk", "From", "To", "Line", "Src", "Dst", "CallerID",
+            "StartUtc", "AnswerUtc", "EndUtc", "Direction", "Trunk", "From", "To", "Line", "Src", "Dst", "Did", "CallerID",
             "Disposition", "DurationSeconds", "BillSecSeconds", "Channel", "DestinationChannel",
             "Dcontext", "LastApplication", "LastData", "AccountCode", "AmaFlags", "UniqueID",
             "LinkedID", "Sequence",
@@ -89,6 +89,7 @@ namespace Techie.Pbx.Core.Reports
                     parties.Line,
                     cdr.Src,
                     cdr.Dst,
+                    cdr.Did,
                     cdr.CallerID,
                     cdr.Disposition,
                     Number(cdr.DurationSeconds),

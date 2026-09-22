@@ -995,6 +995,11 @@ namespace Techie.Pbx.Asterisk.Config
             // The dispatch block: DID routes first, then the fallthrough (D50). A GotoIf with
             // only a true target falls through to the next line, so the checks chain naturally.
             sb.Append("exten => _X.,1,Set(DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)})\n");
+            // The call record keeps the DID (F5): by the time the call is dialled it has been sent
+            // into internal and Dst is the extension, not the number the caller dialled.
+            // cdr_manager.conf maps userfield onto the Cdr event as Did. Every route, catch-all
+            // included, passes through here, so this one line covers them all.
+            sb.Append(" same => n,Set(CDR(userfield)=${DID})\n");
             sb.Append($" same => n,NoOp(Inbound ${{DID}} on {trunkName})\n");
 
             foreach (var route in routes.Where(r => !r.CatchAll))

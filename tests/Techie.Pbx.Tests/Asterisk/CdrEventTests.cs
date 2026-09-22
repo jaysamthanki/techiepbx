@@ -7,7 +7,7 @@ namespace Techie.Pbx.Tests.Asterisk
     /// <summary>
     /// Cdr events as cdr_manager writes them in Asterisk 22 (F5), read into records and through
     /// the collector into the database. The header names here are the ones in cdr_manager.c, plus
-    /// the LinkedID and Sequence our cdr_manager.conf maps on; the end-to-end check against a real
+    /// the LinkedID, Sequence and Did our cdr_manager.conf maps on; the end-to-end check against a real
     /// Asterisk happens on the lab VM.
     /// </summary>
     public class CdrEventTests : IDisposable
@@ -34,14 +34,18 @@ namespace Techie.Pbx.Tests.Asterisk
             Directory.Delete(this.directory, recursive: true);
         }
 
-        /// <summary>An inbound call answered at 101, as cdr_manager.c formats it, headers in its order.</summary>
+        /// <summary>
+        /// An inbound call answered at 101, as cdr_manager.c formats it, headers in its order. The
+        /// trunk context sent the call into internal, so Destination is the extension; the DID is
+        /// in the userfield, which cdr_manager.conf also maps on as Did.
+        /// </summary>
         private static string AnsweredInbound(string sequence = "42") =>
             "Event: Cdr\r\n" +
             "Privilege: cdr,all\r\n" +
             "AccountCode: \r\n" +
             "Source: 15551234567\r\n" +
-            "Destination: 15557654321\r\n" +
-            "DestinationContext: from-trunk-voipms\r\n" +
+            "Destination: 101\r\n" +
+            "DestinationContext: internal\r\n" +
             "CallerID: \"ACME Corp\" <15551234567>\r\n" +
             "Channel: PJSIP/voipms-00000012\r\n" +
             "DestinationChannel: PJSIP/101-00000013\r\n" +
@@ -55,9 +59,10 @@ namespace Techie.Pbx.Tests.Asterisk
             "Disposition: ANSWERED\r\n" +
             "AMAFlags: DOCUMENTATION\r\n" +
             "UniqueID: 1758549785.18\r\n" +
-            "UserField: \r\n" +
+            "UserField: 15557654321\r\n" +
             "LinkedID: 1758549785.18\r\n" +
             $"Sequence: {sequence}\r\n" +
+            "Did: 15557654321\r\n" +
             "\r\n";
 
         private static AmiMessage Message(string packet) =>
@@ -74,10 +79,11 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(120, cdr.BillSecSeconds);
             Assert.Equal("\"ACME Corp\" <15551234567>", cdr.CallerID);
             Assert.Equal("PJSIP/voipms-00000012", cdr.Channel);
-            Assert.Equal("from-trunk-voipms", cdr.Dcontext);
+            Assert.Equal("internal", cdr.Dcontext);
             Assert.Equal("PJSIP/101-00000013", cdr.DestinationChannel);
             Assert.Equal("ANSWERED", cdr.Disposition);
-            Assert.Equal("15557654321", cdr.Dst);
+            Assert.Equal("15557654321", cdr.Did);
+            Assert.Equal("101", cdr.Dst);
             Assert.Equal(126, cdr.DurationSeconds);
             Assert.Equal("2026-09-22T14:05:11Z", cdr.EndUtc);
             Assert.Equal("Dial", cdr.LastApplication);
@@ -114,6 +120,36 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Null(cdr.AnswerUtc);
             Assert.Null(cdr.LinkedID);
             Assert.Null(cdr.Sequence);
+        }
+
+        /// <summary>
+        /// Only an inbound call has a DID: an internal or outbound record carries an empty
+        /// userfield, and so does any record from before the mapping, which is null rather than "".
+        /// </summary>
+        [Fact]
+        public void A_record_without_a_did_has_none()
+        {
+            var packet = AnsweredInbound()
+                .Replace("UserField: 15557654321\r\n", "UserField: \r\n")
+                .Replace("Did: 15557654321\r\n", "Did: \r\n");
+            Assert.Null(CdrEvent.ToCdr(Message(packet), TimeZoneInfo.Utc, Received).Did);
+
+            var missing = AnsweredInbound()
+                .Replace("UserField: 15557654321\r\n", "")
+                .Replace("Did: 15557654321\r\n", "");
+            Assert.Null(CdrEvent.ToCdr(Message(missing), TimeZoneInfo.Utc, Received).Did);
+        }
+
+        /// <summary>
+        /// The standard event already carries the userfield as UserField, so a record still has its
+        /// DID if the Did mapping is ever missing.
+        /// </summary>
+        [Fact]
+        public void The_did_is_read_from_userfield_when_there_is_no_mapping()
+        {
+            var packet = AnsweredInbound().Replace("Did: 15557654321\r\n", "");
+
+            Assert.Equal("15557654321", CdrEvent.ToCdr(Message(packet), TimeZoneInfo.Utc, Received).Did);
         }
 
         /// <summary>

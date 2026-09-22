@@ -7,10 +7,12 @@ namespace Techie.Pbx.Asterisk.Config
     /// it logs "Module not activated" and declines, and with no <c>enabled = yes</c> it loads and
     /// sends nothing. There is nothing in it that comes from the database.
     ///
-    /// The mappings add two fields the standard Cdr event does not carry. LinkedID ties together
-    /// the records of one call. Sequence is the CDR engine's own counter for each record, which with
-    /// UniqueID is what identifies one: a ring-all Dial writes a record per phone, all with the
-    /// caller's UniqueID. Each mapping is written into the event as <c>${CDR(name)}</c>, which is
+    /// The mappings add fields the standard Cdr event does not carry, or not by a name that says
+    /// what it holds. LinkedID ties together the records of one call. Sequence is the CDR engine's
+    /// own counter for each record, which with UniqueID is what identifies one: a ring-all Dial
+    /// writes a record per phone, all with the caller's UniqueID. Did is the userfield, which the
+    /// trunk context sets to the number an inbound caller dialled (ExtensionsConfRenderer), because
+    /// Dst is the extension by the time the call is dialled. Each mapping is written into the event as <c>${CDR(name)}</c>, which is
     /// why func_cdr is on the modules allowlist.
     ///
     /// cdr.conf IS generated (CdrConfRenderer): the CDR engine's defaults would drop unanswered
@@ -33,6 +35,7 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append("[mappings]\n");
             sb.Append("linkedid => LinkedID\n");
             sb.Append("sequence => Sequence\n");
+            sb.Append("userfield => Did\n");
 
             return sb.ToString();
         }

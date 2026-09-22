@@ -202,7 +202,10 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 ExtensionsConfRenderer.Render(new List<Extension>(), SampleTrunks(), new List<OutboundRoute>(), new List<InboundRoute>()),
                 actual);
-            Assert.Contains("exten => _X.,1,Set(DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)})\n", actual);
+            Assert.Contains(
+                "exten => _X.,1,Set(DID=${CUT(CUT(PJSIP_HEADER(read,To),@,1),:,2)})\n" +
+                " same => n,Set(CDR(userfield)=${DID})\n",
+                actual);
             Assert.Contains(" same => n(none),NoOp(No inbound route for ${DID} on callcentric)\n same => n,Hangup()\n", actual);
         }
 

@@ -21,10 +21,11 @@ namespace Techie.Pbx.Tests.Core
 
         private static Cdr Record(
             string channel, string? destination, string disposition = CallStatuses.Answered,
-            string src = "", string dst = "", string uniqueID = "1.1", string? linkedID = null) => new()
+            string src = "", string dst = "", string uniqueID = "1.1", string? linkedID = null, string? did = null) => new()
         {
             Channel = channel,
             DestinationChannel = destination,
+            Did = did,
             Disposition = disposition,
             Dst = dst,
             LinkedID = linkedID,
@@ -158,6 +159,32 @@ namespace Techie.Pbx.Tests.Core
                 t => Assert.Equal(("voipms", 1, 1, 3), (t.Name, t.Answered, t.Missed, t.Total)));
         }
 
+        /// <summary>The DID says which number was called, not who took the call: totals ignore it.</summary>
+        [Fact]
+        public void Totals_are_the_same_with_or_without_a_did()
+        {
+            var without = new[]
+            {
+                Record("PJSIP/voipms-00000001", "PJSIP/101-00000002", dst: "101"),
+                Record("PJSIP/voipms-00000003", "PJSIP/102-00000004", CallStatuses.NoAnswer, dst: "102"),
+            };
+            var with = new[]
+            {
+                Record("PJSIP/voipms-00000001", "PJSIP/101-00000002", dst: "101", did: "17771234567"),
+                Record("PJSIP/voipms-00000003", "PJSIP/102-00000004", CallStatuses.NoAnswer, dst: "102", did: "17771234568"),
+            };
+
+            var (extensionsWithout, trunksWithout) = CdrTotals.For(without, Endpoints, NoOrigins);
+            var (extensionsWith, trunksWith) = CdrTotals.For(with, Endpoints, NoOrigins);
+
+            Assert.Equal(
+                extensionsWithout.Select(t => (t.Name, t.Answered, t.Missed, t.Total)),
+                extensionsWith.Select(t => (t.Name, t.Answered, t.Missed, t.Total)));
+            Assert.Equal(
+                trunksWithout.Select(t => (t.Name, t.Answered, t.Missed, t.Total)),
+                trunksWith.Select(t => (t.Name, t.Answered, t.Missed, t.Total)));
+        }
+
         [Fact]
         public void Totals_put_extensions_in_numeric_order()
         {
@@ -193,8 +220,28 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("voipms", parties.Trunk);
         }
 
+        /// <summary>
+        /// The call the user reported (piece 18 follow-up 2): the trunk context sends the call into
+        /// internal, so Dst is the extension. The DID the caller dialled comes from the userfield.
+        /// </summary>
         [Fact]
-        public void An_inbound_call_is_from_the_caller_to_the_extension_and_its_line_is_the_number_dialled()
+        public void An_inbound_call_is_from_the_caller_to_the_extension_and_its_line_is_the_did()
+        {
+            var cdr = Record("PJSIP/voipms-00000001", "PJSIP/101-00000002", src: "15551234567", dst: "101",
+                did: "17771234567");
+
+            var parties = CdrParties.For(cdr, Endpoints, NoOrigins);
+
+            Assert.Equal("15551234567", parties.From);
+            Assert.Null(parties.FromExtension);
+            Assert.Equal("101 (Front Desk)", parties.To);
+            Assert.Equal("101", parties.ToExtension);
+            Assert.Equal("17771234567", parties.Line);
+        }
+
+        /// <summary>An inbound record from before the DID was collected has only Dst to go on.</summary>
+        [Fact]
+        public void An_inbound_call_without_a_did_falls_back_to_the_number_dialled()
         {
             var cdr = Record("PJSIP/voipms-00000001", "PJSIP/101-00000002", src: "15551234567", dst: "17771234567");
 
@@ -349,16 +396,17 @@ namespace Techie.Pbx.Tests.Core
             cdr.DurationSeconds = 126;
             cdr.Sequence = 42;
 
-            cdr.Dst = "17771234567";
+            cdr.Dst = "101";
+            cdr.Did = "17771234567";
 
             var csv = CdrCsv.Render(new[] { cdr }, Endpoints, NoOrigins);
             var lines = csv.Split("\r\n");
 
             Assert.Equal(3, lines.Length);
             Assert.Equal("", lines[2]);
-            Assert.StartsWith("StartUtc,AnswerUtc,EndUtc,Direction,Trunk,From,To,Line,Src,Dst,CallerID,Disposition,", lines[0]);
+            Assert.StartsWith("StartUtc,AnswerUtc,EndUtc,Direction,Trunk,From,To,Line,Src,Dst,Did,CallerID,Disposition,", lines[0]);
             Assert.StartsWith(
-                "2026-09-22T10:00:00Z,,,Inbound,voipms,15551234567,101 (Front Desk),17771234567,15551234567,17771234567," +
+                "2026-09-22T10:00:00Z,,,Inbound,voipms,15551234567,101 (Front Desk),17771234567,15551234567,101,17771234567," +
                 "\"\"\"ACME, Corp\"\" <15551234567>\",ANSWERED,126,,",
                 lines[1]);
             Assert.EndsWith(",1.1,,42", lines[1]);

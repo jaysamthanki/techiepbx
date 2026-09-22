@@ -32,7 +32,16 @@ namespace Techie.Pbx.Core.Models
         /// <summary>ANSWERED, NO ANSWER, BUSY, FAILED, CONGESTION or CANCEL: Asterisk's own words.</summary>
         public string Disposition { get; set; } = "";
 
-        /// <summary>The dialled number, or the DID for a call from a trunk.</summary>
+        /// <summary>
+        /// The number an inbound caller dialled, which the trunk context puts in the CDR userfield.
+        /// Null for any other call, and for inbound calls recorded before it was collected.
+        /// </summary>
+        public string? Did { get; set; }
+
+        /// <summary>
+        /// The dialled number. For a call from a trunk this is where the dialplan sent it, usually
+        /// an extension, not the number the caller dialled: that is <see cref="Did"/>.
+        /// </summary>
         public string Dst { get; set; } = "";
 
         /// <summary>Seconds from start to hangup, ringing included.</summary>

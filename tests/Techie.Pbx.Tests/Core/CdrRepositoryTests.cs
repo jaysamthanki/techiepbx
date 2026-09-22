@@ -81,15 +81,53 @@ namespace Techie.Pbx.Tests.Core
             record.AnswerUtc = "2026-09-22T14:03:11Z";
             record.BillSecSeconds = 120;
             record.LinkedID = "1758549785.18";
+            record.Did = "17771234567";
 
             Assert.True(this.cdrs.Insert(record));
 
             var stored = this.cdrs.Find(Filters.Everything(), Trunks).Single();
             Assert.Equal(record.AnswerUtc, stored.AnswerUtc);
+            Assert.Equal("17771234567", stored.Did);
+            Assert.Equal("17771234567", this.cdrs.GetByID(stored.CdrID)!.Did);
             Assert.Equal(120, stored.BillSecSeconds);
             Assert.Equal(42, stored.Sequence);
             Assert.Equal("1758549785.18", stored.LinkedID);
             Assert.Equal(stored.UniqueID, this.cdrs.GetByID(stored.CdrID)!.UniqueID);
+        }
+
+        [Fact]
+        public void A_record_without_a_did_stores_null()
+        {
+            this.cdrs.Insert(Record("1.1", 1, "2026-09-22T10:00:00Z", "PJSIP/101-00000001", "PJSIP/102-00000002"));
+
+            Assert.Null(this.cdrs.Find(Filters.Everything(), Trunks).Single().Did);
+        }
+
+        /// <summary>
+        /// 026 adds the column to a database that already has records: they keep everything they
+        /// had and have no DID, and the reports fall back to Dst for them.
+        /// </summary>
+        [Fact]
+        public void The_did_column_is_added_to_existing_records_as_null()
+        {
+            using (var connection = this.database.Open())
+            {
+                // Back to how 025 left the table, with one record in it.
+                connection.Execute("ALTER TABLE Cdrs DROP COLUMN Did");
+                connection.Execute(
+                    "INSERT INTO Cdrs (UniqueID, Sequence, Src, Dst, Channel, Disposition, StartUtc) " +
+                    "VALUES ('1.1', 1, '15551234567', '17771234567', 'PJSIP/voipms-00000001', 'ANSWERED', '2026-09-20T10:00:00Z')");
+                connection.Execute("PRAGMA user_version = 25");
+            }
+
+            this.database.Migrate();
+
+            var stored = this.cdrs.Find(Filters.Everything(), Trunks).Single();
+            Assert.Equal("17771234567", stored.Dst);
+            Assert.Null(stored.Did);
+
+            using var check = this.database.Open();
+            Assert.Equal(26, check.ExecuteScalar<long>("PRAGMA user_version"));
         }
 
         [Fact]

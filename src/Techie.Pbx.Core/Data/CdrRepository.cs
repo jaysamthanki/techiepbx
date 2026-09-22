@@ -21,7 +21,7 @@ namespace Techie.Pbx.Core.Data
         private const string Columns =
             "CdrID, UniqueID, Sequence, LinkedID, Src, Dst, Dcontext, CallerID, Channel, DestinationChannel, " +
             "LastApplication, LastData, Disposition, AmaFlags, AccountCode, StartUtc, AnswerUtc, EndUtc, " +
-            "DurationSeconds, BillSecSeconds";
+            "DurationSeconds, BillSecSeconds, Did";
 
         /// <summary>How many UniqueIDs one query asks for, well inside SQLite's limit on parameters.</summary>
         private const int OriginBatch = 500;
@@ -106,10 +106,10 @@ namespace Techie.Pbx.Core.Data
             var rows = connection.Execute(
                 "INSERT OR IGNORE INTO Cdrs (UniqueID, Sequence, LinkedID, Src, Dst, Dcontext, CallerID, Channel, " +
                 "DestinationChannel, LastApplication, LastData, Disposition, AmaFlags, AccountCode, StartUtc, " +
-                "AnswerUtc, EndUtc, DurationSeconds, BillSecSeconds) " +
+                "AnswerUtc, EndUtc, DurationSeconds, BillSecSeconds, Did) " +
                 "VALUES (@UniqueID, @Sequence, @LinkedID, @Src, @Dst, @Dcontext, @CallerID, @Channel, " +
                 "@DestinationChannel, @LastApplication, @LastData, @Disposition, @AmaFlags, @AccountCode, @StartUtc, " +
-                "@AnswerUtc, @EndUtc, @DurationSeconds, @BillSecSeconds)",
+                "@AnswerUtc, @EndUtc, @DurationSeconds, @BillSecSeconds, @Did)",
                 cdr);
 
             return rows > 0;
