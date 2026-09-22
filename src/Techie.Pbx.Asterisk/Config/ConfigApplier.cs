@@ -39,6 +39,9 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string FeaturesModule = "features";
 
+        /// <summary>Owns cdr_manager.conf, which sends call records to AMI for the reports (F5).</summary>
+        public const string CdrManagerModule = "cdr_manager";
+
         /// <summary>Owns musiconhold.conf, the generated hold classes (D119, D122).</summary>
         public const string MohModule = "res_musiconhold";
 
@@ -269,6 +272,11 @@ namespace Techie.Pbx.Asterisk.Config
                 new("features.conf", FeaturesModule, FeaturesConfRenderer.Render(this.parking)),
                 new("musiconhold.conf", MohModule, MohConfRenderer.Render(allMohClasses, allMohFiles)),
                 new("res_parking.conf", ParkingModule, ParkingConfRenderer.Render(this.parking)),
+
+                // Call records over AMI for the reports page (F5). Reloadable, but the first apply
+                // that writes it also changes modules.conf, and the restart that asks for is what
+                // loads cdr_manager at all.
+                new(CdrManagerConfRenderer.FileName, CdrManagerModule, CdrManagerConfRenderer.Render()),
             };
 
             return files;

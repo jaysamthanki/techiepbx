@@ -86,6 +86,14 @@ namespace Techie.Pbx.Asterisk.Config
                 "func_timeout.so",          // TIMEOUT(digit), the gap an IVR allows between keys (D61)
             }),
 
+            ("Call records for the reports page (F5)", new[]
+            {
+                // The CDR engine itself is not here: it is built into the Asterisk core as "cdr"
+                // and loads whatever this file says. There is no cdr_core.so.
+                "cdr_manager.so",           // sends each finished record to AMI as a Cdr event, for the app to store
+                "func_cdr.so",              // CDR(): what cdr_manager.conf's mappings add LinkedID and Sequence with
+            }),
+
             ("Audio: the formats our prompts and messages are stored in", new[]
             {
                 "codec_alaw.so",

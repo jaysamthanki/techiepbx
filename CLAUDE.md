@@ -19,34 +19,6 @@ and [docs/security.md](docs/security.md) before changing anything structural.
 - When a decision is made (by the user or during review), record it in
   [docs/decisions.md](docs/decisions.md). Update [docs/roadmap.md](docs/roadmap.md) when a piece lands.
 
-## Layout
-
-```
-Techie.Pbx.slnx
-Directory.Build.props          shared: net10.0, nullable, implicit usings
-src/
-  Techie.Pbx.Web/              Razor Pages UI + API controllers, Entra ID (cookie) auth. Runs unprivileged.
-  Techie.Pbx.Core/             Models, validation, SQLite data access (Dapper), secrets
-    Data/Schema/NNN_name.sql   numbered schema scripts (embedded resources)
-    scripts/                   shell scripts (lab VM build, later the installer)
-  Techie.Pbx.Asterisk/         Config renderers, atomic conf writer, (next) AMI client
-  Techie.Pbx.Contracts/        Typed messages between Web and Helper. No dependencies.
-  Techie.Pbx.Helper/           Root helper on a Unix socket, fixed command allowlist (stub)
-tests/
-  Techie.Pbx.Tests/            xUnit. Expected/ holds the known-good generated conf files.
-docs/                          architecture, decisions, security, database, lab, roadmap
-```
-
-References: Web → Core, Asterisk, Contracts. Asterisk → Core. Helper → Core, Contracts.
-
-## Commands
-
-```bash
-dotnet build Techie.Pbx.slnx
-dotnet test Techie.Pbx.slnx
-dotnet run --project src/Techie.Pbx.Web
-```
-
 ## Conventions (follow these, the user cares about them)
 
 **C#**
@@ -63,31 +35,6 @@ dotnet run --project src/Techie.Pbx.Web
   Framework logs are bridged into log4net in `Program.cs`. Don't inject `ILogger<T>`.
 - Namespaces match folders: `Techie.Pbx.<Project>.<Folder>`.
 - Block-scoped namespaces (`namespace X { ... }`), as in the existing code.
-
-**Database**
-- SQLite via **Dapper** + `Microsoft.Data.Sqlite`. No EF Core.
-- **Primary keys are `<Entity>ID`**, e.g. `ExtensionID`, never `Id`, in both the column and the
-  C# property. Foreign keys use the same name as the key they point at.
-- Tables and columns are PascalCase (`Extensions.Number`). Tables are plural.
-- Schema changes: add a new `Data/Schema/NNN_description.sql`. **Never edit a script that has
-  shipped**; `PRAGMA user_version` tracks which have run. See [docs/database.md](docs/database.md).
-- Repositories validate before writing and throw `ValidationFailedException` for user errors.
-
-**UI**
-- **Allowed client libraries (and nothing else without asking):** Bootstrap, **bootstrap-table**,
-  **sweetalert2**, and **htmx**. All vendored locally under wwwroot/lib — no CDN, no npm build step.
-- **Modals:** create/edit/delete **forms live in Bootstrap modals** — a server-rendered partial
-  (htmx `hx-get` loads it into the modal body, the form posts via htmx and swaps back validation
-  errors or a 204 + `HX-Trigger`). **sweetalert2 is only for alerts, confirms and toasts** —
-  never for forms.
-- **htmx** is the workhorse: Razor Pages returns HTML partials, and htmx handles table refresh,
-  modal submit, and polling (`hx-trigger="every 5s"`) for live status like registration state.
-  JavaScript we write ourselves stays minimal — a few lines of glue, not a framework.
-- Lists are **tables** (bootstrap-table); **rows are clickable and open the edit form** - no stack
-  of action buttons on the right of each row. Other row-level actions (show secret, regenerate,
-  delete) live as buttons in the edit modal's footer, so the table stays clean and edit is one
-  click anywhere on the row.
-- API controllers use the same Entra ID cookie as the pages. Only our own pages call the API.
 
 **Asterisk config**
 - The database is the source of truth. Conf files are generated, never hand-edited.
@@ -108,6 +55,4 @@ dotnet run --project src/Techie.Pbx.Web
 
 ## Current state
 
-See [docs/roadmap.md](docs/roadmap.md). As of 2026-09-13: solution scaffolded, lab VM running
-Asterisk 22 (echo test works), extension model + schema + repository + pjsip/extensions
-renderers + atomic writer done with tests. Next: AMI client and "apply config".
+See [docs/roadmap.md](docs/roadmap.md).

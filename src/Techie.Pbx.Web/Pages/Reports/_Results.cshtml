@@ -1,0 +1,147 @@
+@using Techie.Pbx.Core.Reports
+@model ReportResults
+@functions {
+    private static string StatusClass(CallStatus status) => status switch
+    {
+        CallStatus.Answered => "text-bg-success",
+        CallStatus.Missed => "text-bg-warning",
+        CallStatus.Busy => "text-bg-secondary",
+        _ => "text-bg-danger",
+    };
+}
+@if (Model.Errors.Count > 0)
+{
+    <div class="alert alert-danger">
+        <ul class="mb-0 ps-3">
+            @foreach (var error in Model.Errors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+    return;
+}
+
+@*
+    Two tabs, both rendered now: switching between them is Bootstrap's and needs nothing from the
+    server. A change to the filters brings both back and lands on the call list again.
+*@
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#report-calls" type="button" role="tab">Calls (@Model.Matched)</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#report-totals" type="button" role="tab">Totals</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="report-calls" role="tabpanel">
+        @if (Model.Truncated)
+        {
+            <div class="alert alert-info">
+                Showing the newest @Model.Rows.Count of @Model.Matched calls. Narrow the dates to see the rest,
+                or export them: the CSV and the totals include every one.
+            </div>
+        }
+
+        @if (Model.Rows.Count == 0)
+        {
+            <p class="text-secondary">No calls match.</p>
+        }
+        else
+        {
+            @* Clicking a row opens the whole record in the modal, the same way a row opens an edit form elsewhere (D48). *@
+            <table class="table table-sm table-hover"
+                   data-toggle="table"
+                   data-search="true"
+                   data-pagination="true"
+                   data-page-size="50"
+                   data-sort-name="started"
+                   data-sort-order="desc"
+                   data-classes="table table-sm table-hover">
+                <thead>
+                    <tr>
+                        <th data-field="started" data-sortable="true">Date/time</th>
+                        <th data-field="from" data-sortable="true">From</th>
+                        <th data-field="to" data-sortable="true">To</th>
+                        <th data-field="direction" data-sortable="true">Direction</th>
+                        <th data-field="via" data-sortable="true">Trunk / ext</th>
+                        <th data-field="duration" data-sortable="true">Duration</th>
+                        <th data-field="status" data-sortable="true">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        var detailUrl = Url.Page("Index", "Detail", new { cdrID = row.CdrID });
+
+                        <tr data-edit-url="@detailUrl">
+                            <td class="font-monospace text-nowrap">@row.Started</td>
+                            <td>@row.From</td>
+                            <td>@row.To</td>
+                            <td>@row.Direction</td>
+                            <td>
+                                @if (row.Trunk != null)
+                                {
+                                    <span class="badge text-bg-primary">@row.Trunk</span>
+                                }
+                                else if (row.Extension != null)
+                                {
+                                    <span class="badge text-bg-light border">@row.Extension</span>
+                                }
+                            </td>
+                            <td class="font-monospace">@row.Duration</td>
+                            <td><span class="badge @StatusClass(row.Status)">@row.Status</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    <div class="tab-pane fade" id="report-totals" role="tabpanel">
+        <p class="text-body-secondary small">
+            Counted per call leg, as Asterisk records them: a call that rings three phones counts once for each.
+            Missed is a call that came to the extension, or in over the trunk, and was not answered;
+            a call an extension made that nobody picked up is in its total but not its missed.
+        </p>
+
+        <div class="row">
+            @foreach (var (title, totals) in new[] { ("Per extension", Model.ExtensionTotals), ("Per trunk", Model.TrunkTotals) })
+            {
+                <div class="col-md-6">
+                    <h2 class="h5">@title</h2>
+                    @if (totals.Count == 0)
+                    {
+                        <p class="text-secondary">None.</p>
+                    }
+                    else
+                    {
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th class="text-end">Answered</th>
+                                    <th class="text-end">Missed</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var total in totals)
+                                {
+                                    <tr>
+                                        <td class="font-monospace">@total.Name</td>
+                                        <td class="text-end">@total.Answered</td>
+                                        <td class="text-end">@total.Missed</td>
+                                        <td class="text-end">@total.Total</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</div>

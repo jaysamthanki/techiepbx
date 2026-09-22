@@ -1,0 +1,67 @@
+@model CallDetail
+@{
+    var cdr = Model.Cdr;
+    var row = Model.Row;
+
+    string Local(string? utc) => CallRow.Local(utc, Model.Zone) ?? "—";
+    string Or(string? value) => string.IsNullOrEmpty(value) ? "—" : value;
+}
+@*
+    The whole stored record, read only, in the shared modal. No form and no actions: a call record
+    is something that happened, and nothing here changes it.
+*@
+<div class="modal-header">
+    <h5 class="modal-title">Call at @row.Started</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+
+<div class="modal-body">
+    <dl class="row mb-0">
+        <dt class="col-sm-4">From</dt>
+        <dd class="col-sm-8">@Or(cdr.Src) <span class="text-body-secondary">@cdr.CallerID</span></dd>
+
+        <dt class="col-sm-4">To</dt>
+        <dd class="col-sm-8">@Or(cdr.Dst) <span class="text-body-secondary">in @Or(cdr.Dcontext)</span></dd>
+
+        <dt class="col-sm-4">Direction</dt>
+        <dd class="col-sm-8">@row.Direction @(row.Trunk != null ? $"over {row.Trunk}" : "")</dd>
+
+        <dt class="col-sm-4">Status</dt>
+        <dd class="col-sm-8">@row.Status <span class="text-body-secondary">(@cdr.Disposition)</span></dd>
+
+        <dt class="col-sm-4">Started</dt>
+        <dd class="col-sm-8 font-monospace">@Local(cdr.StartUtc)</dd>
+
+        <dt class="col-sm-4">Answered</dt>
+        <dd class="col-sm-8 font-monospace">@Local(cdr.AnswerUtc)</dd>
+
+        <dt class="col-sm-4">Ended</dt>
+        <dd class="col-sm-8 font-monospace">@Local(cdr.EndUtc)</dd>
+
+        <dt class="col-sm-4">Duration</dt>
+        <dd class="col-sm-8 font-monospace">@Or(CallRow.Seconds(cdr.DurationSeconds)) <span class="text-body-secondary">in all</span></dd>
+
+        <dt class="col-sm-4">Talk time</dt>
+        <dd class="col-sm-8 font-monospace">@Or(CallRow.Seconds(cdr.BillSecSeconds))</dd>
+
+        <dt class="col-sm-4">Caller channel</dt>
+        <dd class="col-sm-8 font-monospace">@Or(cdr.Channel)</dd>
+
+        <dt class="col-sm-4">Called channel</dt>
+        <dd class="col-sm-8 font-monospace">@Or(cdr.DestinationChannel)</dd>
+
+        <dt class="col-sm-4">Last application</dt>
+        <dd class="col-sm-8 font-monospace">@Or(cdr.LastApplication)@(cdr.LastData != null ? $"({cdr.LastData})" : "")</dd>
+
+        <dt class="col-sm-4">Unique ID</dt>
+        <dd class="col-sm-8 font-monospace">@cdr.UniqueID @(cdr.Sequence is { } sequence ? $"#{sequence}" : "")</dd>
+
+        <dt class="col-sm-4">Linked ID</dt>
+        <dd class="col-sm-8 font-monospace">@Or(cdr.LinkedID)</dd>
+    </dl>
+    <p class="text-body-secondary small mt-3 mb-0">Times are @Model.Timezone.</p>
+</div>
+
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+</div>

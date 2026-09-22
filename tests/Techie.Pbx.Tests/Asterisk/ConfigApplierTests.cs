@@ -84,7 +84,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf", "logger.conf",
                     "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
                     "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName,
-                    "features.conf", "musiconhold.conf", "res_parking.conf",
+                    "features.conf", "musiconhold.conf", "res_parking.conf", CdrManagerConfRenderer.FileName,
                 },
                 files.Select(f => f.FileName));
 
@@ -98,6 +98,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
+                    ConfigApplier.CdrManagerModule,
                 },
                 files.Select(f => f.Module));
 
@@ -163,14 +164,15 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var written = this.applier.Write().Select(f => f.FileName).ToList();
 
-            // Fourteen files: the thirteen of call parking (D119) — the ten of piece 23, of which
+            // The thirteen of call parking (D119) — the ten of piece 23, of which
             // tnpbx-cert.pem is always written, empty when no certificate exists so a stale key
             // never lingers (D101), plus features.conf, musiconhold.conf and res_parking.conf,
             // written whether parking is switched on or not so that switching it off is itself
             // something an apply carries out — and tnpbx-voicemail-options.json, which is written
             // even with no mailboxes at all, so that removing the last one removes its options
-            // too (D128).
-            Assert.Equal(14, written.Count);
+            // too (D128). Fifteen with cdr_manager.conf, which has nothing from the database in it
+            // and so is the same on every system (F5).
+            Assert.Equal(15, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
@@ -343,7 +345,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 {
                     ConfigApplier.LoggerModule, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
-                    ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
+                    ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule, ConfigApplier.CdrManagerModule,
                     ConfigApplier.ManagerModule,
                 },
                 plan);

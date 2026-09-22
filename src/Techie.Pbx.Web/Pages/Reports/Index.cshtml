@@ -1,0 +1,103 @@
+@page
+@using Techie.Pbx.Core.Reports
+@model IndexModel
+@{
+    ViewData["Title"] = "Call reports";
+
+    var resultsUrl = Url.Page("Index", "Results");
+    var form = Model.Form;
+
+    // Worked out here, in the site's zone, so the buttons only copy dates (ReportRange).
+    var ranges = new[]
+    {
+        ("Today", ReportRange.Today(Model.SiteToday)),
+        ("Yesterday", ReportRange.Yesterday(Model.SiteToday)),
+        ("This week", ReportRange.ThisWeek(Model.SiteToday)),
+        ("Last week", ReportRange.LastWeek(Model.SiteToday)),
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Call reports</h1>
+    <span class="text-body-secondary small">Times are @Model.Timezone</span>
+</div>
+
+@*
+    A plain GET form: pressing Enter reloads the page with the filters in the URL, so a report can
+    be bookmarked, and brings in calls that ended since. htmx reads the same form for the results
+    (hx-include below), and the export button submits it with handler=Export, which answers with
+    the CSV rather than a page. A button's name and value are only sent by the button that
+    submitted, so htmx never sees handler=Export.
+*@
+<form id="report-filters" method="get" class="row g-2 align-items-end mb-3">
+    <div class="col-auto">
+        <label for="report-from" class="form-label">From</label>
+        <input id="report-from" name="From" type="date" class="form-control" value="@form.From?.ToString("yyyy-MM-dd")" required>
+    </div>
+    <div class="col-auto">
+        <label for="report-to" class="form-label">To</label>
+        <input id="report-to" name="To" type="date" class="form-control" value="@form.To?.ToString("yyyy-MM-dd")" required>
+    </div>
+    @* type="button" and no name: they fill the dates in and are never part of what the form sends. *@
+    <div class="col-auto">
+        <div class="btn-group" role="group" aria-label="Quick date ranges">
+            @foreach (var (label, (from, to)) in ranges)
+            {
+                <button type="button" class="btn btn-outline-secondary"
+                        data-report-from="@from.ToString("yyyy-MM-dd")"
+                        data-report-to="@to.ToString("yyyy-MM-dd")">@label</button>
+            }
+        </div>
+    </div>
+    <div class="col-auto">
+        <label for="report-extension" class="form-label">Extension</label>
+        <select id="report-extension" name="Extension" class="form-select">
+            <option value="">Any</option>
+            @foreach (var extension in Model.Extensions)
+            {
+                <option value="@extension.Number" selected="@(extension.Number == form.Extension)">@extension.Number – @extension.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label for="report-direction" class="form-label">Direction</label>
+        <select id="report-direction" name="Direction" class="form-select">
+            <option value="">Any</option>
+            @foreach (var direction in new[] { "inbound", "outbound", "internal" })
+            {
+                <option value="@direction" selected="@(string.Equals(direction, form.Direction, StringComparison.OrdinalIgnoreCase))">@(char.ToUpperInvariant(direction[0]) + direction[1..])</option>
+            }
+        </select>
+    </div>
+    <div class="col-auto">
+        <label for="report-status" class="form-label">Status</label>
+        <select id="report-status" name="Status" class="form-select">
+            <option value="">Any</option>
+            @foreach (var status in new[] { "answered", "missed", "busy", "failed" })
+            {
+                <option value="@status" selected="@(string.Equals(status, form.Status, StringComparison.OrdinalIgnoreCase))">@(char.ToUpperInvariant(status[0]) + status[1..])</option>
+            }
+        </select>
+    </div>
+    @* First, because Enter submits a form with its first submit button: Enter reloads the page
+       with these filters, and never downloads a CSV by surprise. *@
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Refresh</button>
+    </div>
+    <div class="col-auto">
+        <button type="submit" name="handler" value="Export" class="btn btn-outline-secondary">Export CSV</button>
+    </div>
+</form>
+
+<div id="report-results"
+     hx-get="@resultsUrl"
+     hx-include="#report-filters"
+     hx-trigger="load, change from:#report-filters">
+    <p class="text-secondary">Loading calls…</p>
+</div>
+
+<partial name="_FormModal" />
+
+@section Scripts {
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

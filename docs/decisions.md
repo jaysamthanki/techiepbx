@@ -2736,3 +2736,24 @@ byte for byte what it was before this existed.
   that the mobile's own voicemail answering does not steal the call in a way that surprises anyone
   (it will — that is what the "press 1 to accept" option above exists for, if it turns out to
   matter), and that answering on the desk phone cleanly cancels the mobile leg.
+
+### D131. Call reports: the app collects Cdrs over AMI, keeps them forever, and reports per leg (2026-09-22)
+
+F5's open question is settled: **our app collects `Cdr` events over AMI into its own SQLite
+database**, not one of Asterisk's own CDR backends. One database, one backup; the report is
+plain SQL; retention is ours. `cdr_manager` needs `cdr_manager.conf` with `enabled = yes` to
+send anything, and that file also maps `linkedid` and `sequence` onto the event — which is why
+`func_cdr.so` joins the module allowlist (D31's `cdr_*` reservation turned out to be
+`cdr_manager` only; the CDR engine itself is in the core and `cdr_core.so` does not exist).
+The AMI account's `read` permission becomes `system,cdr` (D32 anticipated this).
+
+The `Cdrs` table (schema 025) keeps **one row per Asterisk CDR record, not per call**: a
+ring-all to three phones is three rows, deliberately, so the history can show who was on a
+ring path and who wasn't. The unique key is `(UniqueID, Sequence)` — UniqueID alone repeats
+across the legs of one call. Retention: **forever**, nothing deletes. Direction (inbound,
+outbound, internal) is derived at read time from which channels are trunks, so it follows the
+trunks as they are. "Missed" means not answered at a called extension, or an unanswered
+inbound trunk call; an outbound call nobody picked up is not the caller's missed. The
+extension filter matches both numbers and channels, so ring-group and DID calls show up. The
+page opens on today in the site's timezone, with Today / Yesterday / This week / Last week
+(Sun–Sat) quick buttons; the list caps at 2,000 rows while totals and CSV include everything.

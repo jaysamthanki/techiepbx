@@ -10,6 +10,7 @@ using Microsoft.Identity.Web.UI;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Diagnostics;
 using Techie.Pbx.Core.Security;
+using Techie.Pbx.Web.CallRecords;
 using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
 
@@ -131,6 +132,9 @@ namespace Techie.Pbx.Web
 
             // Renews certificates before they expire, whether or not anybody is signed in (D100).
             builder.Services.AddHostedService<CertificateRenewalService>();
+
+            // Listens on AMI for call records and stores them for the reports page (F5).
+            builder.Services.AddHostedService<CdrCollectorService>();
 
             if (certificate != null)
                 builder.Services.AddHttpsRedirection(options => options.HttpsPort = WebBindings.HttpsPort);

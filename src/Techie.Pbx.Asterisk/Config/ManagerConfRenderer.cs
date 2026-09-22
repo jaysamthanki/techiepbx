@@ -8,7 +8,8 @@ namespace Techie.Pbx.Asterisk.Config
     /// credentials in the file and the credentials in the database cannot drift apart.
     ///
     /// AMI listens on the loopback address and nothing else, whatever the settings say (D32), and
-    /// the one account it defines gets only the permissions our four actions need.
+    /// the one account it defines gets only the permissions our actions and the call record
+    /// collector need.
     /// </summary>
     public static class ManagerConfRenderer
     {
@@ -16,11 +17,12 @@ namespace Techie.Pbx.Asterisk.Config
         public const string BindAddress = "127.0.0.1";
 
         /// <summary>
-        /// Read: "system" carries the answers to PJSIPShowContacts. Write: "system" and "config"
+        /// Read: "system" carries the answers to PJSIPShowContacts, and "cdr" the Cdr events the
+        /// call reports are collected from (F5, anticipated by D32). Write: "system" and "config"
         /// are between them what Action: Reload needs. No "command" permission, because we do not
         /// use Action: Command (D17), and no "originate", because nothing here places calls.
         /// </summary>
-        private const string ReadPermissions = "system";
+        private const string ReadPermissions = "system,cdr";
 
         private const string WritePermissions = "system,config";
 

@@ -24,6 +24,16 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("asterisk.conf"), AsteriskConfRenderer.Render());
         }
 
+        /// <summary>
+        /// cdr_manager.conf: on, plus the two mappings the collector dedupes and groups calls by
+        /// (F5). A file with no "enabled = yes" loads the module and sends nothing.
+        /// </summary>
+        [Fact]
+        public void CdrManager_matches_expected_file()
+        {
+            Assert.Equal(Expected("cdr_manager.conf"), CdrManagerConfRenderer.Render());
+        }
+
         [Fact]
         public void Logger_matches_expected_file()
         {
@@ -155,6 +165,48 @@ namespace Techie.Pbx.Tests.Asterisk
         public void The_allowlist_carries_what_the_dialplan_calls(string module)
         {
             Assert.Contains(module, ModulesConfRenderer.Modules);
+        }
+
+        /// <summary>
+        /// The call reports (F5): cdr_manager sends the records to AMI, and func_cdr is what its
+        /// mappings are evaluated with — without it LinkedID and Sequence arrive empty. The CDR
+        /// engine itself is built into the core, so there is no cdr_core.so to list.
+        /// </summary>
+        [Theory]
+        [InlineData("cdr_manager.so")]
+        [InlineData("func_cdr.so")]
+        public void The_allowlist_carries_what_the_call_reports_need(string module)
+        {
+            Assert.Contains(module, ModulesConfRenderer.Modules);
+        }
+
+        /// <summary>
+        /// Asterisk's other CDR backends write the records somewhere of their own. The app is the
+        /// one place they are stored (F5), so none of them load.
+        /// </summary>
+        [Theory]
+        [InlineData("cdr_csv")]
+        [InlineData("cdr_sqlite3_custom")]
+        [InlineData("cdr_custom")]
+        [InlineData("cdr_core")]
+        public void No_other_cdr_backend_is_loaded(string module)
+        {
+            Assert.DoesNotContain(module, ModulesConfRenderer.Render());
+        }
+
+        /// <summary>
+        /// The collector's AMI account can read call records, and the permissions stay exactly
+        /// what D32 allows plus "cdr": no command, no originate.
+        /// </summary>
+        [Fact]
+        public void Manager_account_reads_system_and_cdr_events_and_nothing_else()
+        {
+            var actual = ManagerConfRenderer.Render(SampleAmi());
+
+            Assert.Contains("read = system,cdr\n", actual);
+            Assert.Contains("write = system,config\n", actual);
+            Assert.DoesNotContain("command", actual);
+            Assert.DoesNotContain("originate", actual);
         }
 
         /// <summary>
