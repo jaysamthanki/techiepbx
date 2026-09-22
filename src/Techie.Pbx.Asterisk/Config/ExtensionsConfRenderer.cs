@@ -1109,7 +1109,8 @@ namespace Techie.Pbx.Asterisk.Config
         /// The <c>r</c> makes Asterisk generate the ringback itself. A caller whose call is still
         /// unanswered hears it from their own phone, but a caller an IVR or a ring group has
         /// already answered has no phone-side ringback left — without <c>r</c>, the ringing
-        /// destination they just chose is silence (D127).
+        /// destination they just chose is silence (D127). On an answered channel that ringback is
+        /// an inband tone out of the tone zone indications.conf defines (D132).
         /// </summary>
         private static string InternalDialOptions(bool hasSetMohContext) =>
             hasSetMohContext ? $"{DialOptions}rU({SetMohContext})" : $"{DialOptions}r";

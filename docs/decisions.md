@@ -2535,6 +2535,10 @@ through the SMTP settings the Email tab already holds.
   `sendmail()` settles that, and the substitution list in
   `configs/samples/voicemail.conf.sample` settles the template.
 
+### D127. `r` on internal Dials: an answered caller hears ringback from the server (2026-09-19)
+
+A caller an IVR or a ring group has already been answered cannot be sent 180 Ringing — the call is up, so Asterisk would have nothing to signal. Without help that caller hears silence while the extension rings. `InternalDialOptions` therefore adds `r` to every internal `Dial`: the server generates ringback toward the caller for the whole dial, whether or not the caller was answered. This was found incomplete by D132 — `r` inband ringback also needs a tone zone to exist.
+
 ### D128. Voicemail transcription: whisper.cpp on the box, and a generated file to ask for it (2026-09-21)
 Voicemail to email (D126) delivers a recording somebody still has to listen to. Transcription puts
 the words in the email, and the interesting question was never the engine — it was **where the
@@ -2765,3 +2769,25 @@ trunk context's first priority sets `CDR(userfield) = ${DID}`, which `cdr_manage
 onto the event as `Did` and schema 026 stores; older rows fall back to `Dst`. A call's
 originating extension is recovered from the first leg via `LinkedID` when the record itself
 only shows a Local channel, as on the outgoing half of a forwarded call.
+
+### D132. indications.conf is generated: one fixed `us` tone zone, so Dial's `r` has a ring to play (2026-09-22)
+
+D127 added `r` to every internal `Dial` so a caller an IVR or ring group has already answered
+hears ringing rather than silence. That was necessary but not sufficient: on an answered
+channel `r` plays the ring tone **inband**, from the channel's tone zone, and the lab had no
+`indications.conf` at all — `indication show` answered "No countries matched your criteria",
+so there was no tone to play and the caller still heard silence when the IVR sent them to an
+extension.
+
+`indications.conf` is now generated like every other file in `/etc/asterisk`
+(`IndicationsConfRenderer`): `[general]` with `country = us`, and a single `[us]` zone copied
+line for line from Asterisk 22's `indications.conf.sample` (description, `ringcadence`, `dial`,
+`busy`, `ring`, `congestion`, `callwaiting`, `dialrecall`, `record`, `info`, `stutter`). No
+other countries. Tone handling is built into the core as the `indications` module, so nothing
+joins the modules.conf allowlist (D31); an apply that changes the file reloads `indications`
+the way it reloads `logger` and `features` — a module reload, not an Asterisk restart.
+
+**No country setting, for now.** The zone is fixed at `us` because every site so far is in
+North America and a setting is surface area nobody has asked for. If a site elsewhere needs
+its own ringing and busy tones, a country setting (one value choosing among the stock zones)
+is the obvious future knob; it would be decided then, not now.

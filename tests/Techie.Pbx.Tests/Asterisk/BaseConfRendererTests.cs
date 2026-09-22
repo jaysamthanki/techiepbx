@@ -45,6 +45,16 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("cdr.conf"), CdrConfRenderer.Render());
         }
 
+        /// <summary>
+        /// indications.conf: the stock us zone and nothing else. Its ring tone is what Dial's r
+        /// option plays to a caller an IVR or ring group has already answered (D127, D132).
+        /// </summary>
+        [Fact]
+        public void Indications_matches_expected_file()
+        {
+            Assert.Equal(Expected("indications.conf"), IndicationsConfRenderer.Render());
+        }
+
         [Fact]
         public void Logger_matches_expected_file()
         {

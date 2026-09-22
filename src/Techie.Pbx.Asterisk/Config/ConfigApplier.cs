@@ -42,6 +42,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>Owns cdr_manager.conf, which sends call records to AMI for the reports (F5).</summary>
         public const string CdrManagerModule = "cdr_manager";
 
+        /// <summary>
+        /// indications.conf, the tone zone inband ringback is played from (D132). Core like the
+        /// logger: main/indications.c registers itself as a reloadable module called "indications".
+        /// </summary>
+        public const string IndicationsModule = "indications";
+
         /// <summary>Owns musiconhold.conf, the generated hold classes (D119, D122).</summary>
         public const string MohModule = "res_musiconhold";
 
@@ -280,6 +286,10 @@ namespace Techie.Pbx.Asterisk.Config
                 // The core CDR engine reads cdr.conf once at startup: without it, unanswered = no,
                 // and a missed inbound call leaves no record (F5's missed calls). Restart-applied.
                 new(CdrConfRenderer.FileName, null, CdrConfRenderer.Render()),
+
+                // The tone zone Dial's r option plays ringing from once a caller is already
+                // answered, by an IVR or a ring group (D127): without it they hear silence (D132).
+                new(IndicationsConfRenderer.FileName, IndicationsModule, IndicationsConfRenderer.Render()),
             };
 
             return files;

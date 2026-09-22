@@ -85,7 +85,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
                     "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName,
                     "features.conf", "musiconhold.conf", "res_parking.conf", CdrManagerConfRenderer.FileName,
-                    CdrConfRenderer.FileName,
+                    CdrConfRenderer.FileName, IndicationsConfRenderer.FileName,
                 },
                 files.Select(f => f.FileName));
 
@@ -99,7 +99,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
-                    ConfigApplier.CdrManagerModule, null,
+                    ConfigApplier.CdrManagerModule, null, ConfigApplier.IndicationsModule,
                 },
                 files.Select(f => f.Module));
 
@@ -173,8 +173,9 @@ namespace Techie.Pbx.Tests.Asterisk
             // even with no mailboxes at all, so that removing the last one removes its options
             // too (D128). Fifteen with cdr_manager.conf, which has nothing from the database in it
             // and so is the same on every system (F5), and cdr.conf, which only turns unanswered
-            // calls on so a missed inbound call leaves a record.
-            Assert.Equal(16, written.Count);
+            // calls on so a missed inbound call leaves a record. Seventeen with indications.conf,
+            // the fixed tone zone inband ringback is played from (D132).
+            Assert.Equal(17, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 
@@ -348,7 +349,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     ConfigApplier.LoggerModule, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule, ConfigApplier.CdrManagerModule,
-                    ConfigApplier.ManagerModule,
+                    ConfigApplier.IndicationsModule, ConfigApplier.ManagerModule,
                 },
                 plan);
         }
