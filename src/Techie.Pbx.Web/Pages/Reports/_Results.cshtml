@@ -65,6 +65,7 @@
                         <th data-field="started" data-sortable="true">Date/time</th>
                         <th data-field="from" data-sortable="true">From</th>
                         <th data-field="to" data-sortable="true">To</th>
+                        <th data-field="line" data-sortable="true">Line</th>
                         <th data-field="direction" data-sortable="true">Direction</th>
                         <th data-field="via" data-sortable="true">Trunk / ext</th>
                         <th data-field="duration" data-sortable="true">Duration</th>
@@ -80,6 +81,7 @@
                             <td class="font-monospace text-nowrap">@row.Started</td>
                             <td>@row.From</td>
                             <td>@row.To</td>
+                            <td class="font-monospace">@row.Line</td>
                             <td>@row.Direction</td>
                             <td>
                                 @if (row.Trunk != null)

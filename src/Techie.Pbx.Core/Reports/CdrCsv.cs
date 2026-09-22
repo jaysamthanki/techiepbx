@@ -6,8 +6,9 @@ namespace Techie.Pbx.Core.Reports
 {
     /// <summary>
     /// The call report as CSV (F5): RFC 4180, CRLF line ends, a field quoted only when it has to
-    /// be. The columns are the stored record plus the derived direction and trunk, so a spreadsheet
-    /// can be filtered the same way the page is.
+    /// be. The columns are the stored record plus what the page works out from it — direction, trunk,
+    /// and the parties as the list shows them (<see cref="CdrParties"/>) — so a spreadsheet can be
+    /// filtered the same way the page is. The raw Src and Dst stay, beside the readable ones.
     ///
     /// Caller ID comes from outside, so a caller can choose what lands in a cell. A value a
     /// spreadsheet would read as a formula gets an apostrophe in front of it, which the spreadsheet
@@ -18,7 +19,7 @@ namespace Techie.Pbx.Core.Reports
     {
         private static readonly string[] Header =
         {
-            "StartUtc", "AnswerUtc", "EndUtc", "Direction", "Trunk", "Src", "Dst", "CallerID",
+            "StartUtc", "AnswerUtc", "EndUtc", "Direction", "Trunk", "From", "To", "Line", "Src", "Dst", "CallerID",
             "Disposition", "DurationSeconds", "BillSecSeconds", "Channel", "DestinationChannel",
             "Dcontext", "LastApplication", "LastData", "AccountCode", "AmaFlags", "UniqueID",
             "LinkedID", "Sequence",
@@ -67,20 +68,25 @@ namespace Techie.Pbx.Core.Reports
 
         private static string? Number(int? value) => value?.ToString(CultureInfo.InvariantCulture);
 
-        public static string Render(IEnumerable<Cdr> cdrs, IReadOnlySet<string> trunkNames)
+        public static string Render(IEnumerable<Cdr> cdrs, PbxEndpoints endpoints, IReadOnlyDictionary<string, Cdr> origins)
         {
             var sb = new StringBuilder();
             Line(sb, Header);
 
             foreach (var cdr in cdrs)
             {
+                var parties = CdrParties.For(cdr, endpoints, origins);
+
                 Line(sb, new[]
                 {
                     cdr.StartUtc,
                     cdr.AnswerUtc,
                     cdr.EndUtc,
-                    CdrChannels.Direction(cdr, trunkNames).ToString(),
-                    CdrChannels.Trunk(cdr, trunkNames),
+                    parties.Direction.ToString(),
+                    parties.Trunk,
+                    parties.From,
+                    parties.To,
+                    parties.Line,
                     cdr.Src,
                     cdr.Dst,
                     cdr.CallerID,

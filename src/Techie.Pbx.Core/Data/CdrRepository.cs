@@ -23,6 +23,9 @@ namespace Techie.Pbx.Core.Data
             "LastApplication, LastData, Disposition, AmaFlags, AccountCode, StartUtc, AnswerUtc, EndUtc, " +
             "DurationSeconds, BillSecSeconds";
 
+        /// <summary>How many UniqueIDs one query asks for, well inside SQLite's limit on parameters.</summary>
+        private const int OriginBatch = 500;
+
         private readonly Database database;
 
         public CdrRepository(Database database)
@@ -113,10 +116,45 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
+        /// The first leg of every call among <paramref name="cdrs"/> whose caller was a Local
+        /// channel, by UniqueID, for <see cref="CdrParties.For"/>. Read from the whole table rather
+        /// than from the records given: a filter can leave the first leg out — an outbound filter
+        /// drops the internal leg that says which extension forwarded the call — and who made the
+        /// call is still the same.
+        /// </summary>
+        public Dictionary<string, Cdr> Origins(IEnumerable<Cdr> cdrs)
+        {
+            var linkedIDs = cdrs.Where(CdrParties.NeedsOrigin).Select(cdr => cdr.LinkedID!).Distinct(StringComparer.Ordinal).ToList();
+            var origins = new Dictionary<string, Cdr>(StringComparer.Ordinal);
+
+            if (linkedIDs.Count == 0)
+                return origins;
+
+            using var connection = this.database.Open();
+
+            foreach (var batch in linkedIDs.Chunk(OriginBatch))
+            {
+                // A ring-all leaves one record per phone under the same UniqueID; the caller is the
+                // same on all of them, so the first will do.
+                var rows = connection.Query<Cdr>(
+                    $"SELECT {Columns} FROM Cdrs WHERE UniqueID IN @ids ORDER BY CdrID",
+                    new { ids = batch });
+
+                foreach (var row in rows)
+                    origins.TryAdd(row.UniqueID, row);
+            }
+
+            return origins;
+        }
+
+        /// <summary>
         /// Totals per extension and per trunk over exactly the records <see cref="Find"/> returns
         /// for the same filter, so the totals and the list always agree.
         /// </summary>
-        public (List<CdrTotal> Extensions, List<CdrTotal> Trunks) Totals(CdrFilter filter, IReadOnlySet<string> trunkNames) =>
-            CdrTotals.For(this.Find(filter, trunkNames), trunkNames);
+        public (List<CdrTotal> Extensions, List<CdrTotal> Trunks) Totals(CdrFilter filter, PbxEndpoints endpoints)
+        {
+            var found = this.Find(filter, endpoints.TrunkNames);
+            return CdrTotals.For(found, endpoints, this.Origins(found));
+        }
     }
 }

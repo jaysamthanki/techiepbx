@@ -72,11 +72,12 @@ namespace Techie.Pbx.Web.Pages.Reports
                 return this.NotFound();
 
             var (zone, name) = this.Zone();
+            var origins = this.cdrs.Origins(new[] { cdr });
 
             return this.Partial("_Detail", new CallDetail
             {
                 Cdr = cdr,
-                Row = CallRow.For(cdr, this.TrunkNames(), zone),
+                Row = CallRow.For(cdr, this.Endpoints(), origins, zone),
                 Timezone = name,
                 Zone = zone,
             });
@@ -94,9 +95,9 @@ namespace Techie.Pbx.Web.Pages.Reports
             if (filter == null)
                 return this.BadRequest(string.Join(" ", errors));
 
-            var trunkNames = this.TrunkNames();
-            var found = this.cdrs.Find(filter, trunkNames);
-            var csv = CdrCsv.Render(found, trunkNames);
+            var endpoints = this.Endpoints();
+            var found = this.cdrs.Find(filter, endpoints.TrunkNames);
+            var csv = CdrCsv.Render(found, endpoints, this.cdrs.Origins(found));
 
             Log.Info($"Call report exported by {this.User.Identity?.Name}: {found.Count} records, {form.From:yyyy-MM-dd} to {form.To:yyyy-MM-dd}");
 
@@ -115,24 +116,25 @@ namespace Techie.Pbx.Web.Pages.Reports
             if (filter == null)
                 return this.Partial("_Results", new ReportResults { Errors = errors });
 
-            var trunkNames = this.TrunkNames();
-            var found = this.cdrs.Find(filter, trunkNames);
-            var (extensionTotals, trunkTotals) = CdrTotals.For(found, trunkNames);
+            var endpoints = this.Endpoints();
+            var found = this.cdrs.Find(filter, endpoints.TrunkNames);
+            var origins = this.cdrs.Origins(found);
+            var (extensionTotals, trunkTotals) = CdrTotals.For(found, endpoints, origins);
 
             return this.Partial("_Results", new ReportResults
             {
                 ExtensionTotals = extensionTotals,
                 Matched = found.Count,
-                Rows = found.Take(MaxRows).Select(cdr => CallRow.For(cdr, trunkNames, zone)).ToList(),
+                Rows = found.Take(MaxRows).Select(cdr => CallRow.For(cdr, endpoints, origins, zone)).ToList(),
                 TrunkTotals = trunkTotals,
             });
         }
 
+        /// <summary>The trunks and extensions as they are now, which is what every record is read against.</summary>
+        private PbxEndpoints Endpoints() => PbxEndpoints.From(this.extensions.GetAll(), this.trunks.GetAll());
+
         private static DateOnly Today(TimeZoneInfo zone) =>
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone));
-
-        private IReadOnlySet<string> TrunkNames() =>
-            this.trunks.GetAll().Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
 
         /// <summary>
         /// The site's zone and its name. A zone this machine cannot find falls back to UTC rather

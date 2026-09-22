@@ -34,6 +34,7 @@ else
             <tr>
                 <th>From</th>
                 <th>To</th>
+                <th>Line</th>
                 <th>Duration</th>
                 <th>State</th>
             </tr>
@@ -46,6 +47,13 @@ else
                 <tr title="@string.Join(", ", call.Channels)">
                     <td>@call.From</td>
                     <td>@call.To</td>
+                    <td>
+                        @call.Line
+                        @if (call.Trunk != null)
+                        {
+                            <span class="badge text-bg-primary">@call.Trunk</span>
+                        }
+                    </td>
                     <td>@(call.Duration is { } duration ? $"{(int)duration.TotalMinutes}:{duration.Seconds:00}" : "")</td>
                     <td>@call.State</td>
                 </tr>

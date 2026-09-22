@@ -34,12 +34,13 @@ namespace Techie.Pbx.Tests.Core
 
         private static Cdr Record(
             string uniqueID, long? sequence, string start, string channel, string? destination,
-            string disposition = CallStatuses.Answered, string src = "", string dst = "") => new()
+            string disposition = CallStatuses.Answered, string src = "", string dst = "", string? linkedID = null) => new()
         {
             Channel = channel,
             DestinationChannel = destination,
             Disposition = disposition,
             Dst = dst,
+            LinkedID = linkedID,
             Sequence = sequence,
             Src = src,
             StartUtc = start,
@@ -268,10 +269,34 @@ namespace Techie.Pbx.Tests.Core
             var filter = Filters.Everything();
             filter.Extension = "101";
 
-            var (extensions, trunks) = this.cdrs.Totals(filter, Trunks);
+            var endpoints = new PbxEndpoints(new Dictionary<string, string>(), Trunks);
+            var (extensions, trunks) = this.cdrs.Totals(filter, endpoints);
 
             Assert.Equal(new[] { "101", "103" }, extensions.Select(t => t.Name));
             Assert.Equal(new[] { "voipms" }, trunks.Select(t => t.Name));
+        }
+
+        /// <summary>
+        /// 102 called 1003, which forwards to a mobile. The outbound filter keeps only the leg out
+        /// over the trunk, and its first leg is still found, so the list can say 102 made the call.
+        /// </summary>
+        [Fact]
+        public void The_first_leg_of_a_forwarded_call_is_found_even_when_the_filter_left_it_out()
+        {
+            this.cdrs.Insert(Record("7.1", 1, "2026-09-22T10:00:00Z", "PJSIP/102-00000001", "Local/7146085242@internal-00000001;1",
+                src: "102", dst: "1003", linkedID: "7.1"));
+            this.cdrs.Insert(Record("7.3", 2, "2026-09-22T10:00:01Z", "Local/7146085242@internal-00000001;2", "PJSIP/voipms-00000003",
+                src: "17771234567", dst: "7146085242", linkedID: "7.1"));
+
+            var filter = Filters.Everything();
+            filter.Direction = CallDirection.Outbound;
+
+            var found = this.cdrs.Find(filter, Trunks);
+            var origins = this.cdrs.Origins(found);
+
+            Assert.Equal("7.3", Assert.Single(found).UniqueID);
+            Assert.Equal("PJSIP/102-00000001", origins["7.1"].Channel);
+            Assert.Empty(this.cdrs.Origins(new[] { origins["7.1"] }));
         }
     }
 }

@@ -42,6 +42,16 @@ namespace Techie.Pbx.Asterisk.Ami
         public string Exten { get; set; } = "";
 
         /// <summary>
+        /// The call this channel is part of: the Uniqueid of the channel that started it, shared by
+        /// every channel the call has — the phones still ringing, the leg out to a trunk, both
+        /// halves of a Local channel — whether or not they are bridged yet.
+        /// </summary>
+        public string LinkedID { get; set; } = "";
+
+        /// <summary>This channel's own id. The channel whose Uniqueid is the LinkedID started the call.</summary>
+        public string UniqueID { get; set; } = "";
+
+        /// <summary>
         /// <see cref="Duration"/> as a span, or null when Asterisk sent something we cannot read.
         /// Null rather than zero: "we do not know how long" and "it just started" are different
         /// answers, and a sort would put them in different places.
@@ -63,6 +73,8 @@ namespace Techie.Pbx.Asterisk.Ami
             Context = message.Get("Context") ?? "",
             Duration = message.Get("Duration") ?? "",
             Exten = message.Get("Exten") ?? "",
+            LinkedID = message.Get("Linkedid") ?? "",
+            UniqueID = message.Get("Uniqueid") ?? "",
         };
     }
 }

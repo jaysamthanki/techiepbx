@@ -6,6 +6,7 @@ using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Asterisk.Status;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Reports;
 
 namespace Techie.Pbx.Web.Pages.Status
 {
@@ -120,8 +121,10 @@ namespace Techie.Pbx.Web.Pages.Status
         /// </summary>
         public PartialViewResult OnGetLive()
         {
-            var enabledExtensions = this.extensions.GetAll().Where(e => e.Enabled).Select(e => e.Number).ToList();
-            var registeringTrunks = this.trunks.GetAll().Where(t => t.Enabled && t.Register).Select(t => t.Name).ToList();
+            var allExtensions = this.extensions.GetAll();
+            var allTrunks = this.trunks.GetAll();
+            var enabledExtensions = allExtensions.Where(e => e.Enabled).Select(e => e.Number).ToList();
+            var registeringTrunks = allTrunks.Where(t => t.Enabled && t.Register).Select(t => t.Name).ToList();
             var current = this.certificates.Current(DateTimeOffset.UtcNow);
 
             var live = new LiveStatus
@@ -146,7 +149,7 @@ namespace Techie.Pbx.Web.Pages.Status
                 var extensionStates = RegistrationStatus.Map(contacts, enabledExtensions);
                 var trunkStates = RegistrationStatus.MapTrunks(registrations, registeringTrunks);
 
-                live.ActiveCalls = ActiveCalls.FromChannels(channels);
+                live.ActiveCalls = ActiveCalls.FromChannels(channels, PbxEndpoints.From(allExtensions, allTrunks));
                 live.ExtensionsRegistered = extensionStates.Values.Count(state => state == RegistrationState.Registered);
                 live.Reachable = true;
                 live.StartedUtc = core.StartedUtc;

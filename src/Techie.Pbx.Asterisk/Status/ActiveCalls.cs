@@ -1,4 +1,5 @@
 using Techie.Pbx.Asterisk.Ami;
+using Techie.Pbx.Core.Reports;
 
 namespace Techie.Pbx.Asterisk.Status
 {
@@ -7,10 +8,16 @@ namespace Techie.Pbx.Asterisk.Status
     /// over an already-read list, like the renderers and <see cref="Ami.RegistrationStatus.Map"/>:
     /// no connection, so what it does to a given set of channels can be pinned down in tests.
     ///
-    /// The rule is the bridge. Two channels in the same bridge are one call, and the older of the
-    /// two is the side that started it — Asterisk creates the caller's channel first and the leg
-    /// it dials out on second, so "longest duration" is what tells the two apart without us having
-    /// to know which direction the call went (D35's reasoning, applied to live channels).
+    /// The rule is the linked id, and failing that the bridge. Every channel of one call shares the
+    /// Linkedid — the caller, the phones still ringing, the leg out to a trunk — so a call being
+    /// dialled is one row and not one per channel. The side that started it is the channel whose
+    /// Uniqueid is that Linkedid; without one, the oldest, since Asterisk creates the caller's
+    /// channel first and the leg it dials out on second (D35's reasoning, applied to live channels).
+    ///
+    /// The ends are named the way the call reports name them (<see cref="CdrParties"/>): an
+    /// extension of ours is its number and name, read from its channel, so an outbound call reads
+    /// as the phone that made it and not as the caller ID it went out with. That caller ID is the
+    /// row's <see cref="ActiveCall.Line"/>.
     /// </summary>
     public static class ActiveCalls
     {
@@ -20,25 +27,33 @@ namespace Techie.Pbx.Asterisk.Status
         /// </summary>
         private const string Unknown = "<unknown>";
 
-        /// <summary>
-        /// One row per bridge, plus one for every channel that is not in a bridge yet, longest
-        /// call first.
-        /// </summary>
-        public static List<ActiveCall> FromChannels(IEnumerable<ActiveChannel> channels)
+        /// <summary>One row per call, longest first.</summary>
+        public static List<ActiveCall> FromChannels(IEnumerable<ActiveChannel> channels, PbxEndpoints endpoints)
         {
             var calls = new List<ActiveCall>();
 
             foreach (var group in Groups(channels))
             {
-                var from = group.OrderByDescending(channel => channel.DurationSpan ?? TimeSpan.Zero).First();
+                var from = group.FirstOrDefault(channel => channel.UniqueID.Length > 0 && channel.UniqueID == channel.LinkedID)
+                    ?? group.OrderByDescending(channel => channel.DurationSpan ?? TimeSpan.Zero).First();
+
+                var others = group.Where(channel => channel != from).Select(channel => CdrChannels.Endpoint(channel.Channel)).ToList();
+                var fromEndpoint = CdrChannels.Endpoint(from.Channel);
+                var fromExtension = endpoints.IsExtension(fromEndpoint) ? fromEndpoint : null;
+
+                // Inbound when the caller is a trunk, outbound when the call reaches one.
+                var trunk = endpoints.IsTrunk(fromEndpoint) ? fromEndpoint : others.FirstOrDefault(endpoints.IsTrunk);
+                var outbound = trunk != null && !endpoints.IsTrunk(fromEndpoint);
 
                 calls.Add(new ActiveCall
                 {
                     Channels = group.Select(channel => channel.Channel).ToList(),
                     Duration = from.DurationSpan,
-                    From = Caller(from),
+                    From = fromExtension != null ? endpoints.Label(fromExtension) : Caller(from),
+                    Line = outbound ? Known(from.CallerIDNum) : "",
                     State = from.ChannelStateDesc,
-                    To = Called(from),
+                    To = Called(from, others, endpoints),
+                    Trunk = trunk,
                 });
             }
 
@@ -48,14 +63,24 @@ namespace Techie.Pbx.Asterisk.Status
         }
 
         /// <summary>
-        /// Who the calling side reached. The connected line is what Asterisk fills in once it
-        /// knows; before that, the extension being dialled is the best answer there is.
+        /// Who the calling side reached: the extensions of ours on the call, every one still
+        /// ringing included. When there are none, the connected line, which Asterisk fills in once
+        /// it knows; before that, the number being dialled is the best answer there is.
         /// </summary>
-        private static string Called(ActiveChannel channel)
+        private static string Called(ActiveChannel from, List<string?> others, PbxEndpoints endpoints)
         {
-            var connected = Known(channel.ConnectedLineNum);
+            var extensions = others
+                .Where(endpoints.IsExtension)
+                .Select(endpoint => endpoint!)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
 
-            return connected.Length > 0 ? connected : Known(channel.Exten);
+            if (extensions.Count > 0)
+                return string.Join(", ", extensions.Select(endpoints.Label));
+
+            var connected = Known(from.ConnectedLineNum);
+
+            return connected.Length > 0 ? connected : Known(from.Exten);
         }
 
         /// <summary>The caller as one label: "2025551234 (Alice Smith)", or whichever half exists.</summary>
@@ -71,31 +96,35 @@ namespace Techie.Pbx.Asterisk.Status
         }
 
         /// <summary>
-        /// The channels of each call: every bridge is a group, and a channel with no bridge is a
-        /// group of its own because it is a call being set up, not half of somebody else's.
-        /// Bridges keep the order their first channel arrived in, so the answer is stable.
+        /// The channels of each call: everything sharing a Linkedid is a group. A channel Asterisk
+        /// sent no Linkedid for falls back to its bridge, and one in no bridge either is a group of
+        /// its own. Groups keep the order their first channel arrived in, so the answer is stable.
         /// </summary>
         private static List<List<ActiveChannel>> Groups(IEnumerable<ActiveChannel> channels)
         {
-            var bridges = new Dictionary<string, List<ActiveChannel>>(StringComparer.Ordinal);
+            var keyed = new Dictionary<string, List<ActiveChannel>>(StringComparer.Ordinal);
             var groups = new List<List<ActiveChannel>>();
 
             foreach (var channel in channels)
             {
-                if (channel.BridgeId.Length == 0)
+                var key = channel.LinkedID.Length > 0 ? "linked:" + channel.LinkedID
+                    : channel.BridgeId.Length > 0 ? "bridge:" + channel.BridgeId
+                    : null;
+
+                if (key == null)
                 {
                     groups.Add(new List<ActiveChannel> { channel });
                     continue;
                 }
 
-                if (!bridges.TryGetValue(channel.BridgeId, out var bridge))
+                if (!keyed.TryGetValue(key, out var group))
                 {
-                    bridge = new List<ActiveChannel>();
-                    bridges[channel.BridgeId] = bridge;
-                    groups.Add(bridge);
+                    group = new List<ActiveChannel>();
+                    keyed[key] = group;
+                    groups.Add(group);
                 }
 
-                bridge.Add(channel);
+                group.Add(channel);
             }
 
             return groups;
