@@ -129,11 +129,6 @@ namespace Techie.Pbx.Web.Controllers
             var stored = this.settings.GetAll();
             var transport = AsteriskSettings.Transport(stored);
 
-            stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var provisioningUsername);
-            stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var provisioningPassword);
-            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
-            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
-
             // The assigned keys, and the extensions they name: the line keys are what this phone
             // registers as and the rest are its lamps (D121, schema 020). A key whose extension has
             // gone or been switched off — it would have no PJSIP endpoint — and a key on a parking
@@ -143,22 +138,8 @@ namespace Techie.Pbx.Web.Controllers
             var usable = PhoneButton.Usable(
                 this.buttons.GetForPhone(phone.PhoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
-            var config = new YealinkConfig
-            {
-                AdminPassword = (adminPassword ?? "").Trim(),
-                Buttons = usable,
-                Codecs = transport.Codecs,
-                Extensions = allExtensions,
-                NtpServer = AsteriskSettings.NtpServer(stored),
-                Phone = phone,
-                ProvisioningPassword = (provisioningPassword ?? "").Trim(),
-                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + RoutePrefix,
-                ProvisioningUsername = (provisioningUsername ?? "").Trim(),
-                ServerAddress = this.ServerAddress(transport.BindAddress),
-                SipPort = transport.Port,
-                TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
-                UserPassword = (userPassword ?? "").Trim(),
-            };
+            var config = PhoneConfigFactory.Yealink(
+                phone, usable, allExtensions, stored, transport, this.Request.Scheme, this.Request.Host.Host);
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");
 
@@ -220,24 +201,6 @@ namespace Techie.Pbx.Web.Controllers
 
             return null;
         }
-
-        /// <summary>
-        /// The host the phone should know the PBX by: the System.Hostname setting when the site
-        /// has one (D105), otherwise the host the phone just asked us on, without the port.
-        /// </summary>
-        private string RequestHost()
-        {
-            var hostname = (this.settings.Get(SettingsKeys.SystemHostname) ?? "").Trim();
-            return hostname.Length > 0 ? hostname : this.Request.Host.Host;
-        }
-
-        /// <summary>
-        /// Where the phone should send SIP: the bind address, unless Asterisk is listening on
-        /// every interface, in which case the only address we can honestly name is the one the
-        /// phone just reached us on.
-        /// </summary>
-        private string ServerAddress(string bindAddress) =>
-            bindAddress.Length == 0 || bindAddress == AnyAddress ? this.RequestHost() : bindAddress;
 
         /// <summary>Yealink cfg files are plain text, not XML, unlike Polycom's.</summary>
         private IActionResult Text(string content) => this.Content(content, "text/plain");

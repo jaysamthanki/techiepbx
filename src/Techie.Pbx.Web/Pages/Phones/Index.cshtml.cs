@@ -176,60 +176,22 @@ namespace Techie.Pbx.Web.Pages.Phones
             var usable = PhoneButton.Usable(
                 this.buttons.GetForPhone(phoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
-            // The web UI passwords are the same two settings for either brand (D85).
-            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
-            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
-
+            // The config assembly is shared with the provisioning controllers
+            // (PhoneConfigFactory), so what an admin previews here is exactly what a phone
+            // would be served — they cannot drift (D121).
             if (phone.MatchesBrand(PhoneBrand.Polycom))
             {
-                var config = new PolycomConfig
-                {
-                    AdminPassword = (adminPassword ?? "").Trim(),
-                    Buttons = usable,
-                    Extensions = allExtensions,
-                    GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
-                    Phone = phone,
-                    ServerAddress = this.ServerAddress(transport.BindAddress),
-                    SipPort = transport.Port,
-                    SntpAddress = AsteriskSettings.NtpServer(stored),
-                    UserPassword = (userPassword ?? "").Trim(),
-                };
+                var polycom = PhoneConfigFactory.Polycom(
+                    phone, usable, allExtensions, stored, transport, this.Request.Host.Host);
 
-                return this.Content(PolycomConfigRenderer.Render(config), "text/plain");
+                return this.Content(PolycomConfigRenderer.Render(polycom), "text/plain");
             }
 
-            stored.TryGetValue(SettingsKeys.ProvisioningUsername, out var username);
-            stored.TryGetValue(SettingsKeys.ProvisioningPassword, out var password);
-
-            var yealink = new YealinkConfig
-            {
-                AdminPassword = (adminPassword ?? "").Trim(),
-                Buttons = usable,
-                Codecs = transport.Codecs,
-                Extensions = allExtensions,
-                NtpServer = AsteriskSettings.NtpServer(stored),
-                Phone = phone,
-                ProvisioningPassword = (password ?? "").Trim(),
-                ProvisioningUrl = this.Request.Scheme + "://" + this.RequestHost() + YealinkController.RoutePrefix,
-                ProvisioningUsername = (username ?? "").Trim(),
-                ServerAddress = this.ServerAddress(transport.BindAddress),
-                SipPort = transport.Port,
-                TimeZoneOffset = YealinkConfig.TimeZoneOffsetFor(AsteriskSettings.Timezone(stored)),
-                UserPassword = (userPassword ?? "").Trim(),
-            };
+            var yealink = PhoneConfigFactory.Yealink(
+                phone, usable, allExtensions, stored, transport, this.Request.Scheme, this.Request.Host.Host);
 
             return this.Content(YealinkConfigRenderer.Render(yealink), "text/plain");
         }
-
-        /// <summary>The host a phone should be told to reach us at: the configured one, else ours.</summary>
-        private string RequestHost()
-        {
-            var hostname = (this.settings.Get(SettingsKeys.SystemHostname) ?? "").Trim();
-            return hostname.Length > 0 ? hostname : this.Request.Host.Host;
-        }
-
-        private string ServerAddress(string bindAddress) =>
-            bindAddress.Length == 0 || bindAddress == "0.0.0.0" ? this.RequestHost() : bindAddress;
 
 /// <summary>
         /// Reboots the phone, for when the daily poll (D79) is too slow to wait for. Confirmed with

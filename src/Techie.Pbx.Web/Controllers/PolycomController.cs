@@ -112,9 +112,6 @@ namespace Techie.Pbx.Web.Controllers
             var stored = this.settings.GetAll();
             var transport = AsteriskSettings.Transport(stored);
 
-            stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
-            stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
-
             // The assigned keys, and the extensions they name: the line keys are what this phone
             // registers as and the rest are its lamps (D121, schema 020). A key whose extension has
             // gone or been switched off — it would have no PJSIP endpoint — and a key on a parking
@@ -124,18 +121,8 @@ namespace Techie.Pbx.Web.Controllers
             var usable = PhoneButton.Usable(
                 this.buttons.GetForPhone(phone.PhoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
 
-            var config = new PolycomConfig
-            {
-                AdminPassword = (adminPassword ?? "").Trim(),
-                Buttons = usable,
-                Extensions = allExtensions,
-                GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
-                Phone = phone,
-                ServerAddress = this.ServerAddress(transport.BindAddress),
-                SipPort = transport.Port,
-                SntpAddress = AsteriskSettings.NtpServer(stored),
-                UserPassword = (userPassword ?? "").Trim(),
-            };
+            var config = PhoneConfigFactory.Polycom(
+                phone, usable, allExtensions, stored, transport, this.Request.Host.Host);
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");
 
@@ -209,24 +196,6 @@ namespace Techie.Pbx.Web.Controllers
 
             return null;
         }
-
-        /// <summary>
-        /// The host the phone should know the PBX by: the System.Hostname setting when the site
-        /// has one (D105), otherwise the host the phone just asked us on, without the port.
-        /// </summary>
-        private string RequestHost()
-        {
-            var hostname = (this.settings.Get(SettingsKeys.SystemHostname) ?? "").Trim();
-            return hostname.Length > 0 ? hostname : this.Request.Host.Host;
-        }
-
-        /// <summary>
-        /// Where the phone should send SIP: the bind address, unless Asterisk is listening on every
-        /// interface, in which case the only address we can honestly name is the one the phone just
-        /// reached us on.
-        /// </summary>
-        private string ServerAddress(string bindAddress) =>
-            bindAddress.Length == 0 || bindAddress == AnyAddress ? this.RequestHost() : bindAddress;
 
         private IActionResult Xml(string content) => this.Content(content, "text/xml");
     }
