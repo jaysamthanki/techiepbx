@@ -177,6 +177,77 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("voicemail.conf"), actual);
         }
 
+        /// <summary>
+        /// Delivery is one fixed, root-owned script and no relay details at all (D126). A host, a
+        /// username or a password in this file would be a credential in a group-readable conf
+        /// file for no reason: the script reads its own config.
+        /// </summary>
+        [Fact]
+        public void Voicemail_hands_delivery_to_the_mailcmd_script_and_names_no_relay()
+        {
+            var actual = VoicemailConfRenderer.Render(SampleExtensions());
+
+            Assert.Contains($"mailcmd = {VoicemailConfRenderer.MailCommand}\n", actual);
+            Assert.Equal("/opt/tnpbx/bin/voicemail-mail", VoicemailConfRenderer.MailCommand);
+            Assert.DoesNotContain("serveremail", actual);
+            Assert.DoesNotContain("fromstring", actual);
+            Assert.DoesNotContain("smtp", actual, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// app_voicemail attaches the first format in the list, so wav49 leads: a .g722 attachment
+        /// is a file no mail client plays (D126). g722 is still stored, because playback picks the
+        /// best format on disk for the listening channel whatever order they are written in (D117).
+        /// </summary>
+        [Fact]
+        public void The_attached_format_is_the_one_a_mail_client_can_play()
+        {
+            Assert.Contains("format = wav49|g722\n", VoicemailConfRenderer.Render(SampleExtensions()));
+        }
+
+        /// <summary>
+        /// The template is only worth having if every variable in it is one app_voicemail
+        /// substitutes — an unknown one arrives in the email as its own name.
+        /// </summary>
+        [Fact]
+        public void The_email_template_uses_only_variables_app_voicemail_substitutes()
+        {
+            var known = new[] { "VM_NAME", "VM_DUR", "VM_MSGNUM", "VM_MAILBOX", "VM_CIDNUM", "VM_DATE" };
+            var actual = VoicemailConfRenderer.Render(SampleExtensions());
+
+            var used = System.Text.RegularExpressions.Regex.Matches(actual, @"\$\{(\w+)\}")
+                .Select(match => match.Groups[1].Value)
+                .Distinct()
+                .ToList();
+
+            Assert.NotEmpty(used);
+            Assert.All(used, name => Assert.Contains(name, known));
+        }
+
+        /// <summary>
+        /// The subject and the body both say what the message is, where it landed and who it is
+        /// from, and the body is one config line: app_voicemail turns the escapes into real line
+        /// breaks, and a real newline here would end the value early.
+        /// </summary>
+        [Fact]
+        public void The_email_template_is_one_line_each_and_says_what_a_message_is()
+        {
+            var lines = VoicemailConfRenderer.Render(SampleExtensions()).Split('\n');
+
+            var subject = Assert.Single(lines, line => line.StartsWith("emailsubject = "));
+            var body = Assert.Single(lines, line => line.StartsWith("emailbody = "));
+
+            Assert.Equal("emailsubject = New message ${VM_MSGNUM} in mailbox ${VM_MAILBOX} from ${VM_CIDNUM}", subject);
+            Assert.Contains("\\n", body);
+            Assert.Contains("${VM_DATE}", body);
+            Assert.Contains("${VM_DUR}", body);
+
+            // The config value has a hard 512 character limit in app_voicemail.
+            Assert.True(body.Length < 512, $"emailbody is {body.Length} characters, and app_voicemail truncates at 512");
+
+            Assert.Contains("emaildateformat = %A, %B %d, %Y at %r\n", VoicemailConfRenderer.Render(SampleExtensions()));
+        }
+
         [Fact]
         public void Pjsip_without_nat_has_no_external_addresses()
         {

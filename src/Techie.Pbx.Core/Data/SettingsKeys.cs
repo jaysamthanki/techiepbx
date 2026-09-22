@@ -348,9 +348,11 @@ namespace Techie.Pbx.Core.Data
             [CertEmail] = SettingScope.App,
 
             // Mail is sent by this application, over Graph or SMTP, not by Asterisk (D115).
-            // Nothing in a generated conf file names any of these, so none of them is an apply:
-            // voicemail-to-email is still Asterisk's own job through a local MTA, and
-            // VoicemailConfRenderer deliberately writes no serveremail (F4).
+            // Nothing in a generated conf file names any of these, so none of them is an apply.
+            // Voicemail email uses the SMTP half of them too, but not through a conf file: the
+            // generated voicemail.conf names a fixed mailcmd script, and the script's own copy of
+            // the relay details is written the moment a setting is saved rather than at apply
+            // time, so these stay App-scoped (D126).
             [MailTransport] = SettingScope.App,
             [MailFromAddress] = SettingScope.App,
             [MailFromName] = SettingScope.App,

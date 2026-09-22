@@ -9,9 +9,11 @@
 #
 # What it does:
 #   - unpacks the self-contained publish into /opt/tnpbx (tnpbx:asterisk 0750)
-#   - preserves an existing appsettings.json and Data/ (the database) across
-#     re-deploys: config and the SQLite database live in the target, not the
-#     tarball (D95)
+#   - preserves an existing appsettings.json, Data/ (the database), bin/ (the
+#     root-owned voicemail mailcmd script) and Config/ (mail.json, the SMTP
+#     credentials that script reads) across re-deploys: all of it lives in the
+#     target, not the tarball (D95, D126)
+#   - (re)installs bin/voicemail-mail root:root 0755 from the tarball (D126)
 #   - writes /etc/systemd/system/tnpbx-web.service (User=tnpbx, never root,
 #     bindings the app chooses itself: 8080 always, plus 80 always and 443 once
 #     a certificate exists (D99). The unit grants CAP_NET_BIND_SERVICE and
@@ -32,12 +34,15 @@ set -euo pipefail
 APP_USER="tnpbx"
 APP_GROUP="asterisk"
 APP_HOME="/opt/tnpbx"
+APP_BIN_DIR="${APP_HOME}/bin"
+APP_CONFIG_DIR="${APP_HOME}/Config"
 MOH_DIR="/var/lib/asterisk/moh"
 UNIT="/etc/systemd/system/tnpbx-web.service"
 POLKIT="/etc/polkit-1/rules.d/40-tnpbx-asterisk.rules"
 
-log() { echo -e "\e[1;34m==>\e[0m $*"; }
-die() { echo -e "\e[1;31mERROR:\e[0m $*" >&2; exit 1; }
+log()  { echo -e "\e[1;34m==>\e[0m $*"; }
+warn() { echo -e "\e[1;33mWARN:\e[0m $*" >&2; }
+die()  { echo -e "\e[1;31mERROR:\e[0m $*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run as root"
 id tnpbx &>/dev/null || die "tnpbx user missing — run install.sh (part 1) first"
@@ -50,27 +55,65 @@ TARBALL="${1:-}"
 
 log "deploying ${TARBALL} into ${APP_HOME}"
 mkdir -p "${APP_HOME}/Data"
-# The tarball carries repo defaults; the server's own appsettings.json and
-# database (Data/) are the live state and must survive every re-deploy.
-if [[ -f "${APP_HOME}/appsettings.json" ]]; then
-    cp "${APP_HOME}/appsettings.json" /tmp/tnpbx-appsettings.keep
-    KEEP_SETTINGS=1
-fi
-if [[ -d "${APP_HOME}/Data" ]]; then
-    cp -a "${APP_HOME}/Data" /tmp/tnpbx-data.keep
-    KEEP_DATA=1
-fi
+
+# The tarball carries repo defaults; the server's own state must survive every re-deploy.
+# appsettings.json and Data/ (the SQLite database and the data protection key ring) are that
+# state, and so are the two directories install.sh creates: bin/ holds the root-owned mailcmd
+# script Asterisk executes, and Config/ holds mail.json with the SMTP password in it (D126).
+#
+# Written as plain "if" blocks rather than "test && command": under "set -e" a test that
+# comes out false is a failed command at the top level, which would end the deploy.
+KEEP_DIR=$(mktemp -d)
+for kept in appsettings.json Data bin Config; do
+    if [[ -e "${APP_HOME}/${kept}" ]]; then
+        cp -a "${APP_HOME}/${kept}" "${KEEP_DIR}/"
+    fi
+done
 
 find "${APP_HOME}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xzf "$TARBALL" -C "$APP_HOME"
 
-(( ${KEEP_SETTINGS:-0} )) && cp /tmp/tnpbx-appsettings.keep "${APP_HOME}/appsettings.json"
-(( ${KEEP_DATA:-0} )) && rm -rf "${APP_HOME}/Data" && cp -a /tmp/tnpbx-data.keep "${APP_HOME}/Data"
-rm -rf /tmp/tnpbx-data.keep /tmp/tnpbx-appsettings.keep
+for kept in appsettings.json Data bin Config; do
+    if [[ -e "${KEEP_DIR}/${kept}" ]]; then
+        rm -rf "${APP_HOME:?}/${kept}"
+        cp -a "${KEEP_DIR}/${kept}" "${APP_HOME}/"
+    fi
+done
+rm -rf "$KEEP_DIR"
 
 chown -R "${APP_USER}:${APP_GROUP}" "$APP_HOME"
 chmod 0750 "$APP_HOME"
 [[ -f "${APP_HOME}/Techie.Pbx.Web" ]] || die "tarball did not contain Techie.Pbx.Web — is this the self-contained publish?"
+
+# --- the voicemail mail relay ---------------------------------------------------
+#
+# app_voicemail's mailcmd (D126). Installed here as well as by install.sh, because a
+# deploy is how a box that was installed before this existed gets it, and how one that
+# has it gets a fixed version. It is put back root-owned AFTER the chown above: the web
+# user must not be able to rewrite a program Asterisk executes.
+
+mkdir -p "${APP_BIN_DIR}" "${APP_CONFIG_DIR}"
+
+if [[ -f "${APP_HOME}/scripts/voicemail-mail" ]]; then
+    log "installing the voicemail mail relay into ${APP_BIN_DIR}"
+    install -o root -g root -m 0755 "${APP_HOME}/scripts/voicemail-mail" "${APP_BIN_DIR}/voicemail-mail"
+elif [[ ! -f "${APP_BIN_DIR}/voicemail-mail" ]]; then
+    warn "no voicemail-mail in the tarball and none installed; voicemail to email will not work"
+fi
+
+chown root:root "$APP_BIN_DIR"
+chmod 0755 "$APP_BIN_DIR"
+if [[ -f "${APP_BIN_DIR}/voicemail-mail" ]]; then
+    chown root:root "${APP_BIN_DIR}/voicemail-mail"
+    chmod 0755 "${APP_BIN_DIR}/voicemail-mail"
+fi
+
+# mail.json is written here by the app and read by that script as the asterisk user, so the
+# directory is setgid asterisk and has no world bit — the file carries the SMTP password.
+chown "${APP_USER}:${APP_GROUP}" "$APP_CONFIG_DIR"
+chmod 2750 "$APP_CONFIG_DIR"
+
+command -v python3 >/dev/null || warn "python3 is not installed, so voicemail cannot be emailed (apt-get install python3)"
 
 # --- music on hold directory ---------------------------------------------------
 #
@@ -162,6 +205,8 @@ cat <<EOF
 TNPBX web application deployed
 ================================================================================
   /opt/tnpbx            app + Data/tnpbx.db (SQLite, preserved on re-deploy)
+  ${APP_BIN_DIR}        root:root 0755, voicemail-mail (Asterisk's mailcmd)
+  ${APP_CONFIG_DIR}     ${APP_USER}:${APP_GROUP} 2750, mail.json (written by the app)
   ${MOH_DIR}   asterisk:asterisk 2770, the music on hold class's directory
   tnpbx-web.service     User=tnpbx, http://0.0.0.0:8080, hardened
   ${POLKIT}

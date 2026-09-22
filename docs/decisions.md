@@ -2456,3 +2456,81 @@ was — nothing in this decision writes to it.
   the provider's right and not something this system can fix), that a held outbound caller hears
   the route's class, and that an extension with a DID beats a route with a caller ID on the same
   call.
+
+### D126. Voicemail to email: a fixed mailcmd script, not a mail server (2026-09-21)
+The last piece of F4, and the one F4 left deliberately open: **how does the recording actually
+leave the box?** The answer is that Asterisk keeps composing the email and we take over the
+delivery, with **no MTA installed at all**.
+
+`app_voicemail` is good at making the message — it renders the template, encodes the recording as
+a MIME attachment and hands the finished thing to whatever `mailcmd` names, on stdin. What it is
+not good at is delivery: `mailcmd` defaults to `/usr/sbin/sendmail -t`, which means a system mail
+server, which means Postfix or Exim on a PBX. So the generated `voicemail.conf` now carries
+
+```
+mailcmd = /opt/tnpbx/bin/voicemail-mail
+```
+
+and that is a **python3 script in this repository** that reads the message on stdin and relays it
+through the SMTP settings the Email tab already holds.
+
+- **No system MTA, and this is the whole reason.** Postfix is a large, network-listening,
+  separately-configured service with its own attack surface, its own queue, its own security
+  updates and its own idea of where mail goes — on a box whose entire premise is a small surface
+  area (D115 made the same argument for not having one). What the job actually needs is "open a
+  TCP connection, authenticate, send one message", which is a few lines of `smtplib`.
+- **One sender and one credential set.** The test button proves `Mail.Smtp.*` (D115); voicemail
+  uses those same settings. There is no `serveremail` and no second relay to configure, and an
+  admin who has made the test button work has made voicemail email work. **The script owns the
+  `From` header**, replacing app_voicemail's `asterisk@<hostname>` — an address no hosted relay
+  accepts and no SPF record covers — with `Mail.FromAddress` / `Mail.FromName`, which is the
+  address the relay authenticated as. That is the *only* header it touches: subject, body, the
+  other headers and the attachment are relayed exactly as composed.
+- **SMTP only, deliberately.** `Mail.Transport = graph` still sends alerts through Graph, but
+  voicemail goes through the SMTP relay or not at all: the script would otherwise need an Entra
+  client credential of its own, outside the web app's process and its `appsettings.json`, which is
+  a secret in a second place for one feature. A site on Graph that wants voicemail email fills in
+  the SMTP relay as well. **This is a known limitation, and the Email tab does not yet say so.**
+- **`mail.json`, not the database.** The script runs as `asterisk` and has no business opening the
+  application's SQLite file, so the web app writes `/opt/tnpbx/Config/mail.json` whenever a setting
+  is saved and at every start. It carries the SMTP password, so it is **0640, owner `tnpbx`, group
+  `asterisk`**, in a **setgid 2750** directory the installer creates — the same trick `/etc/asterisk`
+  uses (D18), and the **only** privilege move in this piece. The Helper is not involved: nothing
+  here needs root at run time.
+- **Settings that leave the relay unusable remove the file** rather than leaving a stale credential
+  behind, and the script fails closed on a missing, unreadable, malformed or incomplete one — exit
+  1 with a sentence on stderr, which Asterisk logs. It never falls back to "send it somehow".
+- **The script is root-owned, mode 0755, and takes no arguments.** app_voicemail runs it as
+  `( mailcmd < tmpfile ; rm -f tmpfile ) &`, so there is no command line to inject into; it reads
+  two fixed paths (its config, and stdin), never reads the environment and never executes
+  anything. Root-owned because neither the web user nor the asterisk user may rewrite a program
+  Asterisk is about to run. `app-deploy.sh` reinstalls it from the publish on every deploy and
+  re-asserts `root:root` **after** its `chown -R tnpbx`, and `bin/` and `Config/` join
+  `appsettings.json` and `Data/` as state that survives a re-deploy (D95).
+- **It refuses to put the relay password on the wire.** Port 465 is implicit TLS; every other port
+  is `STARTTLS` where the relay offers it, and where it does not *and a username is configured* the
+  script hangs up rather than authenticating in plain text. An unauthenticated hop to an internal
+  relay is still allowed, because that is the admin's own choice to make.
+- **`format = wav49|g722`, reordered.** D117 put g722 first for wideband storage; app_voicemail
+  attaches **the first format in the list**, which made the attachment a raw `.g722` no mail client
+  will play. wav49 (GSM-in-WAV) leads now — every desktop mail client plays it and the storage cost
+  is similar — and **playback is unaffected**: Asterisk picks the best format on disk for the
+  listening channel whatever order they are written in, so a wideband phone still hears g722.
+- **The template is a constant, not a setting.** FreePBX's wording — "New message N in mailbox X
+  from Y", and a body with the date, the length and a reminder that `*97` plays it — with
+  `emaildateformat = %A, %B %d, %Y at %r`. A per-site template is a text box that renders into a
+  file Asterisk parses, for a line of wording; it can become a setting the day somebody asks. Only
+  variables app_voicemail actually substitutes appear in it (`VM_NAME`, `VM_DUR`, `VM_MSGNUM`,
+  `VM_MAILBOX`, `VM_CIDNUM`, `VM_DATE`), and a test asserts that.
+- **Not an apply.** The `Mail.*` keys stay App-scoped (D103): the generated `voicemail.conf` names
+  a fixed path and nothing else, so no mail setting changes a conf file. `mail.json` is written the
+  moment the setting is saved, which is also why the apply button stays quiet for it.
+- **`python3` joins the package list.** A Debian standard install has it; a minimal cloud image may
+  not, so `install.sh` asks for it explicitly and `app-deploy.sh` warns when it is missing.
+- **Not verified on the lab VM.** Everything below needs a real message: that app_voicemail runs
+  the script at all and what it logs when the script exits non-zero, that the attachment arrives
+  playable, that the rewritten `From` gets past the relay, and — the one thing that could not be
+  checked from here — **that app_voicemail attaches only the first format**, which is what the
+  `format` reorder rests on. `grep -n 'fmt' /usr/src/asterisk-22/apps/app_voicemail.c` around
+  `sendmail()` settles that, and the substitution list in
+  `configs/samples/voicemail.conf.sample` settles the template.

@@ -29,6 +29,8 @@ CORE_SOUNDS_VERSION="1.6.1"   # matches the GSM set make install ships
 
 APP_USER="tnpbx"
 APP_HOME="/opt/tnpbx"
+APP_BIN_DIR="${APP_HOME}/bin"
+APP_CONFIG_DIR="${APP_HOME}/Config"
 ANNOUNCEMENTS_DIR="/var/lib/asterisk/sounds/tnpbx/announcements"
 MOH_DIR="/var/lib/asterisk/moh"
 
@@ -136,7 +138,8 @@ log "system clock: $(date -u)"
 # Build dependencies for Asterisk, plus what the application needs at run time: libicu for
 # .NET globalisation, ffmpeg for announcement conversion (D55) and for the music on hold this
 # script transcodes and the upload form converts (D122), sqlite3 for looking at the database by
-# hand, curl and ca-certificates for outbound HTTPS.
+# hand, curl and ca-certificates for outbound HTTPS, python3 for the voicemail mailcmd script
+# (D126) — a Debian standard install has it, but a minimal cloud image may not.
 
 case "${VERSION_ID:-13}" in
   12) ICU_PACKAGE="libicu72" ;;
@@ -150,7 +153,7 @@ run apt-get install -y -q --no-install-recommends \
   build-essential pkg-config ca-certificates wget curl bzip2 patch openssl procps iproute2 \
   libedit-dev libjansson-dev libxml2-dev uuid-dev libsqlite3-dev libssl-dev \
   libncurses-dev libsrtp2-dev \
-  ffmpeg sqlite3 "${ICU_PACKAGE}"
+  ffmpeg sqlite3 python3 "${ICU_PACKAGE}"
 
 # --- 4. users, groups and directories ----------------------------------------
 # The layout proven on the lab VM (D94). The web process never runs as root and never uses
@@ -180,7 +183,8 @@ fi
 
 log "creating directories"
 run mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk \
-             "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$MOH_DEFAULT_DIR" "$APP_HOME"
+             "$ANNOUNCEMENTS_DIR" "$MOH_DIR" "$MOH_DEFAULT_DIR" \
+             "$APP_HOME" "$APP_BIN_DIR" "$APP_CONFIG_DIR"
 
 apply_layout() {
   run chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /var/spool/asterisk
@@ -204,11 +208,34 @@ apply_layout() {
   run chown -R asterisk:asterisk "$MOH_DIR"
   run chmod 2770 "$MOH_DIR" "$MOH_DEFAULT_DIR"
 
-  # The application's deploy target. Created and left EMPTY: the app is deployed separately.
+  # The application's deploy target. Created without the application in it: the app is deployed
+  # separately. The two subdirectories below are not the app's code, which is why they are here.
   run chown "${APP_USER}:asterisk" "$APP_HOME"
   run chmod 0750 "$APP_HOME"
+
+  # The voicemail mailcmd script lives here (D126). root:root 0755 on purpose: Asterisk executes
+  # it as the asterisk user, and neither that user nor the web user may rewrite what it runs.
+  # Readable and traversable by everyone, which costs nothing — the secret is in Config, not here.
+  run chown root:root "$APP_BIN_DIR"
+  run chmod 0755 "$APP_BIN_DIR"
+
+  # mail.json: written by the web application, read by that script as the asterisk user. Setgid
+  # so what tnpbx writes here is group-owned by asterisk (the same trick as /etc/asterisk, D18),
+  # and no world bit at all, because the file carries the SMTP password.
+  run chown "${APP_USER}:asterisk" "$APP_CONFIG_DIR"
+  run chmod 2750 "$APP_CONFIG_DIR"
 }
 apply_layout
+
+# The one program Asterisk runs that we wrote (D126): app_voicemail hands it the composed email
+# on stdin and it relays it through the SMTP settings the application stores. Installed root-owned
+# so that a compromised web or asterisk process cannot turn mailcmd into something else.
+if [[ -f "${SCRIPT_DIR}/voicemail-mail" ]]; then
+  log "installing the voicemail mail relay into ${APP_BIN_DIR}"
+  run install -o root -g root -m 0755 "${SCRIPT_DIR}/voicemail-mail" "${APP_BIN_DIR}/voicemail-mail"
+else
+  warn "voicemail-mail is not beside this script; voicemail to email will not work until it is installed"
+fi
 
 # --- 5. Asterisk --------------------------------------------------------------
 
@@ -396,7 +423,9 @@ Created:
   ${ANNOUNCEMENTS_DIR}
                            asterisk:asterisk  2770  setgid
   ${MOH_DIR}     asterisk:asterisk  2770  setgid
-  ${APP_HOME}               ${APP_USER}:asterisk  0750  EMPTY, the deploy target
+  ${APP_HOME}               ${APP_USER}:asterisk  0750  the deploy target
+  ${APP_BIN_DIR}           root:root  0755  voicemail-mail (Asterisk's mailcmd)
+  ${APP_CONFIG_DIR}        ${APP_USER}:asterisk  2750  setgid, holds mail.json
   /usr/sbin/asterisk       Asterisk ${ASTERISK_MAJOR}.x built from source
   asterisk.service         our hardened unit, enabled
 

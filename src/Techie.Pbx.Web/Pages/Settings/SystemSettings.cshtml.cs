@@ -45,7 +45,8 @@ namespace Techie.Pbx.Web.Pages.Settings
                 new()
                 {
                     Help = "The relay, when the transport is SMTP. Submission is always over STARTTLS, so a relay " +
-                        "that only offers plain text will not work.",
+                        "that only offers plain text will not work. Voicemail to email uses this relay whatever the " +
+                        "transport above says, so fill it in even on Graph if mailboxes should email their messages (D126).",
                     Rows = Rows(stored, SettingsKeys.MailSmtpHost, SettingsKeys.MailSmtpPort, SettingsKeys.MailSmtpUsername, SettingsKeys.MailSmtpPassword),
                     Title = "SMTP relay",
                 },

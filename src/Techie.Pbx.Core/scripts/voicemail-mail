@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+#
+# TNPBX voicemail delivery: the program app_voicemail's "mailcmd" points at (D126).
+#
+# app_voicemail composes the whole email itself — headers, body and the attached recording —
+# and hands it to this script on stdin. All this does is relay it through the SMTP credentials
+# the web application already proved with its "send test mail" button, so a TNPBX box needs no
+# system MTA and there is exactly one set of mail credentials on the machine.
+#
+# It is deliberately dull:
+#   * no arguments, ever. app_voicemail runs it as "( mailcmd < tmpfile ; rm -f tmpfile ) &",
+#     so anything on a command line here would be a shell string, and there isn't one.
+#   * two fixed paths: this file's config, and nothing else. Nothing is read from the
+#     environment, no path comes from the message, and nothing is executed.
+#   * fail closed. A missing, unreadable, malformed or incomplete config is exit 1 with a
+#     sentence on stderr, which Asterisk logs. It never falls back to "send it somehow".
+#
+# Installed by install.sh (and refreshed by app-deploy.sh) as root:root 0755, so neither the
+# web application nor the asterisk user can rewrite what Asterisk is about to execute.
+
+import email.policy
+import email.utils
+import json
+import smtplib
+import ssl
+import sys
+import syslog
+from email.parser import BytesParser
+
+# Written by the web application whenever the Mail.* settings are saved. 0640, owned by the web
+# user and group-readable by asterisk — it carries the SMTP password, so it is never logged and
+# never quoted back in an error message.
+CONFIG_PATH = "/opt/tnpbx/Config/mail.json"
+
+# The port that means TLS from the first byte. Every other port is tried with STARTTLS.
+IMPLICIT_TLS_PORT = 465
+
+SYSLOG_IDENT = "tnpbx-voicemail-mail"
+
+# Long enough for a relay having a slow day, short enough that a wedged one does not leave a
+# forked shell sitting around inside Asterisk forever.
+TIMEOUT_SECONDS = 30
+
+
+def fail(message):
+    """Says why, in one sentence, to syslog and to stderr, then stops. Never exits 0."""
+    syslog.syslog(syslog.LOG_ERR, message)
+    sys.stderr.write("voicemail-mail: %s\n" % message)
+    sys.exit(1)
+
+
+def load_config():
+    """The relay settings, or a refusal. Every value is checked before anything is sent."""
+    try:
+        with open(CONFIG_PATH, "rb") as handle:
+            raw = json.load(handle)
+    except FileNotFoundError:
+        fail("%s does not exist, so there is nowhere to send voicemail. Fill in the SMTP relay "
+             "on the Email tab in TNPBX: saving it writes this file." % CONFIG_PATH)
+    except PermissionError:
+        fail("%s cannot be read by this user. It should be mode 0640 and group-readable by "
+             "asterisk." % CONFIG_PATH)
+    except (OSError, ValueError) as error:
+        fail("%s could not be read: %s" % (CONFIG_PATH, error))
+
+    if not isinstance(raw, dict):
+        fail("%s is not a JSON object." % CONFIG_PATH)
+
+    config = {
+        "From": text(raw, "From"),
+        "FromName": text(raw, "FromName"),
+        "Host": text(raw, "Host"),
+        "Password": text(raw, "Password"),
+        "Port": raw.get("Port"),
+        "Username": text(raw, "Username"),
+    }
+
+    if not config["Host"]:
+        fail("%s names no SMTP host." % CONFIG_PATH)
+
+    if not isinstance(config["Port"], int) or isinstance(config["Port"], bool) \
+            or not 1 <= config["Port"] <= 65535:
+        fail("%s does not name a usable SMTP port." % CONFIG_PATH)
+
+    if "@" not in config["From"]:
+        fail("%s does not name a from address, and no relay accepts mail from nobody."
+             % CONFIG_PATH)
+
+    return config
+
+
+def main():
+    syslog.openlog(SYSLOG_IDENT, syslog.LOG_PID, syslog.LOG_MAIL)
+
+    config = load_config()
+    message = read_message()
+
+    # The one header we touch. app_voicemail's own From is built from serveremail, which is
+    # "asterisk@<hostname>" on a box like this one — an address no relay will accept and no
+    # recipient's spam filter will like. The configured address is the system's real identity,
+    # and it is the address the relay authenticated as.
+    del message["From"]
+    message["From"] = email.utils.formataddr((config["FromName"], config["From"])) \
+        if config["FromName"] else config["From"]
+
+    to = recipients(message)
+
+    if not to:
+        fail("The message from app_voicemail has no recipient. Check that the mailbox has an "
+             "email address.")
+
+    send(config, to, message)
+
+    syslog.syslog(
+        syslog.LOG_INFO,
+        "voicemail relayed to %s through %s:%d" % (", ".join(to), config["Host"], config["Port"]))
+
+
+def read_message():
+    """The complete email app_voicemail composed, exactly as it wrote it."""
+    raw = sys.stdin.buffer.read()
+
+    if not raw.strip():
+        fail("app_voicemail sent nothing on stdin, so there is no message to relay.")
+
+    try:
+        return BytesParser(policy=email.policy.compat32).parsebytes(raw)
+    except Exception as error:
+        fail("The message from app_voicemail could not be parsed: %s" % error)
+
+
+def recipients(message):
+    """Who app_voicemail addressed it to. Mailbox addresses, not anything from a caller."""
+    headers = message.get_all("To", []) + message.get_all("Cc", [])
+
+    return [address for _, address in email.utils.getaddresses(headers) if "@" in address]
+
+
+def send(config, to, message):
+    """One submission, TLS wherever the relay will have it, and never a password in the clear."""
+    host = config["Host"]
+    port = config["Port"]
+    where = "%s:%d" % (host, port)
+    context = ssl.create_default_context()
+
+    try:
+        if port == IMPLICIT_TLS_PORT:
+            server = smtplib.SMTP_SSL(host, port, timeout=TIMEOUT_SECONDS, context=context)
+        else:
+            server = smtplib.SMTP(host, port, timeout=TIMEOUT_SECONDS)
+
+        with server:
+            server.ehlo()
+
+            if port != IMPLICIT_TLS_PORT:
+                if server.has_extn("starttls"):
+                    server.starttls(context=context)
+                    server.ehlo()
+                elif config["Username"]:
+                    # An unauthenticated hop to an internal relay in the clear is the admin's
+                    # choice to make; putting the relay password on the wire is not. Hang up
+                    # before saying so, so that nothing further is sent down this connection.
+                    server.quit()
+                    fail("The relay at %s does not offer STARTTLS and a username is configured. "
+                         "Refusing to send the password in the clear." % where)
+
+            if config["Username"]:
+                server.login(config["Username"], config["Password"])
+
+            # send_message rather than sendmail: it flattens the message with CRLF line
+            # endings, which is what SMTP requires and what app_voicemail's LF-terminated
+            # temp file is not. Handing the raw bytes over would leave a base64 attachment
+            # for a strict relay to reject.
+            server.send_message(message, config["From"], to)
+    except smtplib.SMTPAuthenticationError:
+        fail("The relay at %s refused the username and password from %s." % (where, CONFIG_PATH))
+    except smtplib.SMTPException as error:
+        fail("The relay at %s refused the message: %s" % (where, error))
+    except (OSError, ssl.SSLError) as error:
+        fail("Could not talk to the relay at %s: %s" % (where, error))
+
+
+def text(raw, key):
+    """A configured string, however JSON spelled it. Anything that is not one is empty."""
+    value = raw.get(key)
+
+    return value.strip() if isinstance(value, str) else ""
+
+
+if __name__ == "__main__":
+    main()

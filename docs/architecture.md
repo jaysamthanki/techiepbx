@@ -197,4 +197,20 @@ pipeline, so it wraps authentication and records anonymous provisioning fetches 
 
 Both live inside the install (`/opt/tnpbx`), which is the only place the hardened unit grants write
 access to — never `/var/log`, which `ProtectSystem=strict` makes read-only to this process. Both are
-therefore cleared by a re-deploy, which keeps only `appsettings.json` and `Data/` (D95).
+therefore cleared by a re-deploy, which keeps `appsettings.json`, `Data/`, `bin/` and `Config/` (D95,
+D126).
+
+## Mail out of the box
+
+Two senders, one credential set, no MTA (D115, D126).
+
+| | Sends | Runs as | Reads the relay details from |
+|---|---|---|---|
+| Alerts and the test button | this app, over Graph or SMTP | `tnpbx` (the web process) | the `Mail.*` settings in the database |
+| Voicemail | `app_voicemail`, composed there and handed to `mailcmd` | `asterisk`, via `/opt/tnpbx/bin/voicemail-mail` | `/opt/tnpbx/Config/mail.json` |
+
+The script is the whole interface between the two: a process running as `asterisk` has no business
+opening this app's database, so the app writes the SMTP half of those settings to `mail.json`
+(0640, group `asterisk`) whenever a setting is saved and at every start. Nothing in `/etc/asterisk`
+carries a mail credential — the generated `voicemail.conf` names the script's fixed path and
+nothing else, which is why a mail setting is not an apply.

@@ -12,7 +12,7 @@ Status: **Done**, **Partial**, **Planned**.
 | F2a | [Voicemail](#f2a-voicemail) | Partial |
 | F2b | [Follow me](#f2b-follow-me) | Planned |
 | F3 | [Ring groups](#f3-ring-groups) (including hunt groups) | Planned |
-| F4 | [Email notifications](#f4-email-notifications) | Partial |
+| F4 | [Email notifications](#f4-email-notifications) | Partial (voicemail done) |
 | F5 | [Call reports](#f5-call-reports) | Planned |
 | F6 | [IVRs](#f6-ivrs) | Partial |
 | F7 | [Announcements](#f7-announcements) | Partial |
@@ -63,8 +63,14 @@ A voicemail box per extension (optional).
 settings on the extension (D27), `voicemail.conf` generation, busy/unanswered fallback to the
 mailbox and `*97` to listen (D29), and the fields in the extension modal.
 
-**Still to do:** sending the email (F4), voicemail as a destination for inbound routes and IVRs
-(needs destinations), and MWI.
+**Done 2026-09-21:** sending the email (D126). `voicemail.conf` names a `mailcmd` — a fixed,
+root-owned script in this repo — which relays what app_voicemail composed through the `Mail.Smtp.*`
+settings, so there is no mail server on the box and one set of credentials on it. `format` is
+`wav49|g722` now, because the attachment is the first format in that list.
+
+**Still to do:** voicemail as a destination for inbound routes and IVRs (needs destinations), and
+MWI. Voicemail email is SMTP only: a site whose `Mail.Transport` is Graph has to fill in the SMTP
+relay as well (D126).
 
 - PIN, email address, whether to attach the recording to the email, whether to delete after emailing.
 - Unanswered or busy calls to an extension go to its voicemail.
@@ -105,13 +111,20 @@ on the System page's Email tab, both transports, and a "send test mail" button t
 (D115). The old open question is answered: **both** SMTP and Graph, chosen per site by
 `Mail.Transport`, and sent by our app.
 
-**Still to do:** anything that sends mail on its own. The test button is the only sender today.
+**Done 2026-09-21:** voicemail to email (D126). The open question is answered, and the answer is
+neither of the two it listed: Asterisk still **composes** the message, and a fixed `mailcmd` script
+of ours **delivers** it through the `Mail.Smtp.*` settings. No MTA, no `externnotify`, no watching
+directories.
 
-- Voicemail to email, with the recording attached (from F2a). **Still Asterisk's own job** through
-  a local MTA, and unchanged by D115: `voicemail.conf` carries no `serveremail`. Routing it
-  through the `Mail.*` settings means either an MTA configured to relay through them, or taking
-  delivery off Asterisk entirely (`externnotify`, or watching the mailbox directories) — a piece
-  of its own, still open.
+**Still to do:** the alerts. Nothing raises one yet.
+
+- Voicemail to email, with the recording attached (from F2a). **Done**: `voicemail.conf` names
+  `mailcmd = /opt/tnpbx/bin/voicemail-mail`, a root-owned python3 script that relays the composed
+  message — headers, body and attachment — through the same SMTP relay the test button proves. It
+  reads `/opt/tnpbx/Config/mail.json`, which the web app writes (0640, group `asterisk`) whenever
+  a mail setting is saved, and fails closed when that file is missing or incomplete. It replaces
+  the `From` header with `Mail.FromAddress`, and refuses to authenticate to a relay that will not
+  offer TLS. **SMTP only** — Graph is not available to it (D126).
 - System alerts worth considering: trunk registration lost, many failed SIP logins or blocked
   IPs, disk space low, config apply failed. The template and the sender are ready for these; what
   is missing is deciding which are worth an email and what raises them.

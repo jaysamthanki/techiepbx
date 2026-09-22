@@ -20,6 +20,17 @@
 
   <ItemGroup>
     <Content Update="log4net.config" CopyToOutputDirectory="PreserveNewest" />
+
+    <!--
+      The program Asterisk's voicemail mailcmd runs (D126). It travels in the publish so that
+      app-deploy.sh has something to install root-owned into /opt/tnpbx/bin; the copy that ships
+      here is never executed. Linked from Core/scripts because that is where this project's
+      shell and helper scripts live.
+    -->
+    <Content Include="..\Techie.Pbx.Core\scripts\voicemail-mail"
+             Link="scripts\voicemail-mail"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -63,6 +63,24 @@ software.
   is the Entra session itself, and it never sees the `Authorization` header: the provisioning
   username reaches `cs-username` through `RequestLogUserMiddleware`, which reads the username half
   of a Basic header and discards the password without looking at it.
+- `/opt/tnpbx/Config/mail.json` holds the SMTP relay password, because the voicemail `mailcmd`
+  script runs as `asterisk` and cannot read the database (D126). It is 0640 `tnpbx:asterisk` in a
+  setgid 2750 directory, never logged, and **removed** rather than left stale when the relay
+  settings are cleared.
+
+### The voicemail mailcmd script
+
+`/opt/tnpbx/bin/voicemail-mail` is the only program of ours that Asterisk executes (D126).
+
+- **root:root 0755.** Neither the web user nor the asterisk user may rewrite it. `app-deploy.sh`
+  re-asserts this *after* its `chown -R tnpbx`, so a deploy cannot hand it to the web user.
+- **No arguments, no environment, no shell.** app_voicemail runs it as
+  `( mailcmd < tmpfile ; rm -f tmpfile ) &`, so there is no command line to inject into. It reads
+  two fixed paths — its config and stdin — and executes nothing.
+- **Fails closed.** A missing, unreadable, malformed or incomplete config is exit 1 with a sentence
+  on stderr. There is no fallback path that sends mail some other way.
+- **Never submits the relay password in the clear**: implicit TLS on 465, STARTTLS elsewhere, and
+  it hangs up rather than authenticating to a relay that offers neither.
 
 ## Known gaps
 

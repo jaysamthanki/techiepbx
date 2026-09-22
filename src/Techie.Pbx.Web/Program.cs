@@ -207,6 +207,10 @@ namespace Techie.Pbx.Web
             PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
             PbxEntra.Open(app.Configuration);
 
+            // The relay details the voicemail mailcmd script reads, refreshed from the settings on
+            // every start so a re-deploy cannot leave voicemail email broken in silence (D126).
+            PbxMailConfig.Open(app.Environment.ContentRootPath, new SettingsRepository(PbxDatabase.Current));
+
             Log.Info($"TNPBX web starting on {string.Join(", ", bindings)}");
             app.Run();
         }

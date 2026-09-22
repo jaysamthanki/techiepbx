@@ -130,6 +130,11 @@ namespace Techie.Pbx.Web.Pages.Settings
         {
             var scope = SettingsKeys.ScopeOf(key);
 
+            // The Mail.* keys are read by a script outside this process as well as by the test
+            // button, so the file that script reads is rewritten here rather than at apply time:
+            // it is not a conf file, and nothing about Asterisk's configuration changed (D126).
+            PbxMailConfig.Write(this.settings);
+
             var events = new Dictionary<string, object?>
             {
                 ["settingsChanged"] = null,
