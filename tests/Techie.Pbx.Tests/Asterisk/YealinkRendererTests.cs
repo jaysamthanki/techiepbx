@@ -254,7 +254,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = YealinkConfigRenderer.Render(config);
 
-            Assert.Contains("security.user_password = admin:AdminPass2026\n", actual);
+            Assert.Contains("static.security.user_password = admin:AdminPass2026\n", actual);
             Assert.Contains("dialplan.dialnow.rule.1 = ", actual);
         }
 
@@ -267,12 +267,12 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var lines = YealinkConfigRenderer.Render(SampleConfig())
                 .Split('\n')
-                .Where(line => line.StartsWith("security.user_password", StringComparison.Ordinal))
+                .Where(line => line.StartsWith("static.security.user_password", StringComparison.Ordinal))
                 .ToList();
 
             Assert.Equal(2, lines.Count);
-            Assert.Single(lines, line => line == "security.user_password = admin:AdminPass2026");
-            Assert.Single(lines, line => line == "security.user_password = user:UserPass2026");
+            Assert.Single(lines, line => line == "static.security.user_password = admin:AdminPass2026");
+            Assert.Single(lines, line => line == "static.security.user_password = user:UserPass2026");
         }
 
         /// <summary>
@@ -287,8 +287,8 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = YealinkConfigRenderer.Render(config);
 
-            Assert.Contains("security.user_password = admin:AdminPass2026\n", actual);
-            Assert.DoesNotContain("security.user_password = user:", actual);
+            Assert.Contains("static.security.user_password = admin:AdminPass2026\n", actual);
+            Assert.DoesNotContain("static.security.user_password = user:", actual);
 
             config.AdminPassword = "";
             Assert.DoesNotContain("security.user_password", YealinkConfigRenderer.Render(config));

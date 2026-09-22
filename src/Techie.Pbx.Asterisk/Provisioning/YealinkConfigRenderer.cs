@@ -324,11 +324,15 @@ namespace Techie.Pbx.Asterisk.Provisioning
             sb.Append('\n');
             sb.Append("# Web UI passwords. The phone applies them at boot, not when it reads this file.\n");
 
+            // static. is Yealink's current form (their own password-recovery doc, 2026): the
+            // bare security.user_password that older guides show is silently not applied by
+            // newer firmware, and the static prefix also locks the value against the phone's
+            // own web UI — exactly what a provisioned password wants (D133 amended).
             if (config.AdminPassword.Length > 0)
-                Line(sb, "security.user_password", "admin:" + ConfText.Safe(config.AdminPassword, "device admin password"));
+                Line(sb, "static.security.user_password", "admin:" + ConfText.Safe(config.AdminPassword, "device admin password"));
 
             if (config.UserPassword.Length > 0)
-                Line(sb, "security.user_password", "user:" + ConfText.Safe(config.UserPassword, "device user password"));
+                Line(sb, "static.security.user_password", "user:" + ConfText.Safe(config.UserPassword, "device user password"));
         }
 
         /// <summary>The Yealink name and RTP payload type for the codecs this system offers (D73).</summary>

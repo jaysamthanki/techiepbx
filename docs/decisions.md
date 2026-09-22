@@ -2820,6 +2820,13 @@ way a Polycom phone has since D85.
 - The admin password is **not** a push credential for Yealink the way it is for Polycom (D85):
   Yealink has no HTTP push here (D90), so it is only ever the password on the phone's own web UI.
 
+> **Amended same day.** The bare `security.user_password` form was silently not applied by the
+> user's handset (T33G, firmware 124.86.0.118): the phone fetched the config and still sat on its
+> password prompt. Yealink's own current password-recovery document (support.yealink.com, 2026)
+> uses the `static.` prefix — `static.security.user_password = admin:<password>` — and a known
+> FusionPBX-thread firmware quirk matches. The renderer now writes the static form, which also
+> locks the value against the phone's own web UI.
+
 ### D134. Yealink gets a reboot button, and `yealink-reboot` really reboots (2026-09-22)
 
 Amends D90 and closes the question D123 left open ("whether its reboot button should send
