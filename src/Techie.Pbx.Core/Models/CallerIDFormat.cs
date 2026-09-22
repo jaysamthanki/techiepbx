@@ -14,10 +14,11 @@ namespace Techie.Pbx.Core.Models
     ///
     /// The rules are deliberately narrower than Asterisk's. A number is digits only: no <c>+</c>, no
     /// spaces and no punctuation, like every other number this system stores (a DID, a prepend). A
-    /// name may not contain brackets, commas or quotes, because what is generated is
+    /// name may not contain brackets, commas, colons or quotes, because what is generated is
     /// <c>Set(CALLERID(all)="Name" &lt;number&gt;)</c> inside an <c>ExecIf</c> — Asterisk reads an
-    /// application's arguments to the matching bracket, and the quotes around the name are ours to
-    /// add rather than the admin's to type.
+    /// application's arguments to the matching bracket and reads a colon as the start of
+    /// <c>ExecIf</c>'s else branch, and the quotes around the name are ours to add rather than the
+    /// admin's to type.
     /// </summary>
     public static partial class CallerIDFormat
     {
@@ -43,7 +44,7 @@ namespace Techie.Pbx.Core.Models
                 return $"{label} must be a number of up to {MaxNumberLength} digits, or a name and " +
                        $"number in the form \"Acme Sales\" <17141234567>. A name may be up to " +
                        $"{MaxNameLength} letters, digits, spaces and . ' - _ & — no brackets, " +
-                       "commas or quotes of its own.";
+                       "commas, colons or quotes of its own.";
 
             return null;
         }

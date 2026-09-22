@@ -2379,3 +2379,80 @@ not stop it. The map is now built per system by `PolycomDigitMap.For(extensions)
   stop, so the test can be seen to see the bug.
 - **Yealink gets no dial plan at all**, and now has a test saying so. It dials on its own Send key
   and its own timers; `dialnow` rules for a Yealink are a piece to justify on their own.
+
+### D125. Outbound caller ID: trunk, then route, then extension — and the route's hold music (2026-09-21)
+
+An outbound route can name **what a call that matched it calls out as** (FreePBX's rarely used
+"option CID"), an extension can name **its own outbound caller ID** so a user with a direct DID
+calls out as that DID, and a route can also name **the music on hold class its caller hears**.
+Schema 022: `OutboundRoutes.CallerID`, `OutboundRoutes.MohClassID`, `Extensions.OutboundCallerID`.
+
+**The precedence, decided by the user and the whole point of the design: trunk < route <
+extension.** The trunk's `callerid` in pjsip.conf is untouched and stays the fallback it always
+was — nothing in this decision writes to it.
+
+- **The extension claims at origination, with `set_var`.** Its endpoint gains
+  `set_var = TNPBX_CID="Jane Smith" <17141234567>`, and chan_pjsip puts that variable on every
+  channel the phone creates. So the claim exists before any dialplan runs, and **no route has to
+  know which extensions have DIDs** — which is the reason for doing it here rather than with a
+  per-extension line in `[internal]` that every route would then have to read around.
+- **The route applies it, and only the route.** `set_var` sets a plain channel variable —
+  `ast_set_variables` does not evaluate dialplan functions — so something has to turn it into
+  `CALLERID(all)`, and the outbound route contexts are the only place that does:
+
+  ```
+  exten => _NXXXXXX,1,ExecIf($["${TNPBX_CID}" != ""]?Set(CALLERID(all)=${TNPBX_CID}))
+   same => n,ExecIf($["${TNPBX_CID}" = ""]?Set(CALLERID(all)="Acme Sales" <17141234567>))
+   same => n,Set(CHANNEL(musicclass)=Front Desk)
+   same => n,Dial(PJSIP/callcentric/sip:1714${EXTEN}@callcentric.com,60,tTkK)
+   same => n,Hangup()
+  ```
+
+  **Applying it nowhere else is what makes a blunt `set_var` safe.** An internal call never enters
+  an outbound context, so a colleague still sees the endpoint's own `callerid` — the name and the
+  extension number. A call that arrived on a trunk cannot enter one either: a trunk's context
+  includes nothing (D50). The claim reaches exactly the calls it is about.
+- **The route's own caller ID is written guarded, the extension's is not.** The two `ExecIf`s are
+  opposite halves of one test, so the order they are written in does not matter and neither can
+  clobber the other. The route's line is guarded **even where no extension has a caller ID at
+  all** — the variable is simply empty and the `ExecIf` always fires — because the alternative is
+  a line whose meaning changes silently the day somebody gives an extension a DID.
+- **Nothing is written where nothing was named.** A route with no caller ID and no class, on a
+  system where no extension claims one, renders the single `Dial` and one `Hangup` it rendered
+  before any of this existed, which is why every existing golden file is unchanged. The line that
+  applies a claim is left out entirely until some enabled extension has one.
+- **The route's music is `Set(CHANNEL(musicclass)=...)` and deliberately unguarded**, unlike the
+  internal backfill (D122 amended). It is the class the *caller* hears while **the far side holds
+  them** — a receptionist at the other end pressing hold on us. An outbound caller's channel has
+  passed no trunk context and no extension entry, so nothing can have named a class on it and
+  there is nothing here to avoid clobbering. Null means no class named, as inbound, and the same
+  caveat applies: Asterisk's own fallback is a class called `default` that this system never
+  writes (D119), so a route left on "Default" is silence, not the shipped music.
+- **`ON DELETE SET NULL`** on the route's class, for the reason the inbound one has it: deleting a
+  hold-music class must not delete the route that named it. The repository refuses a class that is
+  not there on the way in; the renderer refuses one it was not given, and one called `default`, on
+  the way out — `MohClassName` is now shared by both directions so the two cannot drift.
+- **Both caller ID fields are read by one validator**, `CallerIDFormat`, because both end up in the
+  same `CALLERID(all)`. FreePBX's two forms are accepted — `"Acme Sales" <17141234567>` or a bare
+  number — with the quotes optional on the way in and **ours to add on the way out**: `ConfText`
+  refuses a value containing a quote, so the name and the number are checked separately and then
+  wrapped, exactly as the endpoint `callerid` lines are.
+- **The rules are deliberately narrower than Asterisk's.** A number is digits only, up to 15: no
+  `+`, no spaces, no punctuation, like every other number this system stores (a DID, a prepend).
+  A name is up to 32 letters, digits, spaces and `. ' - _ &` — **no brackets, commas, colons or
+  quotes**, because what is generated is `Set(CALLERID(all)="Name" <number>)` *inside an `ExecIf`*:
+  Asterisk reads an application's arguments to the matching bracket, and `ExecIf` reads a colon as
+  the start of its else branch. A site that needs `+E.164` presentation is a decision to take on
+  its own, for every number field at once.
+- **No new modules.** `set_var` is core res_pjsip (an endpoint option, not an application),
+  `func_callerid.so` was already on the allowlist for `${CALLERID(num)}` in the `*97` entry, and
+  `app_exec.so` + `func_channel.so` arrived with D122's amendments. The allowlist is unchanged,
+  which was checked rather than assumed (D31).
+- **What the toll-fraud story does not change.** A caller ID is presentation, not permission: the
+  route's pattern still decides what may be dialled, and international dialling is still refused
+  by validation (D47). Nothing here lets a call out that could not go out before.
+- **Not verified on the lab VM.** Three things need a real call: that the provider accepts and
+  displays the caller ID we set (Callcentric may override it to an account-owned number, which is
+  the provider's right and not something this system can fix), that a held outbound caller hears
+  the route's class, and that an extension with a DID beats a route with a caller ID on the same
+  call.

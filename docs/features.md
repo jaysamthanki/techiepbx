@@ -49,8 +49,11 @@ Notes:
 modals), apply config via AMI, live registration status, show or regenerate the SIP password —
 all written, none of it run against the lab VM yet (see [roadmap.md](roadmap.md#piece-5-detail-code-done-2026-09-15)).
 
-**Still to do:** per-extension caller ID for outbound calls, which needs trunks and outbound
-routes to exist first.
+**Done 2026-09-21:** per-extension caller ID for outbound calls (D125). An extension names its own
+outbound caller ID — a user with a direct DID calls out as that DID — and it beats the route's and
+the trunk's. Stored as `Extensions.OutboundCallerID` (schema 022), carried on the endpoint as
+`set_var = TNPBX_CID=...` and applied by the outbound route contexts, so internal calls still show
+the extension's own name and number.
 
 ## F2a. Voicemail
 
@@ -181,13 +184,13 @@ minimum.
 
 | Piece | Needed by | Notes |
 |---|---|---|
-| **Outbound routes** | Trunks, follow me | Dial pattern → trunk. Restrict international dialing by default (toll fraud). |
+| **Outbound routes** | Trunks, follow me | Dial pattern → trunk, with prepend/strip digits (D109). Restrict international dialing by default (toll fraud). Each route may also name **the caller ID calls out as** and **the music on hold class** its caller hears while the far side holds them (D125); an extension's own outbound caller ID beats both. |
 | **Inbound routes** | Trunks | DID → destination |
 | **Destinations** | Inbound routes, IVR, ring groups, voicemail | One shared "send the call to X" picker and dialplan helper used by every feature. **Built 2026-09-17** (D35, D36): types so far are Extension, Voicemail and Hangup; each new feature adds its own |
 | **Feature codes** | Voicemail, IVR recording | `*43` echo exists; `*97` voicemail etc. |
 | **Audio file handling** | IVR, voicemail greetings | Storage, format conversion |
 | **Time conditions** | Inbound routes, IVRs, anything needing business-hours routing | **Requested 2026-09-19.** One form per condition: open hours → destination, closed → destination, holidays → destination, with per-holiday overrides. No time-group entity (D62). F8. |
-| **Music on hold** | Call parking | **Built 2026-09-19, several classes 2026-09-21** (D119, D122). Its own page at `/Moh`: as many classes as you like, each `mode=files` on its own directory under `/var/lib/asterisk/moh`, with tracks uploaded and converted like announcements (D55). One class ships with the product — **Standard**, three royalty-free tracks the installer transcodes — and no class may be called `default`, which is the name Asterisk keeps for its own fallback. The only thing that asks for a class today is a parked call (`Parking.MusicClass`); ring groups and transfers do not. |
+| **Music on hold** | Call parking | **Built 2026-09-19, several classes 2026-09-21** (D119, D122). Its own page at `/Moh`: as many classes as you like, each `mode=files` on its own directory under `/var/lib/asterisk/moh`, with tracks uploaded and converted like announcements (D55). One class ships with the product — **Standard**, three royalty-free tracks the installer transcodes — and no class may be called `default`, which is the name Asterisk keeps for its own fallback. What asks for a class today: a parked call (`Parking.MusicClass`), an inbound route, an internal call's backfill (D122 amended) and an outbound route (D125). Ring groups and transfers do not. |
 | **Call parking** | — | **Built 2026-09-19** (D119). One lot, off by default. `*3` (configurable) parks the call you are on, the system speaks the slot back, and dialling the slot number from any phone picks it up. 1–9 slots, 30–600s timeout, then it rings back whoever parked it. Parked callers hear silence or one of the music on hold classes above, named by `Parking.MusicClass` (D122). Own page at `/Parking`. A slot can be put on a phone key, and its lamp is lit while a call is sitting there (D121). Not built: per-user or per-department lots, a park-and-page button. |
 | **Phone provisioning** | Extensions | **Built 2026-09-21** (D77–D83). Polycom only. DHCP option 160 points phones at `http://user:pass@host/polycom`; a phone fetches `<mac>.cfg` then `exten<mac>.cfg`, both generated from the database per request and never stored on disk (D79). A phone with valid credentials and a Polycom User-Agent **adds itself** the first time it asks (D78); an admin then names it and gives it an extension. Basic auth against two settings keys, outside the Entra cookie (D77). Eight assignable keys per phone: **key 1 is the line it registers as** and the rest are lamps — another extension (BLF + quick dial) or a parking slot (D121, schema 020). Rebooting a phone is a SIP NOTIFY to its registered contact, so it works through NAT (D123). Not built: firmware serving (D83), log/overrides/contacts upload endpoints (D79), softkeys, a Yealink reboot button. |
 | **Settings UI** | Everything | **Built 2026-09-20.** Settings dropdown: a general page listing every key (modal edit, masked secrets, reset to default, D67–D69) and a SIP Settings page — bind address (0.0.0.0 default), UDP/TCP/TLS ports, NAT external address, local networks, STUN (default stun.l.google.com:19302), and codecs (ulaw/alaw/gsm only, the allowlist's modules, D73). TCP transport conditional (D70), TLS stored-only until cert management (D71), STUN + icesupport into rtp.conf (D72). |

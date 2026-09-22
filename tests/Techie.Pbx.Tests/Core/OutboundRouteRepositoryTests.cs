@@ -219,6 +219,111 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal(1, updated.StripDigits);
         }
 
+        /// <summary>
+        /// The route's own caller ID (D125), in both the forms an admin might type it and empty for
+        /// the route that names none — which is the default, and then the trunk says who we are.
+        /// </summary>
+        [Theory]
+        [InlineData("")]
+        [InlineData("17141234567")]
+        [InlineData("\"Acme Sales\" <17141234567>")]
+        public void A_route_caller_id_round_trips(string callerID)
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.CallerID = callerID;
+
+            this.routes.Insert(route);
+
+            Assert.Equal(callerID, this.routes.GetByID(route.OutboundRouteID)!.CallerID);
+        }
+
+        /// <summary>A caller ID is trimmed on the way in, like the pattern and the name are.</summary>
+        [Fact]
+        public void A_route_caller_id_is_stored_without_stray_whitespace()
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.CallerID = "  17141234567  ";
+
+            this.routes.Insert(route);
+
+            Assert.Equal("17141234567", this.routes.GetByID(route.OutboundRouteID)!.CallerID);
+        }
+
+        /// <summary>
+        /// What is refused is what could not be written into the dialplan, or could be written and
+        /// mean something else: the caller ID ends up inside a <c>Set(CALLERID(all)=...)</c>, so a
+        /// comma, a bracket or a quote of its own is not allowed, and a number is digits (D125).
+        /// </summary>
+        [Theory]
+        [InlineData("+17141234567")]
+        [InlineData("1 714 123 4567")]
+        [InlineData("Acme Sales")]
+        [InlineData("\"Acme, Sales\" <17141234567>")]
+        [InlineData("\"Acme (Sales)\" <17141234567>")]
+        public void A_route_caller_id_that_could_not_be_written_is_refused(string callerID)
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.CallerID = callerID;
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.routes.Insert(route));
+
+            Assert.Contains("Caller ID", ex.Message);
+            Assert.Empty(this.routes.GetAll());
+        }
+
+        /// <summary>
+        /// The class an outbound caller hears while the far side holds them (D125). Stored as a
+        /// reference, like the inbound one, so this is the same three behaviours: it round trips, a
+        /// class that is not there is refused, and deleting a class puts the route back to none
+        /// rather than taking the route with it.
+        /// </summary>
+        [Fact]
+        public void A_music_on_hold_class_round_trips()
+        {
+            var trunkID = AddTrunk();
+            var mohClasses = new MohClassRepository(this.database);
+            var mohClassID = mohClasses.Insert(new MohClass { Name = "Front Desk", Directory = "front-desk" });
+            var route = Route(trunkID);
+            route.MohClassID = mohClassID;
+
+            this.routes.Insert(route);
+
+            Assert.Equal(mohClassID, this.routes.GetByID(route.OutboundRouteID)!.MohClassID);
+        }
+
+        [Fact]
+        public void A_music_on_hold_class_that_is_not_there_is_refused()
+        {
+            var trunkID = AddTrunk();
+            var route = Route(trunkID);
+            route.MohClassID = 999;
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.routes.Insert(route));
+
+            Assert.Contains("music on hold class", ex.Message);
+            Assert.Empty(this.routes.GetAll());
+        }
+
+        [Fact]
+        public void Deleting_a_class_leaves_the_route_with_no_class_named()
+        {
+            var trunkID = AddTrunk();
+            var mohClasses = new MohClassRepository(this.database);
+            var mohClassID = mohClasses.Insert(new MohClass { Name = "Front Desk", Directory = "front-desk" });
+            var route = Route(trunkID);
+            route.MohClassID = mohClassID;
+            this.routes.Insert(route);
+
+            mohClasses.Delete(mohClassID);
+
+            var loaded = this.routes.GetByID(route.OutboundRouteID);
+            Assert.NotNull(loaded);
+            Assert.Null(loaded!.MohClassID);
+        }
+
         /// <summary>The international guard closes the prepend door too (D47, D109).</summary>
         [Fact]
         public void A_prepend_starting_with_zero_cannot_be_stored()

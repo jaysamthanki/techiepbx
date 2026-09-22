@@ -191,6 +191,24 @@ itself is from 006; this is the one column added since.
 |---|---|---|
 | `MohClassID` | INTEGER FK → `MohClasses`, nullable | Null means no class is named, which is what every route did before this column and leaves the channel to Asterisk's own fallback. `ON DELETE SET NULL`: deleting a class must not delete the route, and a route naming a class that has gone is a name the renderer refuses to write |
 
+### OutboundRoutes: caller ID and music on hold (022)
+
+What a call that matched this route calls out as, and what its caller hears when the far side holds
+them (D125). The table itself is from 005 (014 added the digit columns); these are the two added
+since. `Extensions.OutboundCallerID` lands in the same script, because the three columns are one
+decision.
+
+| Column | Type | Notes |
+|---|---|---|
+| `CallerID` | TEXT, default `''` | FreePBX's "option CID": a bare number of up to 15 digits, or `"Acme Sales" <17141234567>` — `CallerIDFormat` reads both, and it is the same validator the extension column uses. Empty means none, and then the trunk's own `callerid` says who we are. Written **guarded** into the dialplan, so an extension that claimed one keeps it |
+| `MohClassID` | INTEGER FK → `MohClasses`, nullable | The outbound twin of `InboundRoutes.MohClassID`, and the same rules: null means no class named, `ON DELETE SET NULL` so deleting a class does not delete the route, and the renderer refuses a class it was not given or one called `default` |
+
+### Extensions: outbound caller ID (022)
+
+| Column | Type | Notes |
+|---|---|---|
+| `OutboundCallerID` | TEXT, default `''` | The user with a direct DID of their own. Same two forms as the route column, and it **beats** the route: the endpoint carries it as `set_var = TNPBX_CID=...`, which the outbound route contexts apply and nothing else reads. Empty means no claim, which is every extension until somebody sets one. Internal calls are unaffected — they show the endpoint's own `callerid` (D125) |
+
 ### PhoneButtons (018, 020)
 
 The assignable keys on a phone (D121): one row per key that has something on it, so a key nobody

@@ -150,6 +150,60 @@ namespace Techie.Pbx.Tests.Core
             Assert.Contains("PIN", ex.Message);
         }
 
+        /// <summary>
+        /// The extension's own outbound caller ID (D125), in both the forms an admin might type it,
+        /// and empty for the extension that has none — which is the default and the common case.
+        /// </summary>
+        [Theory]
+        [InlineData("")]
+        [InlineData("17141234567")]
+        [InlineData("\"Jane Smith\" <17141234567>")]
+        public void An_outbound_caller_id_survives_a_round_trip(string callerID)
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                OutboundCallerID = callerID,
+            };
+            this.repository.Insert(extension);
+
+            Assert.Equal(callerID, this.repository.GetByNumber("1001")!.OutboundCallerID);
+
+            extension.OutboundCallerID = "";
+            this.repository.Update(extension);
+
+            Assert.Equal("", this.repository.GetByNumber("1001")!.OutboundCallerID);
+        }
+
+        /// <summary>
+        /// What is refused is what could not be written into a conf file, or could be written into one
+        /// and mean something else: a number with anything but digits in it, a name with a bracket,
+        /// comma or quote of its own, and a name with no number behind it (D125).
+        /// </summary>
+        [Theory]
+        [InlineData("+17141234567")]
+        [InlineData("1 714 123 4567")]
+        [InlineData("Jane Smith")]
+        [InlineData("\"Jane, Smith\" <17141234567>")]
+        [InlineData("\"Jane (Sales)\" <17141234567>")]
+        [InlineData("\"Jane\" <714123456789012345>")]
+        public void An_outbound_caller_id_that_could_not_be_written_is_refused(string callerID)
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                OutboundCallerID = callerID,
+            };
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.repository.Insert(extension));
+
+            Assert.Contains("Outbound caller ID", ex.Message);
+        }
+
         [Fact]
         public void A_voicemail_email_that_is_not_an_address_is_rejected()
         {
