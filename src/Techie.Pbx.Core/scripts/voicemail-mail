@@ -1,18 +1,33 @@
 #!/usr/bin/env python3
 #
-# TNPBX voicemail delivery: the program app_voicemail's "mailcmd" points at (D126), and where
-# voicemail is transcribed on the way past (D128).
+# TNPBX voicemail delivery: the program app_voicemail's "mailcmd" points at (D126), where
+# voicemail is transcribed on the way past (D128), and where the web application is asked to send
+# a proper email instead (D129).
 #
 # app_voicemail composes the whole email itself — headers, body and the attached recording —
-# and hands it to this script on stdin. All this does is relay it through the SMTP credentials
-# the web application already proved with its "send test mail" button, so a TNPBX box needs no
-# system MTA and there is exactly one set of mail credentials on the machine.
+# and hands it to this script on stdin. There are two ways out of here, and they are tried in
+# this order:
+#
+#   1. the callback (D129). This posts what the email says about the message — the mailbox, the
+#      message's path on disk, who called and when — to the web application on the loopback
+#      address, and the application composes its own branded email with the transcript in the body
+#      and the recording attached as an MP3, and sends it through the same SMTP settings. A 200
+#      means it went, and this script is done.
+#   2. the relay (D126, D128). Anything else — the application is down, mid-deploy, has no token,
+#      answered slowly or answered badly — and this script relays the message app_voicemail
+#      composed, transcribing it on the way past exactly as it did before the callback existed.
+#
+# The second path is the point. The application being unavailable must never mean a voicemail
+# nobody hears, so the nicer email is always the *first* try and never the only one.
 #
 # It is deliberately dull:
 #   * no arguments, ever. app_voicemail runs it as "( mailcmd < tmpfile ; rm -f tmpfile ) &",
 #     so anything on a command line here would be a shell string, and there isn't one.
 #   * fixed paths only, every one of them a constant below. Nothing is read from the environment,
-#     PATH included, and no path ever comes from the message.
+#     PATH included, and no path ever comes from the message. The one path it builds — the
+#     message on disk, for the callback — is built out of a mailbox and a message number that
+#     have both been matched against a pattern, and the application checks it again before it
+#     opens anything.
 #   * the only programs it runs are ffmpeg and whisper-cli, at fixed paths, with an argument
 #     list — never a shell, never a string. Both are handed a temporary file this script wrote
 #     itself, never anything a caller chose.
@@ -39,6 +54,8 @@ import sys
 import syslog
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from email.mime.text import MIMEText
 from email.parser import BytesParser
 
@@ -46,6 +63,16 @@ from email.parser import BytesParser
 # user and group-readable by asterisk — it carries the SMTP password, so it is never logged and
 # never quoted back in an error message.
 CONFIG_PATH = "/opt/tnpbx/Config/mail.json"
+
+# How long the web application gets to compose and send the email (D129). Generous on purpose:
+# transcription happens inside that request and is allowed 300 seconds of its own, so a shorter
+# wait here would abandon a message the application is in the middle of sending. app_voicemail
+# already forked this script into the background, so the only thing waiting is the message.
+CALLBACK_TIMEOUT_SECONDS = 360
+
+# The mailbox context every mailbox this system generates lives in. Only used when the email does
+# not name one; app_voicemail stamps it on what it composes.
+DEFAULT_CONTEXT = "default"
 
 # ffmpeg, wherever Debian put it. A fixed list rather than a PATH search on purpose: this script
 # reads nothing from the environment, and that includes PATH. The recording app_voicemail attaches
@@ -66,6 +93,10 @@ OPTIONS_PATH = "/etc/asterisk/tnpbx-voicemail-options.json"
 # How long ffmpeg gets to convert one voicemail. It is a few seconds of work on a file that is at
 # most maxsecs long; anything near this is a wedged process, not a slow one.
 RESAMPLE_TIMEOUT_SECONDS = 60
+
+# Where app_voicemail keeps its messages. The callback names one of them by path, and the web
+# application refuses any path that is not exactly this shape for exactly that mailbox (D129).
+SPOOL_ROOT = "/var/spool/asterisk/voicemail"
 
 SYSLOG_IDENT = "tnpbx-voicemail-mail"
 
@@ -92,6 +123,124 @@ WHISPER_BIN = "/opt/tnpbx/bin/whisper-cli"
 WHISPER_MODEL = "/opt/tnpbx/whisper/ggml-small.en.bin"
 
 
+def callback(config, message):
+    """
+    Asks the web application to compose and send the email itself (D129), and says whether it did.
+
+    False for every way it could not — no token, nothing in the email to locate the message with,
+    the application down, slow, or answering anything but 200 — and every one of those means the
+    caller relays what app_voicemail composed instead. Nothing here raises: this is the nicer of
+    two paths, not the only one.
+    """
+    token = config["CallbackToken"]
+    url = config["CallbackUrl"]
+
+    if not token or not url:
+        syslog.syslog(syslog.LOG_INFO,
+                      "%s names no callback token, so the message is relayed as app_voicemail "
+                      "composed it" % CONFIG_PATH)
+        return False
+
+    # The application is on this machine, on the loopback address, and that is the only place this
+    # script will send a voicemail's details to. A mail.json naming anywhere else is not followed.
+    if not url.startswith("http://127.0.0.1:") and not url.startswith("http://localhost:"):
+        syslog.syslog(syslog.LOG_WARNING,
+                      "%s names a callback that is not on this machine; ignoring it" % CONFIG_PATH)
+        return False
+
+    facts = details(message)
+
+    if facts is None:
+        return False
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(facts).encode("utf-8"),
+        method="POST")
+    request.add_header("Authorization", "Bearer %s" % token)
+    request.add_header("Content-Type", "application/json")
+
+    try:
+        with urllib.request.urlopen(request, timeout=CALLBACK_TIMEOUT_SECONDS) as answer:
+            status = answer.status
+            # Drain the answer so the connection closes tidily; nothing in it is needed.
+            answer.read(1024)
+    except urllib.error.HTTPError as error:
+        syslog.syslog(syslog.LOG_WARNING,
+                      "the application answered %d for mailbox %s, so the message is relayed "
+                      "instead" % (error.code, facts["Mailbox"]))
+        return False
+    except Exception as error:
+        syslog.syslog(syslog.LOG_WARNING,
+                      "the application could not be reached (%s), so the message is relayed "
+                      "instead" % error)
+        return False
+
+    if status != 200:
+        syslog.syslog(syslog.LOG_WARNING,
+                      "the application answered %d, so the message is relayed instead" % status)
+        return False
+
+    syslog.syslog(syslog.LOG_INFO,
+                  "mailbox %s: the application composed and sent the email" % facts["Mailbox"])
+    return True
+
+
+def details(message):
+    """
+    What the application is told about this message, out of the email's own headers, or None when
+    the email does not say enough to be sure.
+
+    Everything here is checked before it goes anywhere: the mailbox and the context have to match
+    a pattern, because they become directory names in the path, and the path itself has to be a
+    message that exists. Nothing a caller said is used to find anything — the caller's name and
+    number are passed along as text and nothing more.
+    """
+    # Some of these headers are written as "201@default"; the mailbox is the part before the
+    # context, and the context has a header of its own.
+    mailbox = (mailbox_of(message) or "").split("@")[0]
+
+    if not re.fullmatch(r"[0-9]{2,6}", mailbox):
+        syslog.syslog(syslog.LOG_WARNING,
+                      "the email does not say which mailbox it is for, so the application cannot "
+                      "be asked to send it")
+        return None
+
+    context = header(message, "X-Asterisk-VM-Context") or DEFAULT_CONTEXT
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", context):
+        syslog.syslog(syslog.LOG_WARNING, "mailbox %s: the email names an odd context" % mailbox)
+        return None
+
+    number = header(message, "X-Asterisk-VM-Message-Num")
+
+    if not number:
+        found = re.search(r"\bNew message ([0-9]{1,4}) in mailbox\b", message.get("Subject") or "")
+        number = found.group(1) if found else ""
+
+    if not re.fullmatch(r"[0-9]{1,4}", number):
+        syslog.syslog(syslog.LOG_WARNING,
+                      "mailbox %s: the email does not say which message it is" % mailbox)
+        return None
+
+    path = message_path(context, mailbox, int(number))
+
+    if not path:
+        syslog.syslog(syslog.LOG_WARNING,
+                      "mailbox %s: message %s is not on disk where it should be, so the "
+                      "application cannot read it" % (mailbox, number))
+        return None
+
+    return {
+        "CallerId": header(message, "X-Asterisk-VM-Caller-ID-Num")[:128],
+        "CallerName": header(message, "X-Asterisk-VM-Caller-ID-Name")[:128],
+        "DurationSeconds": seconds(header(message, "X-Asterisk-VM-Duration")),
+        "Mailbox": mailbox,
+        "MessagePath": path,
+        "ReceivedEpoch": received(message),
+    }
+
+
 def fail(message):
     """Says why, in one sentence, to syslog and to stderr, then stops. Never exits 0."""
     syslog.syslog(syslog.LOG_ERR, message)
@@ -106,6 +255,11 @@ def ffmpeg():
             return path
 
     return None
+
+
+def header(message, name):
+    """One header as a stripped string, or "" for a header that is not there."""
+    return (message.get(name) or "").strip()
 
 
 def load_config():
@@ -126,6 +280,10 @@ def load_config():
         fail("%s is not a JSON object." % CONFIG_PATH)
 
     config = {
+        # The callback half (D129). Both may be absent: a system whose token has been cleared, or
+        # a mail.json written by an older build, simply relays the message the way D126 did.
+        "CallbackToken": text(raw, "CallbackToken"),
+        "CallbackUrl": text(raw, "CallbackUrl"),
         "From": text(raw, "From"),
         "FromName": text(raw, "FromName"),
         "Host": text(raw, "Host"),
@@ -173,6 +331,18 @@ def main():
     config = load_config()
     message = read_message()
 
+    # The nicer email first (D129): the application's own template, with the transcript in the
+    # body and the recording attached as an MP3. A blanket except because this is the optional
+    # path — anything at all going wrong here has to end with the message being relayed rather
+    # than with a voicemail nobody hears.
+    try:
+        if callback(config, message):
+            return
+    except Exception as error:
+        syslog.syslog(syslog.LOG_WARNING,
+                      "the callback to the application failed (%s), so the message is relayed "
+                      "instead" % error)
+
     # The one header we touch. app_voicemail's own From is built from serveremail, which is
     # "asterisk@<hostname>" on a box like this one — an address no relay will accept and no
     # recipient's spam filter will like. The configured address is the system's real identity,
@@ -199,7 +369,35 @@ def main():
 
     syslog.syslog(
         syslog.LOG_INFO,
-        "voicemail relayed to %s through %s:%d" % (", ".join(to), config["Host"], config["Port"]))
+        "voicemail relayed to %s through %s:%d as app_voicemail composed it"
+        % (", ".join(to), config["Host"], config["Port"]))
+
+
+def message_path(context, mailbox, number):
+    """
+    Where this message's files are, without the extension, or "" when there is no such message.
+
+    app_voicemail numbers the message in the email from one and the files on disk from zero, so
+    both candidates are tried and the one that is really there wins — rather than this script
+    encoding a belief about which end of that off-by-one it is on. Both candidates are inside this
+    mailbox's own INBOX whatever happens: the directory names are a matched context and a matched
+    mailbox, and the file name is a number this script formats itself.
+
+    The .txt beside the recording is what is looked for, because app_voicemail writes it for every
+    message whatever audio formats are configured.
+    """
+    folder = "%s/%s/%s/INBOX" % (SPOOL_ROOT, context, mailbox)
+
+    for candidate in (number - 1, number):
+        if candidate < 0 or candidate > 9999:
+            continue
+
+        base = "%s/msg%04d" % (folder, candidate)
+
+        if os.path.isfile(base + ".txt"):
+            return base
+
+    return ""
 
 
 def options(mailbox):
@@ -233,6 +431,24 @@ def read_message():
         return BytesParser(policy=email.policy.compat32).parsebytes(raw)
     except Exception as error:
         fail("The message from app_voicemail could not be parsed: %s" % error)
+
+
+def received(message):
+    """
+    When the message arrived, in seconds since the epoch. app_voicemail stamps the recording's own
+    origtime on the email; the Date header is the fallback, and now is the fallback to that — it is
+    within a second or two of the truth, because this runs the moment the message is left.
+    """
+    for name in ("X-Asterisk-VM-Orig-time", "X-Asterisk-VM-Orig-Time"):
+        stamped = header(message, name)
+
+        if re.fullmatch(r"[0-9]{1,12}", stamped):
+            return int(stamped)
+
+    try:
+        return int(email.utils.parsedate_to_datetime(message.get("Date")).timestamp())
+    except Exception:
+        return int(time.time())
 
 
 def recipients(message):
@@ -293,6 +509,15 @@ def resample(converter, source, target):
         return False
 
     return os.path.isfile(target) and os.path.getsize(target) > 0
+
+
+def seconds(value):
+    """
+    A duration as a whole number of seconds. app_voicemail writes it as seconds, but a build that
+    wrote "1:05" or nothing at all must not stop a voicemail being sent, so anything unexpected is
+    zero and the email simply says 0:00.
+    """
+    return int(value) if re.fullmatch(r"[0-9]{1,6}", value or "") else 0
 
 
 def send(config, to, message):

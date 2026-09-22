@@ -262,9 +262,13 @@ music on hold class, default `Standard`, written as `parkedmusicclass`).
 And the mail settings (D115), which this application reads and no generated conf file carries:
 `Mail.Transport` (`graph`, `smtp`, or blank for "decide for me"), `Mail.FromAddress`,
 `Mail.FromName`, `Mail.Smtp.Host`, `Mail.Smtp.Port`, `Mail.Smtp.Username` and
-`Mail.Smtp.Password`.
+`Mail.Smtp.Password` — plus `Mail.VoicemailCallbackToken` (D129), the secret the voicemail
+`mailcmd` script proves itself with when it asks this application to compose and send the email.
+It is generated on the first start that finds it missing, like the ACME account key, and reaches
+the script through `Config/mail.json`.
 
-`Ami.Secret`, `Provisioning.Password` and `Mail.Smtp.Password` are credentials (D14, D77, D115):
+`Ami.Secret`, `Provisioning.Password`, `Mail.Smtp.Password` and `Mail.VoicemailCallbackToken` are
+credentials (D14, D77, D115, D129):
 `SettingsKeys.IsSecret` marks them, they are never logged, and the table masks them — the edit
 form shows the stored value (D112). Defaults are not seeded as rows — they live on `AmiSettings` and `PjsipTransport`,
 and `AsteriskSettings` applies a row on top only when there is one.

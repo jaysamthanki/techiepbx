@@ -28,6 +28,14 @@ software.
   a session gets 401, not a redirect (D20).
 - SIP secrets are never rendered into a list or a table. They go to the browser one at a time,
   when an admin asks for that one extension, and the request is logged without the value.
+- `POST /api/voicemail/notify` is outside the Entra cookie, because the caller is the voicemail
+  `mailcmd` script and a script has no session (D129). **The bearer token is the only thing
+  protecting it**, so the token check is the first thing the action does, it is compared in fixed
+  time, and a blank configured token matches nothing at all. A loopback check sits behind the
+  token, never in front of it. Everything the request names is then checked before anything is
+  opened: the mailbox must be an extension with voicemail and an address, and the message path
+  must match `VoicemailSpool`'s pattern **for that mailbox** — which is what stops traversal and
+  stops one mailbox reading another's messages.
 - Intended systemd hardening: `NoNewPrivileges=true`, `ProtectSystem=strict` with explicit
   `ReadWritePaths`, `PrivateTmp=true`, `ProtectHome=true`, minimal `CapabilityBoundingSet`.
   Don't add code that would need these relaxed without recording a decision.
@@ -66,7 +74,10 @@ software.
 - `/opt/tnpbx/Config/mail.json` holds the SMTP relay password, because the voicemail `mailcmd`
   script runs as `asterisk` and cannot read the database (D126). It is 0640 `tnpbx:asterisk` in a
   setgid 2750 directory, never logged, and **removed** rather than left stale when the relay
-  settings are cleared.
+  settings are cleared. It also carries `Mail.VoicemailCallbackToken` (D129), which is a secret in
+  the same sense and lives under the same mode: it is the credential the script proves itself with
+  on `/api/voicemail/notify`. Generated, never typed, and masked in the settings table like the
+  AMI secret.
 
 ### The voicemail mailcmd script
 
@@ -77,9 +88,17 @@ software.
 - **No arguments, no environment, no shell.** app_voicemail runs it as
   `( mailcmd < tmpfile ; rm -f tmpfile ) &`, so there is no command line to inject into. It reads
   fixed paths only — its config, the generated transcription options, and stdin — and no path
-  ever comes from the message or from the environment, `PATH` included.
-- **Fails closed.** A missing, unreadable, malformed or incomplete config is exit 1 with a sentence
-  on stderr. There is no fallback path that sends mail some other way.
+  ever comes from the message or from the environment, `PATH` included. The one path it *builds*
+  is the message's own (D129): from a mailbox and a context it has matched against a pattern and a
+  message number it formats itself, and the application checks the result again before opening
+  anything.
+- **The callback goes to this machine and nowhere else** (D129). It posts the message's details to
+  the URL in `mail.json`, and refuses to post them anywhere that is not `127.0.0.1` or
+  `localhost` — a voicemail's caller ID and mailbox are not for a URL somebody edited into a file.
+- **Fails closed on the relay.** A missing, unreadable, malformed or incomplete config is exit 1
+  with a sentence on stderr. There is no fallback path that sends mail some other way. The
+  callback is the other way round: every way it can fail ends with the message relayed here
+  instead, because an application that is down must not mean a voicemail nobody hears.
 - **Never submits the relay password in the clear**: implicit TLS on 465, STARTTLS elsewhere, and
   it hangs up rather than authenticating to a relay that offers neither.
 - **Transcription (D128) is the only thing it executes**, and only two programs: `ffmpeg` at one of

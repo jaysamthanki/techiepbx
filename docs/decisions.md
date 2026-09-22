@@ -2603,3 +2603,77 @@ audio goes** and **how a per-extension choice reaches a script that takes no arg
   way, that the attachment's content type arrives as `audio/*`, that ffmpeg decodes wav49 from
   app_voicemail's own writer, and what `small.en` actually does to a 30 second voicemail recorded
   over G.722.
+
+### D129. The voicemail email is ours: the script calls the application back (2026-09-21)
+D126 put delivery in our hands and left composition in app_voicemail's. That was the right first
+step and it shows: the email that arrives is a plain-text template with a transcript bolted on as
+a second MIME part and a `.WAV` attachment some phones will not play. This piece takes composition
+too — **the application builds the email**, with its own template, the transcript in the body and
+the recording attached as an MP3 — **without giving up the guarantee that a voicemail always
+arrives**.
+
+- **A callback, not a replacement.** `mailcmd` still points at `/opt/tnpbx/bin/voicemail-mail`, and
+  app_voicemail still composes its message. The script now tries one thing first: it POSTs what the
+  email says about the message — mailbox, the message's path on disk, caller ID, duration, arrival
+  time — to `http://127.0.0.1:8080/api/voicemail/notify`. **200 and it exits**; app_voicemail's
+  `delete=yes` then tidies up as usual. **Anything else** — the app down, mid-deploy, no token,
+  slow, or answering badly — **and it relays the message exactly as D126 and D128 do today**,
+  transcript and all. The fallback is the whole reason the design is shaped like this: an
+  application that is not running must never mean a voicemail nobody hears.
+- **Why not have the app do it all?** Because then the app is on the critical path of every
+  message. The script is what Asterisk executes and the script always works; the nicer email is an
+  improvement it attempts, not a dependency it acquires.
+- **The token is the only thing protecting the endpoint, and it is the first thing checked.** The
+  endpoint is outside the Entra cookie for the same reason provisioning is (D77): the caller is a
+  script running as `asterisk`, with no browser and no session. It carries
+  `Authorization: Bearer <Mail.VoicemailCallbackToken>`, compared in fixed time, and **a blank
+  configured token matches nothing** — a system without one has a closed endpoint, not an open one.
+  Behind that, and only behind it, the request must come from the loopback address. It is
+  `[AllowAnonymous]` and `[IgnoreAntiforgeryToken]`, which are the two things that would otherwise
+  refuse it, and nothing else about the pipeline changes.
+- **The token is generated, not typed.** A machine credential between two processes on one box;
+  40 characters from `SecretGenerator`, created on the first start that finds it missing, exactly
+  as the ACME account key is created on the first order (D98). A feature that needs an admin to
+  invent a secret before it works is a feature that does not work. It is a **secret key** — masked
+  in the settings table, never logged — and it travels to the script in `Config/mail.json`, which
+  already carries the SMTP password at 0640 `tnpbx:asterisk`. One file is the whole interface
+  between these two processes, and it stays one file. Clearing it turns the callback off; the next
+  restart makes a new one.
+- **Nothing the script sends is trusted.** The mailbox has to be an extension with voicemail
+  enabled and an address. The path has to match `VoicemailSpool`'s pattern exactly — the spool
+  root, a context, **the mailbox from the request**, `INBOX`, `msgNNNN`, no extension — anchored
+  with `\A`/`\z` rather than `^`/`$` so a trailing newline cannot sneak past, and not trimmed, so
+  "nearly the right path" is not the right path. That closes traversal and closes one mailbox
+  asking for another's messages. The caller's name and number are text a stranger chose: they are
+  flattened by `MailText.Plain` before they reach a subject line (a line break in a header is an
+  injected header) and HTML-encoded by the renderer before they reach a body.
+- **MP3, with the original as the fallback.** ffmpeg — already a dependency (D55, D122) — converts
+  the wav49 recording to 48 kbit/s mono MP3, which every phone and mail client plays and which
+  keeps a five minute message under two megabytes. If ffmpeg is missing or refuses the file, **the
+  original is attached instead**: a conversion is not worth an email. A mailbox set to
+  `attach=no` still gets no audio, because that is what it asked for.
+- **Transcription moves into the app, and gains something.** Same engine, same model, same 300
+  second timeout (D128), but it reads the message **from disk** rather than out of the MIME — so a
+  mailbox that emails without the recording can still have a transcript, which the script could
+  never do. Every failure is still a null transcript and never an error.
+- **The message number is tried both ways.** app_voicemail numbers messages from 1 in the email and
+  from 0 on disk, so the script tries `msgNNNN` for both and takes the one whose `.txt` is really
+  there, rather than encoding a belief about which end of that off-by-one it is on. Both candidates
+  are inside that mailbox's own INBOX whatever happens.
+- **Reading the spool needs no new privilege.** `/var/spool/asterisk` is 0755 `asterisk:asterisk`,
+  the mailbox directories are group-readable, and the web user is already in the `asterisk` group
+  (D18) with `/var/spool/asterisk` already in the service's `ReadWritePaths`. The Helper is not
+  involved and nothing here runs as root.
+- **SMTP only, still.** Graph sends a JSON message with a body and no parts, so an attachment has
+  nowhere to go; voicemail email remains the SMTP relay's job, as in D126. This is now the second
+  reason for that limitation rather than the first.
+- **Tested where it can be tested.** The renderer, the path gate, the token, the text flattening
+  and the ffmpeg/whisper fallbacks all have tests; the converter and the engine are stand-in shell
+  scripts, so they run on a machine that has neither. The controller itself is glue and is not
+  tested, because the test project deliberately does not reference the web project — so every
+  decision it makes was put somewhere that could be.
+- **Not verified on the lab VM.** What a real message proves: that the `X-Asterisk-VM-*` headers
+  are spelled as assumed (`Caller-ID-Num`, `Caller-ID-Name`, `Duration`, `Message-Num`, `Context`,
+  `Orig-time`), which end of the message-number off-by-one is real, that the web user can read the
+  spool, that ffmpeg makes a playable MP3 out of app_voicemail's wav49, and that the whole callback
+  finishes inside a caller's patience.

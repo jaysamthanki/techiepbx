@@ -15,6 +15,10 @@ namespace Techie.Pbx.Core.Mail
     /// interface between them, and it is written from those same settings, so there is still one
     /// credential on the box.
     ///
+    /// It also carries the callback token and URL the script uses to ask this application to
+    /// compose and send the email itself (D129) — same file, because the interface between these
+    /// two processes should stay one file rather than two.
+    ///
     /// It carries the SMTP password, so: mode 0640, owned by the web user, group-readable by
     /// asterisk through the setgid directory the installer creates. Never logged, and a settings
     /// change that leaves the relay unusable <b>removes</b> it rather than leaving a stale
@@ -93,6 +97,12 @@ namespace Techie.Pbx.Core.Mail
             var json = JsonSerializer.Serialize(
                 new
                 {
+                    // Where the script asks this application to compose and send the email itself,
+                    // and what it proves itself with (D129). A blank token switches the callback
+                    // off rather than opening it: the script then relays what app_voicemail
+                    // composed, which is exactly the D126 behaviour.
+                    CallbackToken = settings.VoicemailCallbackToken,
+                    CallbackUrl = VoicemailCallback.Url,
                     From = settings.FromAddress,
                     FromName = settings.FromName,
                     Host = settings.SmtpHost,

@@ -116,6 +116,11 @@ neither of the two it listed: Asterisk still **composes** the message, and a fix
 of ours **delivers** it through the `Mail.Smtp.*` settings. No MTA, no `externnotify`, no watching
 directories.
 
+**Done 2026-09-21:** the voicemail email itself (D129). The application composes it — its own
+template, the transcript in the body, the recording attached as an MP3 — and the script calls the
+application to ask for that, keeping its own relay as the fallback for when the application cannot
+answer. So composition is ours and delivery has two paths, of which the plainer one always works.
+
 **Still to do:** the alerts. Nothing raises one yet.
 
 - Voicemail to email, with the recording attached (from F2a). **Done**: `voicemail.conf` names
@@ -124,7 +129,10 @@ directories.
   reads `/opt/tnpbx/Config/mail.json`, which the web app writes (0640, group `asterisk`) whenever
   a mail setting is saved, and fails closed when that file is missing or incomplete. It replaces
   the `From` header with `Mail.FromAddress`, and refuses to authenticate to a relay that will not
-  offer TLS. **SMTP only** — Graph is not available to it (D126).
+  offer TLS. **SMTP only** — Graph is not available to it (D126). Since D129 that is the *second*
+  path: the script first asks the application to compose and send a proper email (branded
+  template, transcript inline, MP3 attachment) over `POST /api/voicemail/notify` on the loopback
+  address, and relays the plainer message only when it cannot.
 - Voicemail **transcription**, per extension. **Done**: the same script runs whisper.cpp
   (`small.en`) on the recording before relaying it and puts the text in the email. Entirely on the
   box — no transcription service, no API key, nothing leaves the server — and entirely optional:

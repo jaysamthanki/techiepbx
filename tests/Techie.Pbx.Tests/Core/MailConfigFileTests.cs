@@ -26,11 +26,14 @@ namespace Techie.Pbx.Tests.Core
                 (SettingsKeys.MailSmtpHost, "smtp.example.com"),
                 (SettingsKeys.MailSmtpPort, "2525"),
                 (SettingsKeys.MailSmtpUsername, "apikey"),
-                (SettingsKeys.MailSmtpPassword, "not-a-real-password"))));
+                (SettingsKeys.MailSmtpPassword, "not-a-real-password"),
+                (SettingsKeys.MailVoicemailCallbackToken, "not-a-real-token"))));
 
             using var json = JsonDocument.Parse(File.ReadAllText(file.FilePath));
             var root = json.RootElement;
 
+            Assert.Equal("not-a-real-token", root.GetProperty("CallbackToken").GetString());
+            Assert.Equal(VoicemailCallback.Url, root.GetProperty("CallbackUrl").GetString());
             Assert.Equal("pbx@example.com", root.GetProperty("From").GetString());
             Assert.Equal("Acme PBX", root.GetProperty("FromName").GetString());
             Assert.Equal("smtp.example.com", root.GetProperty("Host").GetString());
@@ -56,6 +59,36 @@ namespace Techie.Pbx.Tests.Core
 
             Assert.Equal("", json.RootElement.GetProperty("Username").GetString());
             Assert.Equal(MailSettings.DefaultSmtpPort, json.RootElement.GetProperty("Port").GetInt32());
+        }
+
+        /// <summary>
+        /// A system with no callback token still gets a file, and the script still relays the
+        /// message app_voicemail composed (D129). A blank token switches the nicer email off; it
+        /// does not switch voicemail email off.
+        /// </summary>
+        [Fact]
+        public void A_relay_without_a_callback_token_is_still_written()
+        {
+            var file = new MailConfigFile(this.directory);
+
+            Assert.True(file.Write(Settings(
+                (SettingsKeys.MailFromAddress, "pbx@example.com"),
+                (SettingsKeys.MailSmtpHost, "smtp.example.com"))));
+
+            using var json = JsonDocument.Parse(File.ReadAllText(file.FilePath));
+
+            Assert.Equal("", json.RootElement.GetProperty("CallbackToken").GetString());
+        }
+
+        /// <summary>
+        /// The URL is ours and not a setting: the script posts a voicemail's details to it, so it
+        /// is the loopback address and this app's own port, always.
+        /// </summary>
+        [Fact]
+        public void The_callback_is_on_this_machine_and_nowhere_else()
+        {
+            Assert.StartsWith("http://127.0.0.1:", VoicemailCallback.Url);
+            Assert.EndsWith("/" + VoicemailCallback.Route, VoicemailCallback.Url);
         }
 
         /// <summary>

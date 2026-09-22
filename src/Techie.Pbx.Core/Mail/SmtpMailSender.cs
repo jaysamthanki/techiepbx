@@ -28,7 +28,14 @@ namespace Techie.Pbx.Core.Mail
         /// Sends one HTML message, or says why it could not. Nothing here throws at the caller:
         /// a relay refusing mail is an ordinary thing for an admin to have to fix.
         /// </summary>
-        public async Task<MailResult> SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)
+        public Task<MailResult> SendAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken) =>
+            this.SendAsync(to, subject, htmlBody, null, cancellationToken);
+
+        /// <summary>
+        /// The same send with a file on it — the voicemail recording, and nothing else so far
+        /// (D129). Bytes rather than a path: this class never opens a file somebody named.
+        /// </summary>
+        public async Task<MailResult> SendAsync(string to, string subject, string htmlBody, MailAttachment? attachment, CancellationToken cancellationToken)
         {
             if (this.settings.SmtpHost.Length == 0)
                 return MailResult.Failed("SMTP is the chosen transport, but no SMTP host is set. Set Mail.Smtp.Host on the Email tab first.");
@@ -64,6 +71,16 @@ namespace Techie.Pbx.Core.Mail
                     : new MailAddress(this.settings.FromAddress);
 
                 message.To.Add(to);
+
+                // The Attachment owns the stream and the message owns the Attachment, so disposing
+                // the message — which the using above does — closes both.
+                if (attachment != null)
+                {
+                    message.Attachments.Add(new Attachment(
+                        new MemoryStream(attachment.Bytes),
+                        attachment.FileName,
+                        attachment.ContentType));
+                }
 
                 await client.SendMailAsync(message, cancellationToken);
 

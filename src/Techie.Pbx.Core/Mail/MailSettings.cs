@@ -41,6 +41,13 @@ namespace Techie.Pbx.Core.Mail
         /// </summary>
         public string Transport { get; }
 
+        /// <summary>
+        /// The shared secret the <c>voicemail-mail</c> script proves itself with on the notify
+        /// endpoint (D129). A secret, and the only thing guarding that endpoint: blank means the
+        /// callback is off, not open, and voicemail email falls back to the script's own relay.
+        /// </summary>
+        public string VoicemailCallbackToken { get; }
+
         public MailSettings(IReadOnlyDictionary<string, string> stored)
         {
             this.FromAddress = Value(stored, SettingsKeys.MailFromAddress);
@@ -50,6 +57,7 @@ namespace Techie.Pbx.Core.Mail
             this.SmtpPort = Number(Value(stored, SettingsKeys.MailSmtpPort), DefaultSmtpPort);
             this.SmtpUsername = Value(stored, SettingsKeys.MailSmtpUsername);
             this.Transport = Value(stored, SettingsKeys.MailTransport);
+            this.VoicemailCallbackToken = Value(stored, SettingsKeys.MailVoicemailCallbackToken);
         }
 
         /// <summary>

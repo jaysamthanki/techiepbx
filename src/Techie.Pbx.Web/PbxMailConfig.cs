@@ -1,6 +1,7 @@
 using log4net;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Mail;
+using Techie.Pbx.Core.Security;
 
 namespace Techie.Pbx.Web
 {
@@ -16,6 +17,12 @@ namespace Techie.Pbx.Web
     /// </summary>
     public static class PbxMailConfig
     {
+        /// <summary>
+        /// How long the generated callback token is. It is never typed by anybody — the app writes
+        /// it into mail.json and the script reads it back — so it is as long as it is useful to be.
+        /// </summary>
+        private const int TokenLength = 40;
+
         private static readonly ILog Log = LogManager.GetLogger(typeof(PbxMailConfig));
 
         private static MailConfigFile? file;
@@ -31,7 +38,35 @@ namespace Techie.Pbx.Web
         public static void Open(string contentRootPath, SettingsRepository settings)
         {
             file = new MailConfigFile(Path.Combine(contentRootPath, MailConfigFile.DirectoryName));
+            Token(settings);
             Write(settings);
+        }
+
+        /// <summary>
+        /// Makes sure there is a callback token for the script to prove itself with (D129), and
+        /// leaves an existing one alone. Generated rather than typed: it is a machine credential
+        /// between two processes on one box, and a feature that needs an admin to invent a secret
+        /// before it works is a feature that does not work.
+        ///
+        /// Clearing it on the Settings page is how an admin switches the callback off; the next
+        /// start makes a new one, which is the same bargain the ACME account key has.
+        /// </summary>
+        private static void Token(SettingsRepository settings)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.Get(SettingsKeys.MailVoicemailCallbackToken)))
+                return;
+
+            try
+            {
+                settings.Set(SettingsKeys.MailVoicemailCallbackToken, SecretGenerator.Create(TokenLength));
+                Log.Info("Generated a voicemail callback token, so voicemail email is composed by this application");
+            }
+            catch (Exception ex)
+            {
+                // A box that could not store it still emails voicemail: the script relays what
+                // app_voicemail composed, exactly as it did before the callback existed (D126).
+                Log.Error($"Could not generate the voicemail callback token: {ex.Message}");
+            }
         }
 
         /// <summary>

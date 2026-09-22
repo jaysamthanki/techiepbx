@@ -189,6 +189,20 @@ namespace Techie.Pbx.Core.Data
         public const string MailSmtpPassword = "Mail.Smtp.Password";
 
         /// <summary>
+        /// The shared secret the <c>voicemail-mail</c> script proves itself with when it calls this
+        /// application back to have a voicemail email composed and sent (D129). A secret: treat it
+        /// exactly like <see cref="AmiSecret"/> — never logged, and shown only in the edit form an
+        /// admin already signed in to open (D112).
+        ///
+        /// Generated on the first start that finds it missing, and written into
+        /// <c>Config/mail.json</c> beside the relay details, because that file is the whole
+        /// interface between this application and that script. It is the <b>only</b> thing
+        /// protecting the endpoint, so clearing it does not open the endpoint — it closes it, and
+        /// voicemail email falls back to the script relaying what app_voicemail composed.
+        /// </summary>
+        public const string MailVoicemailCallbackToken = "Mail.VoicemailCallbackToken";
+
+        /// <summary>
         /// Whether Kestrel writes the W3C request log — one line per web request, with the client
         /// address, what it asked for and what it got (D116). A <see cref="Models.Toggles"/> value,
         /// read once at startup: the logger is built into the request pipeline or left out of it,
@@ -269,6 +283,7 @@ namespace Techie.Pbx.Core.Data
             MailSmtpPort,
             MailSmtpUsername,
             MailSmtpPassword,
+            MailVoicemailCallbackToken,
             ParkingAudio,
             ParkingDtmfCode,
             ParkingEnabled,
@@ -289,6 +304,7 @@ namespace Techie.Pbx.Core.Data
             ProvisioningUserPassword,
             CertAcmeAccountKeyPem,
             MailSmtpPassword,
+            MailVoicemailCallbackToken,
         };
 
         /// <summary>
@@ -360,6 +376,11 @@ namespace Techie.Pbx.Core.Data
             [MailSmtpPort] = SettingScope.App,
             [MailSmtpUsername] = SettingScope.App,
             [MailSmtpPassword] = SettingScope.App,
+
+            // The callback token is read by this application's own notify endpoint and written
+            // into Config/mail.json for the script, the same way the relay details are (D129).
+            // No generated conf file names it, so it is not an apply either.
+            [MailVoicemailCallbackToken] = SettingScope.App,
 
             // Every Parking key lands in a generated conf file: the feature code in features.conf,
             // the slots and the timeout in res_parking.conf, the audio choice in res_parking.conf

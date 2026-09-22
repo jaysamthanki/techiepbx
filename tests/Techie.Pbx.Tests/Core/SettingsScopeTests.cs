@@ -101,7 +101,10 @@ namespace Techie.Pbx.Tests.Core
         /// The Mail keys are here and not in the Asterisk scope on purpose (D115): this app sends
         /// its own mail, and voicemail-to-email remains Asterisk's own job through a local MTA —
         /// <c>VoicemailConfRenderer</c> still writes no <c>serveremail</c>, so no generated conf
-        /// file carries any of these and there is nothing an apply would write.
+        /// file carries any of these and there is nothing an apply would write. The voicemail
+        /// callback token is here for the same reason (D129): it reaches the mailcmd script
+        /// through <c>Config/mail.json</c>, which is written the moment a setting is saved, and
+        /// never through a conf file.
         ///
         /// <c>Web.RequestLog</c> is here too (D116): it switches on Kestrel's own request log, which
         /// nothing outside this process reads. It is the one App key that does not take effect
@@ -127,6 +130,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.MailSmtpPort,
                     SettingsKeys.MailSmtpUsername,
                     SettingsKeys.MailTransport,
+                    SettingsKeys.MailVoicemailCallbackToken,
                     SettingsKeys.WebRequestLog,
                 },
                 KeysIn(SettingScope.App));

@@ -221,6 +221,11 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "The secret the voicemail delivery script proves itself with when it asks this app to compose and send a voicemail email. Generated on the first start that finds it missing; there is normally no reason to touch it. Clearing it makes voicemail email fall back to the plainer message Asterisk composes, until the next restart generates a new one.",
+                Key = SettingsKeys.MailVoicemailCallbackToken,
+            },
+            new SettingDescriptor
+            {
                 Choices = ParkingAudio.All,
                 Default = ParkingAudio.Silence,
                 Description = "What a parked caller hears while they wait: nothing, or the music on hold class named below. With no tracks in that class it is silence either way.",

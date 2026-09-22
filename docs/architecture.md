@@ -208,13 +208,23 @@ Two senders, one credential set, no MTA (D115, D126).
 | | Sends | Runs as | Reads the relay details from |
 |---|---|---|---|
 | Alerts and the test button | this app, over Graph or SMTP | `tnpbx` (the web process) | the `Mail.*` settings in the database |
-| Voicemail | `app_voicemail`, composed there and handed to `mailcmd` | `asterisk`, via `/opt/tnpbx/bin/voicemail-mail` | `/opt/tnpbx/Config/mail.json` |
+| Voicemail, normally | this app, composed from its own template with the recording as an MP3 (D129) | `tnpbx`, asked by the script over `POST /api/voicemail/notify` | the `Mail.*` settings in the database |
+| Voicemail, when the app cannot | `app_voicemail`, composed there and handed to `mailcmd` | `asterisk`, via `/opt/tnpbx/bin/voicemail-mail` | `/opt/tnpbx/Config/mail.json` |
 
 The script is the whole interface between the two: a process running as `asterisk` has no business
 opening this app's database, so the app writes the SMTP half of those settings to `mail.json`
 (0640, group `asterisk`) whenever a setting is saved and at every start. Nothing in `/etc/asterisk`
 carries a mail credential — the generated `voicemail.conf` names the script's fixed path and
 nothing else, which is why a mail setting is not an apply.
+
+The script tries the application first (D129). It posts what the email says about the message —
+mailbox, the message's path on disk, caller ID, duration, arrival time — to
+`http://127.0.0.1:8080/api/voicemail/notify`, carrying `Mail.VoicemailCallbackToken` as a bearer
+token, and the application composes its own branded email: the transcript in the body and the
+recording attached as an MP3 that any phone will play. A 200 and the script is done. **Anything
+else and it relays what `app_voicemail` composed, exactly as it did before that endpoint
+existed** — the application being down, mid-deploy or unreachable must never mean a voicemail
+nobody hears, which is why the plainer path stays and stays exercised.
 
 That script also transcribes the recording on its way past, when the mailbox asked for one (D128):
 whisper.cpp and its model on this machine, so a voicemail is never sent anywhere to be read. Which
