@@ -13,8 +13,8 @@ namespace Techie.Pbx.Asterisk.Config
     /// caller's UniqueID. Each mapping is written into the event as <c>${CDR(name)}</c>, which is
     /// why func_cdr is on the modules allowlist.
     ///
-    /// cdr.conf is not generated: the CDR engine is built into the core and its defaults — enabled,
-    /// unanswered single-channel records dropped, no batching — are what the reports want.
+    /// cdr.conf IS generated (CdrConfRenderer): the CDR engine's defaults would drop unanswered
+    /// calls, and the reports count a missed inbound call (F5).
     /// </summary>
     public static class CdrManagerConfRenderer
     {

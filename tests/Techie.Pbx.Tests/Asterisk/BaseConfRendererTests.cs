@@ -34,6 +34,17 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("cdr_manager.conf"), CdrManagerConfRenderer.Render());
         }
 
+        /// <summary>
+        /// cdr.conf: one setting, unanswered = yes, because without a file the CDR engine's
+        /// default is to drop unanswered calls — and a missed inbound call is half of the
+        /// reports' "missed" (F5).
+        /// </summary>
+        [Fact]
+        public void Cdr_matches_expected_file()
+        {
+            Assert.Equal(Expected("cdr.conf"), CdrConfRenderer.Render());
+        }
+
         [Fact]
         public void Logger_matches_expected_file()
         {

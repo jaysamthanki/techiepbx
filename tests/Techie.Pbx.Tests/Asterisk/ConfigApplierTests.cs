@@ -85,6 +85,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
                     "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName,
                     "features.conf", "musiconhold.conf", "res_parking.conf", CdrManagerConfRenderer.FileName,
+                    CdrConfRenderer.FileName,
                 },
                 files.Select(f => f.FileName));
 
@@ -98,7 +99,7 @@ namespace Techie.Pbx.Tests.Asterisk
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
-                    ConfigApplier.CdrManagerModule,
+                    ConfigApplier.CdrManagerModule, null,
                 },
                 files.Select(f => f.Module));
 
@@ -152,7 +153,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new[]
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf",
-                    PjsipConfRenderer.TlsCertificateFileName,
+                    PjsipConfRenderer.TlsCertificateFileName, CdrConfRenderer.FileName,
                 },
                 restart);
         }
@@ -171,8 +172,9 @@ namespace Techie.Pbx.Tests.Asterisk
             // something an apply carries out — and tnpbx-voicemail-options.json, which is written
             // even with no mailboxes at all, so that removing the last one removes its options
             // too (D128). Fifteen with cdr_manager.conf, which has nothing from the database in it
-            // and so is the same on every system (F5).
-            Assert.Equal(15, written.Count);
+            // and so is the same on every system (F5), and cdr.conf, which only turns unanswered
+            // calls on so a missed inbound call leaves a record.
+            Assert.Equal(16, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 

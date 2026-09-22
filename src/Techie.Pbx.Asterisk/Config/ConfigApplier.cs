@@ -277,6 +277,9 @@ namespace Techie.Pbx.Asterisk.Config
                 // that writes it also changes modules.conf, and the restart that asks for is what
                 // loads cdr_manager at all.
                 new(CdrManagerConfRenderer.FileName, CdrManagerModule, CdrManagerConfRenderer.Render()),
+                // The core CDR engine reads cdr.conf once at startup: without it, unanswered = no,
+                // and a missed inbound call leaves no record (F5's missed calls). Restart-applied.
+                new(CdrConfRenderer.FileName, null, CdrConfRenderer.Render()),
             };
 
             return files;
