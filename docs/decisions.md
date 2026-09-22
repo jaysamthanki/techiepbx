@@ -2757,3 +2757,11 @@ inbound trunk call; an outbound call nobody picked up is not the caller's missed
 extension filter matches both numbers and channels, so ring-group and DID calls show up. The
 page opens on today in the site's timezone, with Today / Yesterday / This week / Last week
 (Sun–Sat) quick buttons; the list caps at 2,000 rows while totals and CSV include everything.
+
+**Added 2026-09-22 (readable endpoints, same piece):** the reports and the status page show
+people, not channels: extensions as `number (name)`, and a Line column with the number a call
+went out as (outbound) or was dialled on (inbound). The DID reaches the record because the
+trunk context's first priority sets `CDR(userfield) = ${DID}`, which `cdr_manager.conf` maps
+onto the event as `Did` and schema 026 stores; older rows fall back to `Dst`. A call's
+originating extension is recovered from the first leg via `LinkedID` when the record itself
+only shows a Local channel, as on the outgoing half of a forwarded call.
