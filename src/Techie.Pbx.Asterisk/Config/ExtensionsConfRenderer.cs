@@ -1042,9 +1042,14 @@ namespace Techie.Pbx.Asterisk.Config
         /// A Dial out over a trunk keeps the bare <see cref="DialOptions"/>: the channel it creates
         /// belongs to the provider, and what the far end of an outbound call hears on hold is not
         /// this system's to choose.
+        ///
+        /// The <c>r</c> makes Asterisk generate the ringback itself. A caller whose call is still
+        /// unanswered hears it from their own phone, but a caller an IVR or a ring group has
+        /// already answered has no phone-side ringback left — without <c>r</c>, the ringing
+        /// destination they just chose is silence (D127).
         /// </summary>
         private static string InternalDialOptions(bool hasSetMohContext) =>
-            hasSetMohContext ? $"{DialOptions}U({SetMohContext})" : DialOptions;
+            hasSetMohContext ? $"{DialOptions}rU({SetMohContext})" : $"{DialOptions}r";
 
         /// <summary>
         /// What a caller whose call started on a phone here hears while they are held, as the one

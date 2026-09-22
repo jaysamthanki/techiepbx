@@ -303,7 +303,10 @@ namespace Techie.Pbx.Tests.Asterisk
             var dials = actual.Split('\n').Where(line => line.Contains("Dial(", StringComparison.Ordinal)).ToList();
 
             Assert.NotEmpty(dials);
-            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions})", line, StringComparison.Ordinal));
+            Assert.All(dials, line => Assert.True(
+                line.EndsWith($",{ExtensionsConfRenderer.DialOptions})", StringComparison.Ordinal) ||
+                line.EndsWith($",{ExtensionsConfRenderer.DialOptions}r)", StringComparison.Ordinal),
+                $"Dial line without the options: {line}"));
         }
 
         /// <summary>

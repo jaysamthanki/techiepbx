@@ -456,7 +456,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Contains(
                 "exten => 1001,1,ExecIf($[\"${CHANNEL(musicclass)}\" = \"\" | \"${CHANNEL(musicclass)}\" = \"default\"]" +
                 "?Set(CHANNEL(musicclass)=Standard))\n" +
-                " same => n,Dial(PJSIP/1001,30,tTkKU(sub-setmoh))\n",
+                " same => n,Dial(PJSIP/1001,30,tTkKrU(sub-setmoh))\n",
                 internalContext);
         }
 
@@ -484,8 +484,8 @@ namespace Techie.Pbx.Tests.Asterisk
             var dials = actual.Split('\n').Where(line => line.Contains("Dial(", StringComparison.Ordinal)).ToList();
 
             Assert.NotEmpty(dials);
-            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions}{option})", line, StringComparison.Ordinal));
-            Assert.Contains(" same => n,Dial(PJSIP/1001&PJSIP/1002,20,tTkK" + option + ")\n", actual);
+            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions}r{option})", line, StringComparison.Ordinal));
+            Assert.Contains(" same => n,Dial(PJSIP/1001&PJSIP/1002,20,tTkK" + "r" + option + ")\n", actual);
 
             // The subroutine itself: the caller-side guard verbatim, and a Return so the call
             // carries on being connected rather than ending in the subroutine.
@@ -515,7 +515,10 @@ namespace Techie.Pbx.Tests.Asterisk
             var dials = actual.Split('\n').Where(line => line.Contains("Dial(", StringComparison.Ordinal)).ToList();
 
             Assert.NotEmpty(dials);
-            Assert.All(dials, line => Assert.EndsWith($",{ExtensionsConfRenderer.DialOptions})", line, StringComparison.Ordinal));
+            Assert.All(dials, line => Assert.True(
+                line.EndsWith($",{ExtensionsConfRenderer.DialOptions})", StringComparison.Ordinal) ||
+                line.EndsWith($",{ExtensionsConfRenderer.DialOptions}r)", StringComparison.Ordinal),
+                $"Dial line without the options: {line}"));
             Assert.DoesNotContain(ExtensionsConfRenderer.SetMohContext, actual);
         }
 

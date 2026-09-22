@@ -104,7 +104,7 @@ namespace Techie.Pbx.Tests.Asterisk
             // and every database has the class that ships to backfill with (D122 amended). The
             // U() carries the same backfill to the channel the Dial creates.
             Assert.Contains(
-                $" same => n,Dial(PJSIP/1001,30,tTkKU({ExtensionsConfRenderer.SetMohContext}))",
+                $" same => n,Dial(PJSIP/1001,30,tTkKrU({ExtensionsConfRenderer.SetMohContext}))",
                 files.Single(f => f.FileName == "extensions.conf").Content);
         }
 

@@ -356,7 +356,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var dialplan = ExtensionsConfRenderer.Render(WithoutVoicemail());
             var voicemail = VoicemailConfRenderer.Render(WithoutVoicemail());
 
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30,tTkK)\n same => n,Hangup()\n", dialplan);
+            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30,tTkKr)\n same => n,Hangup()\n", dialplan);
             Assert.DoesNotContain("VoiceMail", dialplan);
             Assert.DoesNotContain("1001 =>", voicemail);
         }
