@@ -77,21 +77,38 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
+        /// <summary>
+        /// Saves the group. A changed number takes every reference to the old one with it, in the
+        /// same transaction (piece 37): the references are rewritten first, so a number another
+        /// group already has fails on the row's own UNIQUE after them and rolls the lot back.
+        /// </summary>
         public void Update(RingGroup group)
         {
+            var stored = this.GetByID(group.RingGroupID);
+
             this.ThrowIfInvalid(group);
 
             using var connection = this.database.Open();
+            using var transaction = connection.BeginTransaction();
+
             try
             {
+                if (stored != null && !string.Equals(stored.Number, group.Number, StringComparison.Ordinal))
+                {
+                    Renumbering.Destinations(connection, transaction,
+                        new Destination(DestinationType.RingGroup, stored.Number),
+                        new Destination(DestinationType.RingGroup, group.Number));
+                }
+
                 var rows = connection.Execute(
                     "UPDATE RingGroups SET Number = @Number, Name = @Name, Strategy = @Strategy, Members = @Members, " +
                     "RingSeconds = @RingSeconds, CallerIDPrefix = @CallerIDPrefix, DestinationType = @DestinationType, " +
                     "DestinationValue = @DestinationValue, Enabled = @Enabled WHERE RingGroupID = @RingGroupID",
-                    group);
+                    group, transaction);
                 if (rows == 0)
                     throw new ValidationFailedException($"RingGroupID {group.RingGroupID} does not exist.");
 
+                transaction.Commit();
                 this.pending.Raise();
             }
             catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)

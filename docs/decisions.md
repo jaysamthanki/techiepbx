@@ -2940,3 +2940,39 @@ switches are in features.md).
   check. All 51 validators now end in `\z`. Harmless before (the page trims what is posted
   and `ConfText.Safe` refuses the control character), but the uniqueness check treated the
   two as different codes.
+
+### D138. An IVR's announcements can come back, and renumbering carries every reference with it (2026-09-23)
+
+Piece 37, both halves user-requested and approved.
+
+**Announcements return to the menu, per IVR.** `Ivrs.ReturnAfterAnnouncement` (schema `028`,
+default 0) — one checkbox on the IVR form, applying to that menu's announcement destinations
+only. When on, such a key plays the announcement's audio in the menu's own context and
+`Goto(s,1)`: the caller re-enters the menu exactly like a fresh dial, so the retry count
+resets and no Gosub stack builds. The final destination never returns — a caller pressing
+nothing would loop forever. Off is byte-identical to before; a key whose announcement has
+become unplayable falls back to what was written before the flag existed.
+
+**Renumbering sweeps every reference, in one transaction.** Destinations are stored by
+number (D35, no FKs), so a changed number used to orphan them. `Renumbering` is one helper
+the entity repositories call from their `Update`: the sweep rewrites references first, the
+entity's own row second, so a refusal on the row's UNIQUE constraint (the mid-way failure)
+rolls everything back. A reference is rewritten only on an exact type+value match — never a
+substring. What follows a renumber:
+
+| Renumber | What is rewritten |
+|---|---|
+| IVR play extension | every stored Ivr destination, plus its own "press 9 to hear this again" keys |
+| Ring group number | every stored RingGroup destination |
+| Extension number | Extension and Voicemail destinations, `Forwarding` lists on every extension (D130), ring group members, phone Line and BLF keys |
+| Time condition play extension | every stored TimeCondition destination |
+| CFC feature code | every stored CallFlowControl destination, phone CFC keys |
+
+Ten stored destination column pairs are covered (inbound routes, IVR keys and final, the
+three time-condition cases, time-condition holiday rules, ring group failover, both CFC
+destinations). The apply marker rises, so nothing goes live until Apply. **Deletes never
+cascade** (D35: references to a deleted thing show as gone and hang up), and clearing a
+number counts as a delete. **Not cascaded, on purpose:** voicemail messages on disk stay in
+the folder named by the old extension number — moving them is a file operation that belongs
+to the Helper (piece 19), not the web app. **Open, for the user:** whether an extension
+renumber also pushes a config re-read (check-sync) at phones holding that line.

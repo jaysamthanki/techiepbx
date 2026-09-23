@@ -78,22 +78,34 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
+        /// <summary>
+        /// Saves the switch. A changed code takes every reference to the old one with it, in the
+        /// same transaction (piece 37): destinations naming the switch, and phone keys on it.
+        /// </summary>
         public void Update(CallFlowControl control)
         {
+            var stored = this.GetByID(control.CallFlowControlID);
+
             this.ThrowIfInvalid(control);
 
             using var connection = this.database.Open();
+            using var transaction = connection.BeginTransaction();
+
             try
             {
+                if (stored != null && !string.Equals(stored.FeatureCode, control.FeatureCode, StringComparison.Ordinal))
+                    Renumbering.CallFlowControl(connection, transaction, stored.FeatureCode, control.FeatureCode);
+
                 var rows = connection.Execute(
                     "UPDATE CallFlowControls SET Name = @Name, FeatureCode = @FeatureCode, " +
                     "NormalDestinationType = @NormalDestinationType, NormalDestinationValue = @NormalDestinationValue, " +
                     "OverrideDestinationType = @OverrideDestinationType, OverrideDestinationValue = @OverrideDestinationValue " +
                     "WHERE CallFlowControlID = @CallFlowControlID",
-                    control);
+                    control, transaction);
                 if (rows == 0)
                     throw new ValidationFailedException($"CallFlowControlID {control.CallFlowControlID} does not exist.");
 
+                transaction.Commit();
                 this.pending.Raise();
             }
             catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)

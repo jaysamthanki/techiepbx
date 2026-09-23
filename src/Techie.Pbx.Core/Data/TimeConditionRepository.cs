@@ -99,15 +99,29 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
+        /// <summary>
+        /// Saves the condition. A changed play extension takes every reference to the old one with
+        /// it, in the same transaction (piece 37) — the sweep runs before the row, so a failure on
+        /// the row's own UNIQUE constraint rolls the references back too. Only a number that
+        /// changes to another number is swept; clearing it is a delete as far as a reference is
+        /// concerned, and deletes are not cascaded (D35).
+        /// </summary>
         public void Update(TimeCondition condition)
         {
             this.ThrowIfInvalid(condition);
+
+            var stored = this.GetByID(condition.TimeConditionID);
+            var renumbered = stored != null && stored.PlayExtension.Length > 0 && condition.PlayExtension.Length > 0 &&
+                !string.Equals(stored.PlayExtension, condition.PlayExtension, StringComparison.Ordinal);
 
             using var connection = this.database.Open();
             using var transaction = connection.BeginTransaction();
 
             try
             {
+                if (renumbered)
+                    Renumbering.Destinations(connection, transaction, stored!.ToDestination(), condition.ToDestination());
+
                 var rows = connection.Execute(
                     "UPDATE TimeConditions SET Name = @Name, Description = @Description, PlayExtension = @PlayExtension, " +
                     "OpenDestinationType = @OpenDestinationType, OpenDestinationValue = @OpenDestinationValue, " +

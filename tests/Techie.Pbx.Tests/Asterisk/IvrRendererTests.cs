@@ -258,6 +258,109 @@ namespace Techie.Pbx.Tests.Asterisk
                 actual);
         }
 
+        /// <summary>
+        /// A menu with one key on a dialable announcement, one on an announcement that is only a
+        /// greeting (so not a destination the render list has), one on an extension, and a final
+        /// destination on the announcement too.
+        /// </summary>
+        private static Ivr AnnouncementMenu(bool returnAfterAnnouncement) => new()
+        {
+            IvrID = 7,
+            Name = "Hours menu",
+            AnnouncementID = 2,
+            PlayExtension = "507",
+            ReturnAfterAnnouncement = returnAfterAnnouncement,
+            DestinationType = "Announcement",
+            DestinationValue = "700",
+            Entries = new List<IvrEntry>
+            {
+                new() { Digit = "1", DestinationType = "Announcement", DestinationValue = "700" },
+                new() { Digit = "2", DestinationType = "Extension", DestinationValue = "1001" },
+            },
+        };
+
+        /// <summary>
+        /// Off is the default and the dialplan as it always was: the key goes in by the
+        /// announcement's own play extension, which plays it and hangs up (D57).
+        /// </summary>
+        [Fact]
+        public void An_announcement_key_without_return_goes_to_the_play_extension()
+        {
+            var actual = Render(AnnouncementMenu(returnAfterAnnouncement: false));
+
+            Assert.Contains(
+                "exten => 1,1,NoOp(IVR 507 key 1 to Announcement:700)\n same => n,Goto(internal,700,1)\n",
+                actual);
+            Assert.DoesNotContain("and back to the menu", actual);
+        }
+
+        /// <summary>
+        /// On, the key plays the announcement's file itself and goes back to priority 1 of this
+        /// menu's own context: a Goto rather than a Gosub, so however often the caller comes round
+        /// nothing stacks, and they arrive as a caller who dialled the menu fresh would (piece 37).
+        /// </summary>
+        [Fact]
+        public void An_announcement_key_with_return_plays_the_file_and_starts_the_menu_again()
+        {
+            var actual = Render(AnnouncementMenu(returnAfterAnnouncement: true));
+
+            Assert.Contains(
+                "exten => 1,1,NoOp(IVR 507 key 1 to Announcement:700 and back to the menu)\n" +
+                " same => n,Playback(tnpbx/announcements/1/welcome-message)\n" +
+                " same => n,Goto(s,1)\n",
+                actual);
+            Assert.DoesNotContain("Gosub", actual);
+        }
+
+        /// <summary>
+        /// Only announcement keys return. The extension key and the final destination are the same
+        /// with the option on as off — the final one deliberately, because a caller who presses
+        /// nothing would otherwise go round the menu for ever (D59).
+        /// </summary>
+        [Fact]
+        public void Return_changes_nothing_but_the_announcement_keys()
+        {
+            var off = Render(AnnouncementMenu(returnAfterAnnouncement: false));
+            var on = Render(AnnouncementMenu(returnAfterAnnouncement: true));
+
+            const string extensionKey = "exten => 2,1,NoOp(IVR 507 key 2 to Extension:1001)\n same => n,Goto(internal,1001,1)\n";
+            const string final = "exten => final,1,NoOp(IVR 507 giving up to Announcement:700)\n same => n,Goto(internal,700,1)\n";
+
+            Assert.Contains(extensionKey, off);
+            Assert.Contains(extensionKey, on);
+            Assert.Contains(final, off);
+            Assert.Contains(final, on);
+        }
+
+        /// <summary>
+        /// An announcement the render list does not have — switched off since the menu was saved —
+        /// has no file to play here, so the key falls back to the Goto it always wrote rather than
+        /// a Playback of something that is not there.
+        /// </summary>
+        [Fact]
+        public void A_key_on_an_announcement_that_cannot_play_is_written_as_before()
+        {
+            var menu = AnnouncementMenu(returnAfterAnnouncement: true);
+            var announcements = SampleAnnouncements();
+            announcements[0].Enabled = false;
+
+            var actual = ExtensionsConfRenderer.Render(
+                SampleExtensions(), new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>(),
+                new List<RingGroup>(), announcements, new[] { menu });
+
+            Assert.Contains(
+                "exten => 1,1,NoOp(IVR 507 key 1 to Announcement:700)\n same => n,Goto(internal,700,1)\n",
+                actual);
+        }
+
+        /// <summary>The golden menus have the option off, and render byte for byte as they did.</summary>
+        [Fact]
+        public void Return_off_leaves_the_golden_file_unchanged()
+        {
+            Assert.All(SampleIvrs(), ivr => Assert.False(ivr.ReturnAfterAnnouncement));
+            Assert.Equal(Expected("extensions-ivrs.conf"), Render(SampleIvrs().ToArray()));
+        }
+
         [Fact]
         public void An_empty_final_destination_hangs_up()
         {

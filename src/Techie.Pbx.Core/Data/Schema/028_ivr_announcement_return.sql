@@ -1,0 +1,15 @@
+-- Piece 37. Whether an announcement reached from this menu's keys hands the caller back to the
+-- menu when it finishes, rather than hanging up.
+--
+-- One flag per IVR, not per key: the question an admin is answering is "does this menu keep the
+-- caller", and a menu that returns from one announcement key and hangs up after another would be a
+-- menu nobody could describe. It applies to Announcement-type keys only; every other destination
+-- is a place the call goes and stays.
+--
+-- Off by default, and off renders exactly the dialplan that was rendered before this column
+-- existed: the key goes in by the announcement's own play extension, which answers, plays and
+-- hangs up (D57). On, the key plays the announcement's file itself and goes back to the start of
+-- this menu's own context, the way a caller who dialled the menu fresh would arrive.
+--
+-- Same shape as EnableDirectDial, the other per-menu switch.
+ALTER TABLE Ivrs ADD COLUMN ReturnAfterAnnouncement INTEGER NOT NULL DEFAULT 0;

@@ -13,7 +13,7 @@ namespace Techie.Pbx.Core.Data
     {
         private const string Columns =
             "IvrID, Name, Description, AnnouncementID, PlayExtension, TimeoutSeconds, Retries, " +
-            "EnableDirectDial, DestinationType, DestinationValue, Enabled";
+            "EnableDirectDial, DestinationType, DestinationValue, Enabled, ReturnAfterAnnouncement";
 
         private const string EntryColumns =
             "IvrEntryID, IvrID, Digit, DestinationType, DestinationValue";
@@ -84,9 +84,9 @@ namespace Techie.Pbx.Core.Data
             {
                 ivr.IvrID = connection.ExecuteScalar<long>(
                     "INSERT INTO Ivrs (Name, Description, AnnouncementID, PlayExtension, TimeoutSeconds, Retries, " +
-                    "EnableDirectDial, DestinationType, DestinationValue, Enabled) " +
+                    "EnableDirectDial, DestinationType, DestinationValue, Enabled, ReturnAfterAnnouncement) " +
                     "VALUES (@Name, @Description, @AnnouncementID, @PlayExtension, @TimeoutSeconds, @Retries, " +
-                    "@EnableDirectDial, @DestinationType, @DestinationValue, @Enabled); " +
+                    "@EnableDirectDial, @DestinationType, @DestinationValue, @Enabled, @ReturnAfterAnnouncement); " +
                     "SELECT last_insert_rowid();",
                     ivr, transaction);
 
@@ -102,8 +102,34 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
+        /// <summary>
+        /// Saves the menu. A changed play extension takes every reference to the old one with it,
+        /// in the same transaction (piece 37). The references are rewritten before the row, so a
+        /// name another IVR already has fails on the row's own UNIQUE after them and rolls the lot
+        /// back.
+        ///
+        /// Only a number that changes to another number is swept. Clearing it takes the menu out
+        /// of the dialplan, which is a delete as far as a reference is concerned, and deletes are
+        /// not cascaded (D35); setting one where there was none has nothing pointing at it yet.
+        /// </summary>
         public void Update(Ivr ivr)
         {
+            var stored = this.GetByID(ivr.IvrID);
+            var renumbered = stored != null && stored.PlayExtension.Length > 0 && ivr.PlayExtension.Length > 0 &&
+                !string.Equals(stored.PlayExtension, ivr.PlayExtension, StringComparison.Ordinal);
+
+            // Its own "press 9 to hear this again" keys are the references the sweep cannot reach,
+            // because the digit map is about to be written from the object in hand (D59).
+            if (renumbered)
+            {
+                foreach (var entry in ivr.Entries.Where(e =>
+                    e.DestinationType == DestinationType.Ivr.ToString() &&
+                    string.Equals(e.DestinationValue, stored!.PlayExtension, StringComparison.Ordinal)))
+                {
+                    entry.DestinationValue = ivr.PlayExtension;
+                }
+            }
+
             this.ThrowIfInvalid(ivr);
 
             using var connection = this.database.Open();
@@ -111,11 +137,15 @@ namespace Techie.Pbx.Core.Data
 
             try
             {
+                if (renumbered)
+                    Renumbering.Destinations(connection, transaction, stored!.ToDestination(), ivr.ToDestination());
+
                 var rows = connection.Execute(
                     "UPDATE Ivrs SET Name = @Name, Description = @Description, AnnouncementID = @AnnouncementID, " +
                     "PlayExtension = @PlayExtension, TimeoutSeconds = @TimeoutSeconds, Retries = @Retries, " +
                     "EnableDirectDial = @EnableDirectDial, DestinationType = @DestinationType, " +
-                    "DestinationValue = @DestinationValue, Enabled = @Enabled WHERE IvrID = @IvrID",
+                    "DestinationValue = @DestinationValue, Enabled = @Enabled, " +
+                    "ReturnAfterAnnouncement = @ReturnAfterAnnouncement WHERE IvrID = @IvrID",
                     ivr, transaction);
                 if (rows == 0)
                     throw new ValidationFailedException($"IvrID {ivr.IvrID} does not exist.");

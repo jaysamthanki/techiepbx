@@ -74,6 +74,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal(10, loaded.TimeoutSeconds);
             Assert.Equal(3, loaded.Retries);
             Assert.False(loaded.EnableDirectDial);
+            Assert.False(loaded.ReturnAfterAnnouncement);
             Assert.True(loaded.Enabled);
             Assert.Equal("Hangup", loaded.ToFinalDestination().Key);
             Assert.Equal("Ivr:500", loaded.ToDestination().Key);
@@ -82,6 +83,39 @@ namespace Techie.Pbx.Tests.Core
             var entry = Assert.Single(loaded.Entries);
             Assert.Equal("1", entry.Digit);
             Assert.Equal(id, entry.IvrID);
+        }
+
+        /// <summary>The return-to-menu switch is stored, read back and changed like the others (piece 37).</summary>
+        [Fact]
+        public void Return_after_announcement_round_trips()
+        {
+            var ivr = Ivr();
+            ivr.ReturnAfterAnnouncement = true;
+            var id = this.ivrs.Insert(ivr);
+
+            var loaded = this.ivrs.GetByID(id)!;
+            Assert.True(loaded.ReturnAfterAnnouncement);
+
+            loaded.ReturnAfterAnnouncement = false;
+            this.ivrs.Update(loaded);
+
+            Assert.False(this.ivrs.GetByID(id)!.ReturnAfterAnnouncement);
+        }
+
+        /// <summary>
+        /// Returning to the menu does not make an announcement that cannot play into one that can:
+        /// a key on an announcement with no play extension is refused exactly as it was before.
+        /// </summary>
+        [Fact]
+        public void Return_after_announcement_does_not_relax_the_key_check()
+        {
+            var ivr = Ivr();
+            ivr.ReturnAfterAnnouncement = true;
+            ivr.Entries.Add(new IvrEntry { Digit = "1", DestinationType = "Announcement", DestinationValue = "777" });
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.ivrs.Insert(ivr));
+
+            Assert.Contains("key 1", ex.Message);
         }
 
         [Fact]

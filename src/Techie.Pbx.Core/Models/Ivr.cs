@@ -69,6 +69,14 @@ namespace Techie.Pbx.Core.Models
         public int Retries { get; set; } = 3;
 
         /// <summary>
+        /// Whether a key that sends the caller to an announcement brings them back to this menu
+        /// once it has played, instead of hanging up (piece 37). Off by default, and off is the
+        /// dialplan as it always was. Announcement keys only: the final destination never returns,
+        /// because a caller who pressed nothing would then go round the menu for ever (D59).
+        /// </summary>
+        public bool ReturnAfterAnnouncement { get; set; }
+
+        /// <summary>
         /// How long the menu waits for a key after the greeting, and how long it waits between
         /// digits of a directly dialled extension.
         /// </summary>

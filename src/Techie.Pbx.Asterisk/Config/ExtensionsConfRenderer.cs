@@ -420,7 +420,7 @@ namespace Techie.Pbx.Asterisk.Config
             AppendSetMohContext(sb, internalMusic);
 
             foreach (var ivr in ivrList)
-                AppendIvrContext(sb, ivr, ivr.GreetingIn(announcementRows)!, enabled);
+                AppendIvrContext(sb, ivr, ivr.GreetingIn(announcementRows)!, enabled, announcementList);
 
             foreach (var condition in timeConditionList)
                 AppendTimeConditionContext(sb, condition, timezone);
@@ -745,7 +745,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// Goto on its play extension, and — like a trunk's context (D50) — it includes nothing, so
         /// a caller from outside can never fall through to anywhere that dials out.
         /// </summary>
-        private static void AppendIvrContext(StringBuilder sb, Ivr ivr, Announcement greeting, List<Extension> enabledExtensions)
+        private static void AppendIvrContext(
+            StringBuilder sb,
+            Ivr ivr,
+            Announcement greeting,
+            List<Extension> enabledExtensions,
+            List<Announcement> playableAnnouncements)
         {
             var context = ConfText.Safe(ivr.Context, "IVR context");
             var number = ConfText.Safe(ivr.PlayExtension, "IVR play extension");
@@ -780,10 +785,27 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 var digit = ConfText.Safe(entry.Digit, "IVR key");
                 var destination = entry.ToDestination();
+                var announcement = ReturningAnnouncement(ivr, destination, playableAnnouncements);
 
                 sb.Append('\n');
-                sb.Append($"exten => {digit},1,NoOp(IVR {number} key {digit} to {ConfText.Safe(destination.Key, "destination")})\n");
-                sb.Append(DestinationDialplan.Lines(destination));
+
+                if (announcement == null)
+                {
+                    sb.Append($"exten => {digit},1,NoOp(IVR {number} key {digit} to {ConfText.Safe(destination.Key, "destination")})\n");
+                    sb.Append(DestinationDialplan.Lines(destination));
+                    continue;
+                }
+
+                // The announcement's own file, played here rather than through its play extension,
+                // whose entry hangs up (D57). Then a Goto — never a Gosub, so nothing stacks however
+                // often the caller comes round — to priority 1 of this menu: the way a caller who
+                // dialled the menu fresh arrives, retry count reset and all, because choosing a key
+                // that works is not a mistake to count.
+                var played = ConfText.Safe(AnnouncementStore.PlaybackName(announcement), "announcement prompt");
+
+                sb.Append($"exten => {digit},1,NoOp(IVR {number} key {digit} to {ConfText.Safe(destination.Key, "destination")} and back to the menu)\n");
+                sb.Append($" same => n,Playback({played})\n");
+                sb.Append(" same => n,Goto(s,1)\n");
             }
 
             if (ivr.EnableDirectDial && enabledExtensions.Count > 0)
@@ -847,6 +869,21 @@ namespace Techie.Pbx.Asterisk.Config
         {
             sb.Append($" same => n,Set({IvrRetriesVariable}=$[${{{IvrRetriesVariable}}} + 1])\n");
             sb.Append($" same => n,GotoIf($[${{{IvrRetriesVariable}}} > {ivr.Retries}]?{IvrFinalExtension},1)\n");
+        }
+
+        /// <summary>
+        /// The announcement a key should play in place and come back from, or null to send the call
+        /// on the way it always has been (piece 37). Only when the menu asks for it, only for an
+        /// announcement key, and only for one the render list has — switched on, with audio and a
+        /// play extension. A key naming anything else is left to the shared helper, which writes
+        /// the same Goto it wrote before this option existed.
+        /// </summary>
+        private static Announcement? ReturningAnnouncement(Ivr ivr, Destination destination, List<Announcement> playable)
+        {
+            if (!ivr.ReturnAfterAnnouncement || destination.Type != DestinationType.Announcement)
+                return null;
+
+            return playable.FirstOrDefault(a => string.Equals(a.PlayExtension, destination.Value, StringComparison.Ordinal));
         }
 
         /// <summary>

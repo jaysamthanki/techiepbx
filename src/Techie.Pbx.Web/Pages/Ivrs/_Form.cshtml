@@ -159,6 +159,16 @@
         </div>
     </div>
 
+    <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="ivr-announcement-return" name="returnAfterAnnouncement" value="true"
+               checked="@(Model.ReturnAfterAnnouncement ? "checked" : null)" />
+        <label class="form-check-label" for="ivr-announcement-return">Return to this menu after an announcement</label>
+        <div class="form-text">
+            Applies to keys that go to an announcement only: the caller hears it and then this menu
+            starts again. Other keys, and where a caller who presses nothing ends up, are unchanged.
+        </div>
+    </div>
+
     <div class="form-check mb-4">
         <input class="form-check-input" type="checkbox" id="ivr-enabled" name="enabled" value="true"
                checked="@(Model.Enabled ? "checked" : null)" />

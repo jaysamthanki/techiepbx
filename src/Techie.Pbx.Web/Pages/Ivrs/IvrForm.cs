@@ -46,6 +46,10 @@ namespace Techie.Pbx.Web.Pages.Ivrs
         public string? Name { get; set; } = "";
         public string? PlayExtension { get; set; } = "";
         public int Retries { get; set; } = 3;
+
+        /// <summary>Whether an announcement key comes back to this menu (piece 37).</summary>
+        public bool ReturnAfterAnnouncement { get; set; }
+
         public int TimeoutSeconds { get; set; } = 10;
     }
 }

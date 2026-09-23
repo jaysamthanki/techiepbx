@@ -70,13 +70,36 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
+        /// <summary>
+        /// Saves the extension. A changed number takes every reference to the old one with it, in
+        /// the same transaction (piece 37) — destinations, forwarding, ring group members and phone
+        /// keys. The references are rewritten first, so a number another extension already has
+        /// fails on the row's own UNIQUE after them and rolls the lot back.
+        /// </summary>
         public void Update(Extension extension)
         {
+            var stored = this.GetByID(extension.ExtensionID);
+            var renumbered = stored != null && !string.Equals(stored.Number, extension.Number, StringComparison.Ordinal);
+
+            // Its own forwarding list is the one reference the sweep cannot reach, because this row
+            // is about to be written from the object in hand: "keep my own handset ringing" has to
+            // follow the new number rather than start ringing whoever takes the old one (D130).
+            if (renumbered && extension.ForwardingList().Contains(stored!.Number, StringComparer.Ordinal))
+            {
+                extension.Forwarding = string.Join(" ", extension.ForwardingList()
+                    .Select(t => string.Equals(t, stored.Number, StringComparison.Ordinal) ? extension.Number : t));
+            }
+
             this.ThrowIfInvalid(extension);
 
             using var connection = this.database.Open();
+            using var transaction = connection.BeginTransaction();
+
             try
             {
+                if (renumbered)
+                    Renumbering.Extension(connection, transaction, stored!.Number, extension.Number);
+
                 var rows = connection.Execute(
                     "UPDATE Extensions SET " +
                     "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +
@@ -85,10 +108,11 @@ namespace Techie.Pbx.Core.Data
                     "VoicemailAttachRecording = @VoicemailAttachRecording, VoicemailDeleteAfterEmail = @VoicemailDeleteAfterEmail, " +
                     "VoicemailTranscribe = @VoicemailTranscribe " +
                     "WHERE ExtensionID = @ExtensionID",
-                    extension);
+                    extension, transaction);
                 if (rows == 0)
                     throw new ValidationFailedException($"ExtensionID {extension.ExtensionID} does not exist.");
 
+                transaction.Commit();
                 this.pending.Raise();
             }
             catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteConstraintError)

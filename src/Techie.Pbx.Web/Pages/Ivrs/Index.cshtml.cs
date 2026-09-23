@@ -67,6 +67,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
                 Name = ivr.Name,
                 PlayExtension = ivr.PlayExtension,
                 Retries = ivr.Retries,
+                ReturnAfterAnnouncement = ivr.ReturnAfterAnnouncement,
                 TimeoutSeconds = ivr.TimeoutSeconds,
             }));
         }
@@ -134,6 +135,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
             ivr.Name = Text(form.Name);
             ivr.PlayExtension = Text(form.PlayExtension);
             ivr.Retries = form.Retries;
+            ivr.ReturnAfterAnnouncement = form.ReturnAfterAnnouncement;
             ivr.TimeoutSeconds = form.TimeoutSeconds;
 
             try
