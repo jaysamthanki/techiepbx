@@ -456,7 +456,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = YealinkConfigRenderer.Render(config);
 
-            Assert.Contains("account.1.label = Sales & Support", actual);
+            Assert.Contains("account.1.label = 1001 - Sales & Support", actual);
         }
 
         /// <summary>A value ConfText.Safe refuses (a control character smuggled into a name) must not reach the file.</summary>

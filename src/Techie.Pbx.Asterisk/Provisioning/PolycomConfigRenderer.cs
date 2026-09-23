@@ -182,7 +182,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 var extension = LineExtension(config, lines[index]);
                 var reg = $"reg.{Number(index + 1)}";
 
-                registrations.Add(PolycomXml.Attribute($"{reg}.displayName", extension.Name, "display name"));
+                registrations.Add(PolycomXml.Attribute($"{reg}.displayName", LineDisplayName.For(extension), "display name"));
                 registrations.Add(PolycomXml.Attribute($"{reg}.address", extension.Number, "address"));
                 registrations.Add(PolycomXml.Attribute($"{reg}.auth.userId", extension.Number, "auth user"));
                 registrations.Add(PolycomXml.Attribute($"{reg}.auth.password", extension.Secret, "auth password"));

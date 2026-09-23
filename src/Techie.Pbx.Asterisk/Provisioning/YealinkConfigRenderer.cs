@@ -189,8 +189,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
             sb.Append('\n');
             Line(sb, $"{account}.enable", "1");
-            Line(sb, $"{account}.label", ConfText.Safe(extension.Name, "extension name"));
-            Line(sb, $"{account}.display_name", ConfText.Safe(extension.Name, "extension name"));
+            Line(sb, $"{account}.label", ConfText.Safe(LineDisplayName.For(extension), "line display name"));
+            Line(sb, $"{account}.display_name", ConfText.Safe(LineDisplayName.For(extension), "line display name"));
             Line(sb, $"{account}.auth_name", ConfText.Safe(extension.Number, "extension number"));
             Line(sb, $"{account}.user_name", ConfText.Safe(extension.Number, "extension number"));
             Line(sb, $"{account}.password", ConfText.Safe(extension.Secret, "extension secret"));

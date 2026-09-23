@@ -410,7 +410,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = PolycomConfigRenderer.Render(config);
 
-            Assert.Contains("reg.1.displayName=\"Sales &amp; Support\"", actual);
+            Assert.Contains("reg.1.displayName=\"1001 - Sales &amp; Support\"", actual);
         }
 
         /// <summary>
