@@ -3187,7 +3187,9 @@ call pickup instead of dialling, and with no pickup code in our dialplan that is
 That was the desk symptom: slot busy → press → nothing; slot empty → press → dials and reaches the
 "nobody parked" playback. Type `normal` keeps the lamp and makes the key dial unconditionally, which
 is what retrieval is. The FreePBX module's slot keys carry no type for the same reason — its
-generated configs are the production-proven shape. Extension lamps keep `automata` for now: their
-busy-press also does nothing (same pickup attempt), but nobody has asked for busy-lamp pickup and
-`normal` there would make a busy colleague's key plain-dial into a busy tone; revisit only if the
-desk test says the pickup behaviour is wanted.
+generated configs are the production-proven shape.
+
+**Amended the same day, on the user's call: every key is `normal`, extensions and call flow
+controls included.** A day/night key set on a Poly Edge showed it: the control switched on — the
+lamp lit — and the lit key's pickup attempt meant it could never be switched back off. A key whose
+action changes with its lamp is not a key anyone can trust, whatever the target is.

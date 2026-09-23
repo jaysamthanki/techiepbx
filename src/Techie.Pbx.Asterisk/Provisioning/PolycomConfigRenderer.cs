@@ -27,15 +27,16 @@ namespace Techie.Pbx.Asterisk.Provisioning
     public static class PolycomConfigRenderer
     {
         /// <summary>
-        /// What kind of attendant resource an assigned key is. "automata" is the monitored line:
-        /// the phone SUBSCRIBEs to the address (so the lamp follows its hint) and pressing the
-        /// key dials it, with the long-press behaviours (pickup, transfer to it) that Polycom
-        /// attaches to a monitored key. "normal" would be a plain speed dial with no lamp, which
-        /// is not what a key is for here. Both kinds of key we render want exactly this — a
-        /// parking slot is dialled to retrieve the call in it, the same gesture as dialling a
-        /// colleague (D121).
+        /// The attendant type every key gets (D148): pressing it always dials its address — an
+        /// extension, a parking slot, or a call flow control's toggle code. Automata is
+        /// attendant-console semantics: a busy (lit) resource makes the key attempt a directed
+        /// call pickup instead of dialling, and with no pickup code in our dialplan that is a
+        /// silent nothing. A slot that cannot be retrieved and a day/night mode that can be
+        /// switched on but never off are the same bug. The key still SUBSCRIBEs either way —
+        /// the FreePBX module's slot keys carry no type and their lamps work in production —
+        /// replacing D121's automata assumption.
         /// </summary>
-        private const string AttendantType = "automata";
+        private const string AttendantType = "normal";
         private const string BlindTransferLabel = "Blind Xfer";
 
         /// <summary>
@@ -60,14 +61,6 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// user who does not want to wait presses <c>#</c>.
         /// </summary>
         private const int DigitMapTimeoutSeconds = 3;
-
-
-        /// <summary>
-        /// The attendant type a parking slot gets instead (D148): pressing it always dials the
-        /// slot — retrieving the call — whether or not the lamp is lit. Automata would make a lit
-        /// slot attempt a directed pickup, which this system has no code for.
-        /// </summary>
-        private const string NormalAttendantType = "normal";
 
         private const string ParkLabel = "Park";
 
@@ -279,15 +272,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
                 attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions, config.CallFlowControls), "attendant label"));
 
-                // A parking slot is type normal, an extension lamp automata (D148). Automata is
-                // attendant-console semantics: a busy resource makes the key attempt a directed
-                // pickup instead of dialling, which on this system is a silent nothing — a slot's
-                // lamp is lit exactly when the key must dial, so it must never change action with
-                // the lamp. The FreePBX module's slot keys carry no type at all for this reason.
-                attributes.Add(PolycomXml.Constant($"{resource}.type",
-                    string.Equals(button.TargetType, PhoneButtonTarget.ParkingSlot, StringComparison.Ordinal)
-                        ? NormalAttendantType
-                        : AttendantType));
+                attributes.Add(PolycomXml.Constant($"{resource}.type", AttendantType));
             }
 
             PolycomXml.Comment(sb, "  ", "Keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
