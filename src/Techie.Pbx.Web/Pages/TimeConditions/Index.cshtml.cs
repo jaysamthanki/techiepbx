@@ -340,11 +340,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
             var all = this.timeConditions.GetAll();
             var stored = all.FirstOrDefault(t => t.TimeConditionID == form.TimeConditionID);
 
-            var choices = this.Catalog(all)
-                .Where(c => stored == null ||
-                    c.Destination.Type != DestinationType.TimeCondition ||
-                    !string.Equals(c.Destination.Value, stored.PlayExtension, StringComparison.Ordinal))
-                .ToList();
+            var choices = DestinationCatalog.Except(this.Catalog(all), stored?.ToDestination());
 
             form.ClosedDestinationChoices = new DestinationSelect
             {

@@ -236,6 +236,77 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal(2, this.groups.GetAll().Count);
         }
 
+        /// <summary>
+        /// The failover is checked against the whole catalog, like an inbound route's, so every
+        /// kind a picker offers can be saved (D35, D56, D59, D63).
+        /// </summary>
+        [Fact]
+        public void A_group_can_fail_over_to_an_announcement_an_ivr_or_a_time_condition()
+        {
+            AddExtension("1001");
+
+            var announcementID = new AnnouncementRepository(this.database).Insert(new Announcement
+            {
+                Name = "Closed message",
+                AudioFile = "closed-message.wav",
+                PlayExtension = "7001",
+            });
+
+            new IvrRepository(this.database).Insert(new Ivr
+            {
+                Name = "Main menu",
+                AnnouncementID = announcementID,
+                PlayExtension = "7002",
+            });
+
+            new TimeConditionRepository(this.database).Insert(new TimeCondition
+            {
+                Name = "Office hours",
+                PlayExtension = "7003",
+            });
+
+            var number = 600;
+            foreach (var (type, value) in new[] { ("Announcement", "7001"), ("Ivr", "7002"), ("TimeCondition", "7003") })
+            {
+                var group = Group((number++).ToString());
+                group.DestinationType = type;
+                group.DestinationValue = value;
+
+                this.groups.Insert(group);
+
+                Assert.Equal($"{type}:{value}", this.groups.GetByID(group.RingGroupID)!.DestinationKey());
+            }
+        }
+
+        /// <summary>One that exists but a call cannot reach is as gone as one that does not (D56).</summary>
+        [Fact]
+        public void A_failover_to_a_switched_off_ivr_is_refused()
+        {
+            AddExtension("1001");
+
+            var announcementID = new AnnouncementRepository(this.database).Insert(new Announcement
+            {
+                Name = "Menu greeting",
+                AudioFile = "menu-greeting.wav",
+            });
+
+            new IvrRepository(this.database).Insert(new Ivr
+            {
+                Name = "Main menu",
+                AnnouncementID = announcementID,
+                PlayExtension = "7002",
+                Enabled = false,
+            });
+
+            var group = Group();
+            group.DestinationType = "Ivr";
+            group.DestinationValue = "7002";
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.groups.Insert(group));
+
+            Assert.Contains("not there any more", ex.Message);
+        }
+
         [Fact]
         public void Update_and_delete()
         {

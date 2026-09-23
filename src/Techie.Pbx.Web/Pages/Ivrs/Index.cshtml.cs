@@ -26,6 +26,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
         private readonly ExtensionRepository extensions;
         private readonly IvrRepository ivrs;
         private readonly RingGroupRepository ringGroups;
+        private readonly TimeConditionRepository timeConditions;
 
         public IndexModel()
         {
@@ -33,6 +34,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
+            this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
@@ -236,18 +238,21 @@ namespace Techie.Pbx.Web.Pages.Ivrs
         /// (D58), and every place a call can be sent — for the final destination and for each key
         /// of the digit map alike (D35).
         ///
-        /// The menu being edited is in that catalog along with the others, because a key pointing
-        /// at its own menu is "press 9 to hear this again" rather than a loop (D59).
+        /// The menu being edited is in the keys' catalog along with the others, because a key
+        /// pointing at its own menu is "press 9 to hear this again" rather than a loop (D59). It is
+        /// left off the final destination's, where it would be a loop, and the save refuses it.
         /// </summary>
         private IvrForm Fill(IvrForm form)
         {
             var allAnnouncements = this.announcements.GetAll();
+            var allIvrs = this.ivrs.GetAll();
+            var stored = allIvrs.FirstOrDefault(i => i.IvrID == form.IvrID);
             var choices = DestinationCatalog.All(
-                this.extensions.GetAll(), this.ringGroups.GetAll(), allAnnouncements, this.ivrs.GetAll());
+                this.extensions.GetAll(), this.ringGroups.GetAll(), allAnnouncements, allIvrs, this.timeConditions.GetAll());
 
             form.DestinationChoices = new DestinationSelect
             {
-                Choices = choices,
+                Choices = DestinationCatalog.Except(choices, stored?.ToDestination()),
                 ElementID = "ivr-destination",
                 Name = "destination",
                 SelectedKey = string.IsNullOrEmpty(form.Destination) ? null : form.Destination,

@@ -18,13 +18,19 @@ namespace Techie.Pbx.Web.Pages.RingGroups
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AnnouncementRepository announcements;
         private readonly ExtensionRepository extensions;
+        private readonly IvrRepository ivrs;
         private readonly RingGroupRepository ringGroups;
+        private readonly TimeConditionRepository timeConditions;
 
         public IndexModel()
         {
+            this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
+            this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
@@ -58,13 +64,14 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         /// <summary>The whole table, by number.</summary>
         public PartialViewResult OnGetTable()
         {
-            var allExtensions = this.extensions.GetAll();
             var allGroups = this.ringGroups.GetAll();
+            var choices = this.Catalog(allGroups);
 
             var rows = allGroups
                 .Select(group =>
                 {
-                    var choice = DestinationCatalog.Find(allExtensions, allGroups, group.ToDestination());
+                    var choice = choices.FirstOrDefault(c =>
+                        string.Equals(c.Destination.Key, group.ToDestination().Key, StringComparison.Ordinal));
 
                     return new RingGroupRow
                     {
@@ -139,6 +146,11 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
         private static string Text(string? value) => (value ?? "").Trim();
 
+        /// <summary>Every place a call can be sent, given the groups already loaded (D35).</summary>
+        private List<DestinationChoice> Catalog(List<RingGroup> allGroups) =>
+            DestinationCatalog.All(
+                this.extensions.GetAll(), allGroups, this.announcements.GetAll(), this.ivrs.GetAll(), this.timeConditions.GetAll());
+
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
         /// "ringGroupsChanged" refreshes the table, "configChanged" wakes the navbar's apply
@@ -160,15 +172,21 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         /// <summary>
         /// The lists the form cannot know for itself: the extensions that can be members, and
         /// every place an unanswered call can be sent — including the other ring groups (D54).
+        ///
+        /// The group being edited is left off its own picker, because a group whose failover is
+        /// itself would ring for ever and the save refuses it. Every <i>other</i> group is on it.
         /// </summary>
         private RingGroupForm Fill(RingGroupForm form)
         {
-            var allExtensions = this.extensions.GetAll();
+            var allGroups = this.ringGroups.GetAll();
+            var stored = allGroups.FirstOrDefault(g => g.RingGroupID == form.RingGroupID);
 
-            form.Extensions = allExtensions.Where(e => e.Enabled).ToList();
+            form.Extensions = this.extensions.GetAll().Where(e => e.Enabled).ToList();
             form.DestinationChoices = new DestinationSelect
             {
-                Choices = DestinationCatalog.All(allExtensions, this.ringGroups.GetAll()),
+                Choices = DestinationCatalog.Except(
+                    this.Catalog(allGroups),
+                    stored == null ? null : new Destination(DestinationType.RingGroup, stored.Number)),
                 ElementID = "group-destination",
                 Name = "destination",
                 SelectedKey = string.IsNullOrEmpty(form.Destination) ? null : form.Destination,

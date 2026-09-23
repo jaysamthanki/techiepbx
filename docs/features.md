@@ -17,6 +17,7 @@ Status: **Done**, **Partial**, **Planned**.
 | F6 | [IVRs](#f6-ivrs) | Partial |
 | F7 | [Announcements](#f7-announcements) | Partial |
 | F8 | [Time conditions](#f8-time-conditions) | Planned |
+| F9 | [Call flow control](#f9-call-flow-control) (day/night override) | Planned |
 
 Plus the [supporting pieces](#supporting-pieces) these features can't work without.
 
@@ -202,6 +203,25 @@ there is deliberately no time-group entity to reference first (D62).
 - The clock is meant to be UTC (the installer sets it); a single Timezone setting, chosen from
   a dropdown, names the customer's zone. Every generated check tells Asterisk to evaluate in
   that zone, so open hours are entered in local time (D74, D75).
+
+---
+
+## F9. Call flow control (day/night override)
+
+The human override for business-hours routing. FreePBX calls it Call Flow Control; here it
+is the "the secretary is leaving early, flip us to night mode" button.
+
+- A CFC entity is a **destination**: an inbound route (or anything else) sends the call to
+  it, and it forwards to one of its two destinations depending on its state.
+- **Normal ("off")**: the call goes to the everyday destination — typically the 9–5 time
+  condition, which then does its own open/closed/holiday thing.
+- **Override ("on")**: the call goes straight to the override destination — the time
+  condition's off-hours behaviour without waiting for the clock: voicemail, a night IVR,
+  whatever the shared picker offers.
+- The state is toggled **from a phone**: a press on a provisioned key (and/or a feature
+  code) flips it, no web login needed. Open question at build time: who may toggle it
+  (any phone vs a named phone), whether a lamp shows the state, and whether the toggle
+  is per-CFC or one global switch with several named CFCs.
 
 ---
 

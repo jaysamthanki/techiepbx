@@ -147,6 +147,18 @@ namespace Techie.Pbx.Core.Models
         }
 
         /// <summary>
+        /// The catalog without the one entity being edited, for the pickers where pointing at
+        /// yourself would be a loop: a ring group's failover (D54), an IVR's final destination
+        /// (D59), a time condition's three cases (D63). Everything else stays, including others
+        /// of the same kind, because handing on to another group, menu or condition is a feature.
+        /// A null <paramref name="self"/> — a new entity, not saved yet — leaves the list whole.
+        /// </summary>
+        public static List<DestinationChoice> Except(IEnumerable<DestinationChoice> choices, Destination? self) =>
+            choices
+                .Where(c => self == null || !string.Equals(c.Destination.Key, self.Key, StringComparison.Ordinal))
+                .ToList();
+
+        /// <summary>
         /// The catalog entry a stored destination points at, or null when it points at something
         /// that has since been deleted, disabled or had its voicemail switched off. Callers use it
         /// both to label a choice and to notice a dangling one.

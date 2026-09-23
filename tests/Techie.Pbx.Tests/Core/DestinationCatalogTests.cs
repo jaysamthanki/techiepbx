@@ -168,6 +168,36 @@ namespace Techie.Pbx.Tests.Core
                 DestinationCatalog.All(SampleExtensions()).Select(c => c.Destination.Type));
         }
 
+        /// <summary>
+        /// A picker leaves off only the entity being edited: other entities of the same kind stay,
+        /// because handing on to another group is a feature (D54).
+        /// </summary>
+        [Fact]
+        public void Except_leaves_off_only_the_one_being_edited()
+        {
+            var groups = SampleGroups().Append(new RingGroup { Number = "602", Name = "Sales", Members = "1002" }).ToList();
+            var all = DestinationCatalog.All(SampleExtensions(), groups);
+
+            var keys = DestinationCatalog.Except(all, new Destination(DestinationType.RingGroup, "600"))
+                .Select(c => c.Destination.Key)
+                .ToList();
+
+            Assert.DoesNotContain("RingGroup:600", keys);
+            Assert.Contains("RingGroup:602", keys);
+            Assert.Equal(all.Count - 1, keys.Count);
+        }
+
+        /// <summary>Something not saved yet cannot be pointed at, so there is nothing to leave off.</summary>
+        [Fact]
+        public void Except_nothing_leaves_the_list_whole()
+        {
+            var all = DestinationCatalog.All(SampleExtensions(), SampleGroups());
+
+            Assert.Equal(
+                all.Select(c => c.Destination.Key),
+                DestinationCatalog.Except(all, null).Select(c => c.Destination.Key));
+        }
+
         private static List<RingGroup> SampleGroups() => new()
         {
             new RingGroup { RingGroupID = 1, Number = "600", Name = "Support", Members = "1001" },

@@ -2881,3 +2881,27 @@ most visible difference left.
 - **Same caveat as D124:** a four- to six-digit extension that starts with an N11 — `2110`, say —
   would be sent as its first three digits. The Polycom map has shipped with the same eager
   `[2-9]11` since D124; a site numbered that way needs the rule revisited for both brands.
+
+### D136. The destination picker is universal: everything except the entity being edited (2026-09-23)
+
+The user asked for the ring group failover picker to be finished and, beyond that, for every
+destination picker to be the same: offer the full catalog, exclude only the thing being edited.
+
+- **Every picker offers every destination type** — extensions, their voicemail boxes, ring
+  groups, announcements, IVRs, time conditions, and the always-available Hangup. Before this,
+  the ring group failover offered extensions and groups only, and the IVR pickers left out
+  time conditions.
+- **Self-exclusion is the only filtering.** `DestinationCatalog.Except(choices, self)` removes
+  the one entity being edited: a ring group's own failover, an IVR's own final destination,
+  a time condition's own three cases (D63). Everything else stays, including others of the
+  same kind — ring group → ring group chains (D54) and IVR → IVR ("press 9 to hear this
+  again", D59) are features, not loops. An IVR's *keys* still offer their own menu (D59).
+- **Ring group save validation was already catalog-wide**; what was missing was tests and the
+  row labels, both of which now cover announcement / IVR / time condition failovers.
+- **Amends D52** in passing: a group's failover may now name anything the picker offers, not
+  only "voicemail, another group, or an extension".
+- **Known gap, left open on purpose:** each repository's loop check still follows only its own
+  kind (ring group → ring group, IVR → IVR, D59). Cross-feature loops — a failover to a time
+  condition whose closed case hands back to the same group — are now buildable from the UI and
+  always were at save; one shared walk over every destination type is a real change and waits
+  for the user to ask for it.
