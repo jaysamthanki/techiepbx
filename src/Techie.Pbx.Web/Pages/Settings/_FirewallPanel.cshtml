@@ -1,0 +1,110 @@
+@model FirewallView
+@{
+    var applyUrl = Url.Page("Firewall", "Apply");
+}
+@*
+    The whole of the firewall page below the heading, swapped in one piece: the apply posts back
+    here and gets the new state in the same response, so there is never a moment where the button
+    has been pressed and the tables still say what they said before.
+*@
+
+@if (Model.Error.Length > 0)
+{
+    @* The helper's own sentence, shown as it is. It is the only end that knows what nft said. *@
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Status</h2>
+        <table class="table table-sm mb-0">
+            <tbody>
+                <tr>
+                    <td style="width: 12rem;">Helper</td>
+                    <td>
+                        @if (Model.HelperReachable)
+                        {
+                            <span class="badge bg-success">Reachable</span>
+                            <span class="text-secondary ms-2">protocol version @Model.Version</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-danger">Not reachable</span>
+                            <span class="text-secondary ms-2">nothing can be applied until it is</span>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <td>Rules applied</td>
+                    <td>
+                        @if (Model.AppliedAtUtc != null)
+                        {
+                            <span class="font-monospace">@Model.AppliedAtUtc.Value.ToString("u")</span>
+                        }
+                        else if (Model.NeverApplied)
+                        {
+                            <span class="text-secondary fst-italic">never — this machine has no TNPBX ruleset</span>
+                        }
+                        else
+                        {
+                            <span class="text-secondary fst-italic">unknown</span>
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <td>Expected vs applied</td>
+                    <td>
+                        @if (!Model.HelperReachable)
+                        {
+                            <span class="badge bg-secondary">Unknown</span>
+                        }
+                        else if (Model.InSync)
+                        {
+                            <span class="badge bg-success">In sync</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-warning text-dark">Out of sync</span>
+                            <span class="text-secondary ms-2">apply to make the firewall match the settings</span>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Expected</h2>
+        <p class="card-text text-secondary">
+            What this system's settings say should be reachable from outside. SIP TCP and SIP TLS
+            appear only when a port is set for them, because nothing listens on one otherwise.
+        </p>
+        <partial name="_FirewallRules" model="Model.Expected" />
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5 card-title">Applied</h2>
+        <p class="card-text text-secondary">
+            What the Helper last loaded into nftables, as it was sent. The four safety rules it
+            adds underneath these are not listed: no message put them there and no message can
+            take them away.
+        </p>
+        <partial name="_FirewallRules" model="Model.Applied" />
+    </div>
+</div>
+
+<div class="d-flex justify-content-end">
+    <button type="button" class="btn btn-danger"
+            hx-post="@applyUrl"
+            hx-target="#firewall"
+            hx-swap="innerHTML"
+            hx-disabled-elt="this"
+            hx-confirm="This replaces the firewall ruleset on this machine with the expected rules. Loopback, established connections, ICMP and SSH stay open whatever happens."
+            disabled="@(!Model.HelperReachable)">
+        Apply firewall
+    </button>
+</div>

@@ -1,0 +1,33 @@
+@using Techie.Pbx.Contracts
+@model List<FirewallRule>
+@*
+    One rule list as a table. Not bootstrap-table: it is half a dozen rows in the order they are
+    meant to be read, and rows here open nothing — the firewall is derived from the settings, so
+    there is nothing on a row to edit (the same reasoning as _Sections).
+*@
+@if (Model.Count == 0)
+{
+    <p class="text-secondary fst-italic mb-0">No rules.</p>
+}
+else
+{
+    <table class="table table-sm mb-0">
+        <thead>
+            <tr>
+                <th>What for</th>
+                <th>Protocol</th>
+                <th>Port</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var rule in Model)
+            {
+                <tr>
+                    <td>@rule.Label</td>
+                    <td class="font-monospace">@rule.Protocol.ToString().ToLowerInvariant()</td>
+                    <td class="font-monospace">@rule.PortRange</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}

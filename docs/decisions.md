@@ -3019,3 +3019,107 @@ NATed admin path can never lock the office out. Lab-verified 2026-09-23: the fil
 real lines from an actual credential-guessing scanner (208.100.60.35, Sep 22) in the lab's
 existing security.log and nothing else in 46k lines; five planted failures banned 203.0.113.77
 into the `f2b-table` nft set within seconds, and five from an ignoreip range banned nothing.
+
+### D142. The Helper: one Unix socket, SO_PEERCRED, typed messages, root-owned binary (2026-09-23)
+Piece 19. The privileged helper of D3 is built, and this is the shape it settled into.
+
+**The socket.** `/run/tnpbx/helper.sock`, never TCP. Newline-delimited JSON: one request object,
+one reply object, connection closed. Request is `{"type":"ping"}`, `{"type":"firewall.status"}` or
+`{"type":"firewall.apply","rules":[…]}`; reply is `{"ok":true,"result":…}` or
+`{"ok":false,"error":"<one human sentence>"}`. The messages live in `Techie.Pbx.Contracts`, which
+stays dependency-free. **There is no message that carries a command, a path or a shell string, and
+there will not be one** — that is the whole reason this process exists instead of a sudo rule.
+Unknown fields deserialize to nothing; an unknown protocol name or a numeric enum value is a
+deserialization failure, not a value anything downstream has to decide about.
+
+**The authentication model, in full.** The kernel reports the connecting process's UID
+(`SO_PEERCRED`) and it must equal the UID of the `tnpbx` system user, resolved once at startup with
+`getpwnam` — the Helper refuses to start if that user does not exist, because there would be nobody
+the socket could be for. Any other UID is logged and closed before a byte is read off it. Nothing
+the caller *says* about itself is an input. Two things back that up rather than replace it: the
+socket directory is 0750 `root:tnpbx` and the socket 0660 `root:tnpbx`. The directory's mode is set
+*before* the bind, which closes the moment between `bind()` creating the socket with the umask's
+permissions and the `chmod` that follows. `tnpbx-web.service` gains `SupplementaryGroups=tnpbx`,
+because its `Group=asterisk` (D18) means systemd would not otherwise give it that group.
+
+**Validation happens at both ends.** Every rule is validated on the web side so a bad one never
+leaves, and again in the Helper so a bad one never arrives, and a third time in the renderer before
+anything is written — the same "never trust the row" rule the conf renderers follow. A rule is a
+protocol (`tcp`/`udp`), a port range inside 1–65535 with start ≤ end, and a label of 1–40
+characters from letters, digits, space, dash and slash. Thirty-two rules per message at most. The
+label's character set is that narrow because it is written into the generated ruleset as the nft
+comment, so `nft list ruleset` on the box says what each open port is for; anything that could end
+that quoted string is refused rather than escaped.
+
+**The safety rules are by construction, not by review.** The Helper always writes loopback,
+established/related, ICMP and TCP 22 itself, before anything a message carried, from data no
+message can reach. A `firewall.apply` can only ever widen what follows them. That is what makes it
+safe to put a red Apply button in a web UI: there is no message content, malicious or mistaken,
+that locks the machine out.
+
+**nft is never a command line.** `ProcessStartInfo` with `FileName = /usr/sbin/nft` (a fixed
+absolute path, so nothing searches `PATH` for a program to run as root) and `ArgumentList`, no
+shell, ever. Every argument is a constant or a path the Helper chose. A ruleset is written to
+`/var/lib/tnpbx-helper/pending.nft` (0700 root directory), checked with `nft -c -f`, then loaded
+with `nft -f`; a failure at either step deletes the temp file and leaves the running ruleset
+exactly as it was, and the reply carries nft's own words. On success the text is kept as
+`last.nft` (0600) and re-applied at startup, so a reboot comes up protected. The rules and the
+timestamp are kept beside it in `last.json`, because the Helper is not in the business of parsing
+nft syntax back and a status page on a rebooted box must not say "never applied".
+
+**`firewall.status` reports what the Helper applied, not what the kernel has.** The comparison
+against what the system *expects* happens in the web app, which is the only end that knows that
+`Sip.Port` means a UDP hole: `FirewallRulesBuilder` derives the expected list from the settings, the
+`RtpConfRenderer` port constants and `WebBindings`, so the firewall and what is actually listening
+cannot drift. "Somebody ran nft by hand" is deliberately not something this page pretends to detect.
+
+**`/opt/tnpbx-helper`, root:root 0755 — not `/opt/tnpbx`.** `app-deploy.sh` chowns the app's tree
+to the `tnpbx` user, so a helper binary in there would be a root binary the web user could rewrite,
+which is precisely the escalation this design exists to prevent. Same reasoning as
+`bin/voicemail-mail` (D126), one step further. The unit and the tmpfiles entry live in the repo
+once and travel in the web publish beside that script; `install.sh` installs them from the repo and
+enables the service, `app-deploy.sh` installs the binary and starts it.
+
+**The unit is the hardening set a root service can actually take:** `NoNewPrivileges`,
+`PrivateTmp`, `ProtectHome`, `ProtectSystem=strict` with `ReadWritePaths=/var/lib/tnpbx-helper`,
+`RuntimeDirectory=tnpbx` (which is what lets it own its socket directory at all under
+`ProtectSystem=strict`), `ProtectClock`, `ProtectHostname`, `ProtectKernelLogs`,
+`ProtectKernelTunables`, `RestrictSUIDSGID`, `LockPersonality`, and
+`RestrictAddressFamilies=AF_UNIX AF_NETLINK` — which turns "listens only on a Unix socket, never
+TCP" from a rule somebody has to keep into one the kernel keeps. Deliberately not set:
+`PrivateNetwork` (the job is this host's packet filter), `ProtectKernelModules` (nft loads
+`nf_tables` on first use) and `PrivateUsers`.
+
+Connections are served one at a time, single threaded: an apply is two nft commands against one
+kernel ruleset, so concurrency buys nothing and costs readability. Both socket directions carry the
+same five second timeout the client does.
+
+### D143. Firewall policy: one `inet tnpbx-input` table, policy drop, fail2ban's untouched (2026-09-23)
+What the Helper generates, decided once so it is not re-argued per rule.
+
+One table, `table inet tnpbx-input` — `inet`, so a single ruleset covers IPv4 and IPv6 and there is
+no second copy to keep in step. One base chain, `input`, `type filter hook input priority 0`, and
+**`policy drop`**: a default-accept firewall with accept rules in it is a list of opinions, not a
+filter.
+
+The rules, in this order and no other:
+
+1. `iif "lo" accept` — the box talking to itself, AMI included.
+2. `ct state established,related accept` — every reply to something this box started.
+3. `meta l4proto { icmp, ipv6-icmp } accept` — ping and, more importantly, the ICMP errors that
+   path MTU discovery needs. Silently dropping those is how "SIP works but big packets vanish".
+4. `tcp dport 22 accept` — SSH, so the way back in is never a thing a firewall change can take away.
+5. Then one `<proto> dport <range> accept comment "<label>"` per rule the message carried.
+
+The first four are written by the renderer from nothing a message can influence (D142).
+
+**fail2ban's `f2b-table` is a separate table at priority -1 and is neither in our file nor flushed
+by it.** Lower priority means it runs first, which is the right way round: a banned source is
+dropped before our accepts are reached. Our file adds the table, deletes it, and builds it again —
+`nft -f` is one transaction, so that replaces exactly our table with no moment where the ruleset is
+half loaded, and nothing else on the box is touched. There is no `flush ruleset` anywhere in it.
+
+Not done, on purpose: no per-address or per-CIDR rules (source restriction is the customer's cloud
+firewall or a later piece), no rate limiting on 5060 (fail2ban owns that, D141), and no outbound
+filtering at all — an `output` chain on a PBX that has to reach trunks, ACME, Graph and NTP is a
+support burden with very little to show for it.

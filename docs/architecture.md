@@ -17,8 +17,8 @@ surface as possible. Install onto a fresh Debian server with one script.
                          ▼                     │ (0660, group tnpbx, peer UID checked)
                  ┌───────────────┐     ┌───────▼────────────────────────────┐
  Phones/trunks ─▶│ Asterisk      │     │ Techie.Pbx.Helper   (root)         │
-  SIP 5060/UDP   │ (user:        │     │  no network, typed command         │
-  RTP 10000-20000│  asterisk)    │     │  allowlist only (firewall, updates)│
+  SIP 5060/UDP   │ (user:        │     │  no network, typed message         │
+  RTP 10000-20000│  asterisk)    │     │  allowlist only — today: nftables  │
                  └───────────────┘     └────────────────────────────────────┘
 ```
 
@@ -26,7 +26,7 @@ surface as possible. Install onto a fresh Debian server with one script.
 |---|---|---|
 | Web | `tnpbx` (unprivileged) | UI, API, database, rendering and writing Asterisk config, AMI control |
 | Asterisk | `asterisk` | The actual PBX: SIP, media, dialplan |
-| Helper | `root` | The few operations that need root. Not built yet. |
+| Helper | `root` | The few operations that need root: today the nftables firewall. Typed messages on a Unix socket, caller's UID checked with `SO_PEERCRED` (D142) |
 
 ### What needs root and what doesn't
 
@@ -39,7 +39,8 @@ Most PBX management doesn't need root if file ownership is set up correctly:
 | Restart `asterisk.service` | polkit rule scoped to that one unit | No |
 | Bind 443 | `AmbientCapabilities=CAP_NET_BIND_SERVICE` | No |
 | TLS certificates (ACME) | In-process, into a directory the web user owns | No |
-| Firewall (nftables), OS updates | Helper | Yes |
+| Firewall (nftables) | Helper: `firewall.apply`, checked with `nft -c -f` then loaded with `nft -f` (D142, D143) | Yes |
+| OS updates | Helper, when it is built. Not a message it accepts yet | Yes |
 | Initial install | Installer script | Yes |
 
 Sudo rules were rejected: see [decisions.md](decisions.md).
@@ -51,8 +52,8 @@ Sudo rules were rejected: see [decisions.md](decisions.md).
 | `Techie.Pbx.Web` | Razor Pages + htmx partials, API controllers, auth, `PbxDatabase`, startup | Core, Asterisk, Contracts |
 | `Techie.Pbx.Core` | Models + validation, `Database` (SQLite + schema scripts), repositories, `SettingsKeys`, `SecretGenerator`, shell scripts | Dapper, Microsoft.Data.Sqlite, log4net |
 | `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, `ConfigApplier`, AMI client | Core |
-| `Techie.Pbx.Contracts` | Messages between Web and Helper | none |
-| `Techie.Pbx.Helper` | Root helper (stub) | Core, Contracts |
+| `Techie.Pbx.Contracts` | Messages between Web and Helper: `HelperRequest`/`HelperReply`, `FirewallRule` | none |
+| `Techie.Pbx.Helper` | Root helper: Unix socket listener, peer UID check, `NftRuleset` renderer, nft invocation | Core, Contracts |
 | `Techie.Pbx.Tests` | xUnit tests, expected conf files | Core, Asterisk |
 
 ## Config flow

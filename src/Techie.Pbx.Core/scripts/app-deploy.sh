@@ -4,8 +4,14 @@
 # install.sh (D92). Everything this script needs was created by part 1: the
 # tnpbx user, the asterisk group membership, /opt/tnpbx, the runtime packages.
 #
-# Usage (as root on the prepared server, with the publish tarball in hand):
-#   ./app-deploy.sh /path/to/tnpbx-web.tgz
+# Usage (as root on the prepared server, with the publish tarball(s) in hand):
+#   ./app-deploy.sh /path/to/tnpbx-web.tgz [/path/to/tnpbx-helper.tgz]
+#
+# The two tarballs are built on the build machine, not here:
+#   dotnet publish src/Techie.Pbx.Web    -c Release -r linux-arm64 --self-contained true
+#   dotnet publish src/Techie.Pbx.Helper -c Release -r linux-arm64 --self-contained true
+# and each publish directory tarred up. The helper one is optional: leave it off and this
+# script redeploys the web app and leaves whatever helper is already installed alone.
 #
 # What it does:
 #   - unpacks the self-contained publish into /opt/tnpbx (tnpbx:asterisk 0750)
@@ -20,6 +26,12 @@
 #     a certificate exists (D99). The unit grants CAP_NET_BIND_SERVICE and
 #     nothing else, which is how an unprivileged user binds ports 80 and 443
 #     (D95, D99).
+#   - installs the privileged helper into /opt/tnpbx-helper (root:root 0755),
+#     NOT under /opt/tnpbx: that tree is chowned to the tnpbx user below, and a
+#     root binary the web user could rewrite would be a way to become root. The
+#     same reasoning as bin/voicemail-mail, one step further (D142)
+#   - installs tnpbx-helper.service and the tmpfiles entry for /run/tnpbx from
+#     the web tarball's scripts/ directory, and starts the helper
 #   - writes the polkit rule that lets tnpbx restart exactly asterisk.service
 #     and nothing else (architecture.md; the app asks the operator, the Helper
 #     or the admin to do the restart, never sudo)
@@ -39,6 +51,10 @@ APP_BIN_DIR="${APP_HOME}/bin"
 APP_CONFIG_DIR="${APP_HOME}/Config"
 MOH_DIR="/var/lib/asterisk/moh"
 WHISPER_DIR="${APP_HOME}/whisper"
+HELPER_HOME="/opt/tnpbx-helper"
+HELPER_STATE_DIR="/var/lib/tnpbx-helper"
+HELPER_UNIT="/etc/systemd/system/tnpbx-helper.service"
+HELPER_TMPFILES="/etc/tmpfiles.d/tnpbx-helper.conf"
 UNIT="/etc/systemd/system/tnpbx-web.service"
 POLKIT="/etc/polkit-1/rules.d/40-tnpbx-asterisk.rules"
 
@@ -51,7 +67,12 @@ id tnpbx &>/dev/null || die "tnpbx user missing — run install.sh (part 1) firs
 [[ -d /opt/tnpbx ]] || die "/opt/tnpbx missing — run install.sh (part 1) first"
 
 TARBALL="${1:-}"
-[[ -n "$TARBALL" && -f "$TARBALL" ]] || die "usage: app-deploy.sh <tnpbx-web.tgz> (the self-contained linux publish)"
+[[ -n "$TARBALL" && -f "$TARBALL" ]] || die "usage: app-deploy.sh <tnpbx-web.tgz> [tnpbx-helper.tgz] (self-contained linux publishes)"
+
+# Optional. A deploy that does not carry one leaves the installed helper as it is, which is what
+# a web-only fix should do — the helper is a different binary on a different release cadence.
+HELPER_TARBALL="${2:-}"
+[[ -z "$HELPER_TARBALL" || -f "$HELPER_TARBALL" ]] || die "no such file: ${HELPER_TARBALL}"
 
 # --- unpack, preserving server-side state -------------------------------------
 
@@ -155,6 +176,55 @@ if compgen -G "${MOH_DIR}/*.wav" > /dev/null; then
   mv -n "${MOH_DIR}"/*.wav "${MOH_DIR}/default/"
 fi
 
+# --- the privileged helper -------------------------------------------------------
+#
+# The one root service (D142). It lives in ${HELPER_HOME}, outside ${APP_HOME}, and everything
+# in it is root:root: the web user owns its own install directory, so a helper binary in there
+# would be a root binary the web user could rewrite — which is exactly the escalation path this
+# project does not have. Its unit and its tmpfiles entry travel in the web tarball's scripts/
+# directory, beside voicemail-mail, so there is one copy of each in the repo.
+
+mkdir -p "$HELPER_HOME" "$HELPER_STATE_DIR"
+
+if [[ -n "$HELPER_TARBALL" ]]; then
+    log "deploying ${HELPER_TARBALL} into ${HELPER_HOME}"
+
+    # Nothing in here is server-side state — the helper keeps all of that in
+    # ${HELPER_STATE_DIR} — so the directory is emptied rather than merged.
+    find "${HELPER_HOME}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    tar -xzf "$HELPER_TARBALL" -C "$HELPER_HOME"
+
+    [[ -f "${HELPER_HOME}/Techie.Pbx.Helper" ]] \
+        || die "tarball did not contain Techie.Pbx.Helper — is this the self-contained helper publish?"
+
+    chmod 0755 "${HELPER_HOME}/Techie.Pbx.Helper"
+elif [[ ! -f "${HELPER_HOME}/Techie.Pbx.Helper" ]]; then
+    warn "no helper tarball given and none installed; the firewall page will say the helper is unreachable"
+fi
+
+# Re-asserted on every deploy, helper tarball or not, and never as part of the chown -R that
+# hands ${APP_HOME} to the web user.
+chown -R root:root "$HELPER_HOME"
+chmod 0755 "$HELPER_HOME"
+chown root:root "$HELPER_STATE_DIR"
+chmod 0700 "$HELPER_STATE_DIR"
+
+if [[ -f "${APP_HOME}/scripts/tnpbx-helper.tmpfiles.conf" ]]; then
+    log "writing ${HELPER_TMPFILES} (the socket directory, 0750 root:${APP_USER})"
+    mkdir -p /etc/tmpfiles.d
+    install -o root -g root -m 0644 "${APP_HOME}/scripts/tnpbx-helper.tmpfiles.conf" "$HELPER_TMPFILES"
+    systemd-tmpfiles --create "$HELPER_TMPFILES"
+fi
+
+if [[ -f "${APP_HOME}/scripts/tnpbx-helper.service" ]]; then
+    log "writing tnpbx-helper.service"
+    install -o root -g root -m 0644 "${APP_HOME}/scripts/tnpbx-helper.service" "$HELPER_UNIT"
+elif [[ ! -f "$HELPER_UNIT" ]]; then
+    warn "no tnpbx-helper.service in the tarball and none installed; run install.sh (part 1) to get it"
+fi
+
+command -v nft >/dev/null || warn "nftables is not installed, so the helper cannot apply a firewall (apt-get install nftables)"
+
 # --- systemd unit --------------------------------------------------------------
 
 log "writing tnpbx-web.service"
@@ -168,6 +238,12 @@ Wants=network-online.target
 Type=simple
 User=tnpbx
 Group=asterisk
+# The primary group is asterisk, which is how generated config gets written (D18). The tnpbx
+# group has to be added back explicitly, because that is the group on the helper's socket
+# (/run/tnpbx, 0750 root:tnpbx and the socket 0660) and systemd does not infer it when Group=
+# names another one (D142). Reaching the socket is not authorisation — the helper checks the
+# caller's UID with SO_PEERCRED — it is what stops every other account getting that far.
+SupplementaryGroups=tnpbx
 WorkingDirectory=/opt/tnpbx
 ExecStart=/opt/tnpbx/Techie.Pbx.Web
 Restart=on-failure
@@ -212,6 +288,21 @@ chmod 0644 "$POLKIT"
 
 # --- go ------------------------------------------------------------------------
 
+# The helper first: the web app's firewall page asks it a question on every load, and a box
+# that has just rebooted wants its ruleset back before anything is reachable.
+systemctl daemon-reload
+
+if [[ -f "$HELPER_UNIT" && -f "${HELPER_HOME}/Techie.Pbx.Helper" ]]; then
+    log "starting tnpbx-helper"
+    systemctl enable tnpbx-helper
+    systemctl restart tnpbx-helper
+    sleep 2
+    systemctl is-active tnpbx-helper \
+        || warn "tnpbx-helper failed to start: journalctl -u tnpbx-helper -n 50 (the web app still works; the firewall page will say it is unreachable)"
+else
+    warn "tnpbx-helper not started (no unit or no binary); the firewall page will say the helper is unreachable"
+fi
+
 log "starting tnpbx-web"
 systemctl restart tnpbx-web
 sleep 3
@@ -227,6 +318,9 @@ TNPBX web application deployed
   ${APP_CONFIG_DIR}     ${APP_USER}:${APP_GROUP} 2750, mail.json (written by the app)
   ${WHISPER_DIR}    root:root 0755, the speech model, if install.sh got one
   ${MOH_DIR}   asterisk:asterisk 2770, the music on hold class's directory
+  ${HELPER_HOME}     root:root 0755, the privileged helper (D142)
+  ${HELPER_STATE_DIR}  root:root 0700, the last applied firewall ruleset
+  tnpbx-helper.service  root, /run/tnpbx/helper.sock, hardened
   tnpbx-web.service     User=tnpbx, http://0.0.0.0:8080, hardened
   ${POLKIT}
                         tnpbx may start/stop/restart asterisk.service only
@@ -236,6 +330,9 @@ Next steps (first run):
   2. Settings: AMI secret, System.Timezone, Provisioning credentials
   3. Add an extension, then Apply config — that writes /etc/asterisk
   4. Start Asterisk:  sudo systemctl start asterisk
-  5. Point phones at http://<host>:8080/polycom (option 160) or /yealink (66)
+  5. Settings -> Firewall: the helper should say "Reachable". Press Apply to
+     load the ruleset. Loopback, established connections, ICMP and SSH stay
+     open whatever happens — the helper writes those itself (D142, D143).
+  6. Point phones at http://<host>:8080/polycom (option 160) or /yealink (66)
 
 EOF

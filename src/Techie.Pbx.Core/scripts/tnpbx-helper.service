@@ -1,0 +1,50 @@
+[Unit]
+# The privileged helper (D142): the one process on this box that runs as root once the install
+# is done. It listens on /run/tnpbx/helper.sock, checks the caller's UID with SO_PEERCRED, and
+# executes a fixed set of typed messages — today, the firewall. It never takes a command, a path
+# or a shell string from anybody.
+Description=TNPBX privileged helper
+After=network.target
+
+[Service]
+Type=simple
+# /opt/tnpbx-helper, NOT /opt/tnpbx: the web user owns its own install directory, and a root
+# binary the web user could rewrite would be a way to become root (D142).
+ExecStart=/opt/tnpbx-helper/Techie.Pbx.Helper
+Restart=on-failure
+RestartSec=5
+
+# The socket's directory. ProtectSystem=strict below makes the rest of /run read-only to this
+# service, so RuntimeDirectory is what lets the helper create its socket at all. systemd makes
+# it root:root; the helper chowns the group to tnpbx itself at startup, because only it knows
+# which account the socket is for.
+RuntimeDirectory=tnpbx
+RuntimeDirectoryMode=0750
+
+# Hardening. This is the one root service, so it gets everything that does not stop it working.
+# /var/lib/tnpbx-helper is the only place on disk it writes: the last applied ruleset, which it
+# re-applies at boot.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tnpbx-helper
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Unix sockets to talk to the web app, netlink for nft. Nothing else — this process must never
+# be able to open a network socket, and this is that rule enforced rather than reviewed.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LimitNOFILE=1024
+
+# Deliberately NOT set, and why:
+#   PrivateNetwork=       the whole job is this host's packet filter.
+#   ProtectKernelModules= nft loads nf_tables and its friends the first time it is used.
+#   PrivateUsers=         nft changes the host's netfilter tables; there is no namespace to do
+#                         that from.
+
+[Install]
+WantedBy=multi-user.target

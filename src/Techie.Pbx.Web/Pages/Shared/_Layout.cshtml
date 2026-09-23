@@ -92,6 +92,10 @@
                                    something a call touches, so they sit with the settings (D120).
                                    Only the menu placement moved; the page is still /Certificates. *@
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Certificates/Index">Certificates</a></li>
+                                @* Same reasoning as certificates: what this box lets in is how it
+                                   presents itself, not something a call touches (D142). A status
+                                   page with one button, so it needs no menu of its own. *@
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Firewall">Firewall</a></li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">All Settings</a></li>
                             </ul>

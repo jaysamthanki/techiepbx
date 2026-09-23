@@ -18,6 +18,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Techie.Pbx.Core\Techie.Pbx.Core.csproj" />
     <ProjectReference Include="..\..\src\Techie.Pbx.Asterisk\Techie.Pbx.Asterisk.csproj" />
+    <ProjectReference Include="..\..\src\Techie.Pbx.Contracts\Techie.Pbx.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Techie.Pbx.Helper\Techie.Pbx.Helper.csproj" />
+    <ProjectReference Include="..\..\src\Techie.Pbx.Web\Techie.Pbx.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

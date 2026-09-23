@@ -31,6 +31,21 @@
              Link="scripts\voicemail-mail"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+
+    <!--
+      The privileged helper's systemd unit and the tmpfiles entry for its socket directory
+      (D142). They travel with the publish for the same reason voicemail-mail does: app-deploy.sh
+      installs them root-owned from the tarball, so the repo holds exactly one copy of each and a
+      box that was installed before the helper existed gets them from a deploy.
+    -->
+    <Content Include="..\Techie.Pbx.Core\scripts\tnpbx-helper.service"
+             Link="scripts\tnpbx-helper.service"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\Techie.Pbx.Core\scripts\tnpbx-helper.tmpfiles.conf"
+             Link="scripts\tnpbx-helper.tmpfiles.conf"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

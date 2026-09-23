@@ -41,11 +41,24 @@ software.
   Don't add code that would need these relaxed without recording a decision.
 
 ### Helper
-- Listens only on a Unix socket, never TCP.
-- Checks the caller's UID with `SO_PEERCRED`.
+Built in piece 19 (D142). The rules it was designed against are the rules it holds to:
+
+- Listens only on a Unix socket, never TCP — and the unit says so too
+  (`RestrictAddressFamilies=AF_UNIX AF_NETLINK`), so it is the kernel's rule and not just ours.
+- Checks the caller's UID with `SO_PEERCRED` against the `tnpbx` user, resolved once at startup;
+  it refuses to start if that user does not exist. **This is the whole authentication model** —
+  nothing the caller says about itself is an input. The socket is 0660 `root:tnpbx` in a 0750
+  `root:tnpbx` directory whose mode is set before the bind, which is defence in depth behind it.
 - Accepts only typed messages defined in `Techie.Pbx.Contracts`. Every argument is validated
-  (enums, IP/CIDR parsing, fixed ranges).
-- **Never** a "run command" message, never a file path from the caller, never a shell.
+  (enums, fixed ranges, a character allowlist on the label), **again in the Helper** — what the
+  sender already checked is not evidence.
+- **Never** a "run command" message, never a file path from the caller, never a shell. nft is run
+  with `ArgumentList` at a fixed absolute path, so nothing searches `PATH` for a program to run
+  as root, and every argument is a constant or a path the Helper chose.
+- The firewall's safety rules — loopback, established/related, ICMP, TCP 22 — are written by the
+  Helper itself before anything a message carried, so no apply can lock the machine out (D143).
+- Its binary lives in `/opt/tnpbx-helper`, root:root 0755, **not** under `/opt/tnpbx`, which the
+  web user owns: a root binary the web user could rewrite would undo all of the above.
 - Keep it small enough to read end to end.
 
 ### Break-glass (Entra unreachable)
@@ -126,6 +139,6 @@ Deliberately deferred. Don't treat them as done.
 |---|---|---|
 | ~~Any user in the Entra tenant can sign in as an admin~~ | Closed 2026-09-23 (D139) | Enterprise app requires assignment; Entra refuses unassigned users at sign-in. Admin changes are an Entra-side workflow. |
 | ~~No break-glass login if Entra is unreachable~~ | Closed 2026-09-23 (D24, D140) | `LocalAuthenticationBypass` is always on; shipping default is loopback-only, deployments whitelist their trusted networks. If Entra is down, an admin on a whitelisted network (or on the box) can still sign in; every bypass request is logged. |
-| ~~No firewall or fail2ban yet~~ | Half closed 2026-09-23 (D141) | fail2ban `tnpbx` jail live (lab-verified): SIP auth failures in security.log → 24h whole-IP nftables ban; trusted ranges ignored. Still open: the base firewall ruleset (Helper piece 19) and D7's own AMI-event blocker remain deferred. |
+| ~~No firewall or fail2ban yet~~ | Closed 2026-09-23 (D141, D142, D143), firewall half pending lab verification | fail2ban `tnpbx` jail live (lab-verified): SIP auth failures in security.log → 24h whole-IP nftables ban; trusted ranges ignored, table `f2b-table` at priority -1. Base firewall built the same day: the Helper applies one `inet tnpbx-input` table, `policy drop`, with loopback/established/ICMP/SSH always present and SIP, RTP and the admin UI opened from the settings. Still open: D7's own AMI-event blocker. |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |

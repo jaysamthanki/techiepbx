@@ -1,0 +1,30 @@
+@page
+@model FirewallModel
+@{
+    ViewData["Title"] = "Firewall";
+
+    var panelUrl = Url.Page("Firewall", "Panel");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Firewall</h1>
+</div>
+
+<p class="text-secondary">
+    The packet filter on this machine, applied by the Helper — the one process here that runs as
+    root (D142). What the firewall allows is derived from what this system is configured to listen
+    on, so it is shown rather than edited: change a SIP port on the
+    <a asp-page="/Settings/Sip">SIP settings</a> page and the expected ruleset below changes with it.
+</p>
+
+<p class="text-secondary">
+    Four rules are always in force and are not listed here, because nothing this page sends can
+    add or remove them: loopback, established connections, ICMP, and SSH on port 22 (D143). The
+    Helper writes those itself, which is what makes it impossible to lock this machine out with
+    the button below. fail2ban's bans live in a table of their own and are left alone.
+</p>
+
+@* The panel arrives from the Panel handler, and comes back after every apply. *@
+<div id="firewall" hx-get="@panelUrl" hx-trigger="load">
+    <p class="text-secondary">Asking the helper…</p>
+</div>
