@@ -48,6 +48,13 @@ software.
 - **Never** a "run command" message, never a file path from the caller, never a shell.
 - Keep it small enough to read end to end.
 
+### Break-glass (Entra unreachable)
+`LocalAuthenticationBypass` (D24) is the break-glass path: trusted CIDRs in `AllowedNetworks`
+authenticate as `local-bypass` without Entra. Keep it **disabled by default** and enable it only
+for the duration of an outage, or scope `AllowedNetworks` so tightly (office VPN /32s behind the
+NSG) that leaving it on is acceptable. The startup WARNING and per-request IP logging make any
+use auditable.
+
 ### Asterisk config
 - Values reach conf files only through the renderers.
 - Models validate strictly (character allowlists, lengths). Renderers re-validate every row
@@ -117,7 +124,7 @@ Deliberately deferred. Don't treat them as done.
 | Gap | Risk | Notes |
 |---|---|---|
 | ~~Any user in the Entra tenant can sign in as an admin~~ | Closed 2026-09-23 (D139) | Enterprise app requires assignment; Entra refuses unassigned users at sign-in. Admin changes are an Entra-side workflow. |
-| No break-glass login if Entra is unreachable | Admin lockout | Deferred by user (D6) |
+| ~~No break-glass login if Entra is unreachable~~ | Closed 2026-09-23 (D24) | `LocalAuthenticationBypass` (`Enabled` + `AllowedNetworks` CIDRs) authenticates trusted-network IPs without Entra. If Entra is down, an admin on a whitelisted network (office VPN / NSG-limited) can still sign in. Enable it only while needed; every bypass request is logged. |
 | No firewall or fail2ban yet | SIP brute force | Lab VM is protected by the Azure NSG only |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |
