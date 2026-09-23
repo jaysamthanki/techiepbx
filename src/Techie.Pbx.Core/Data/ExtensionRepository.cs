@@ -71,24 +71,17 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
-        /// Saves the extension. A changed number takes every reference to the old one with it, in
-        /// the same transaction (piece 37) — destinations, forwarding, ring group members and phone
-        /// keys. The references are rewritten first, so a number another extension already has
-        /// fails on the row's own UNIQUE after them and rolls the lot back.
+        /// Saves the extension. The number is the extension's identity — it names the phone, the
+        /// mailbox on disk and every stored reference — and renumbering one never really happens,
+        /// so it is refused outright (D138 amended): delete the row and create a new extension.
+        /// Everything else about the row can change.
         /// </summary>
         public void Update(Extension extension)
         {
             var stored = this.GetByID(extension.ExtensionID);
-            var renumbered = stored != null && !string.Equals(stored.Number, extension.Number, StringComparison.Ordinal);
 
-            // Its own forwarding list is the one reference the sweep cannot reach, because this row
-            // is about to be written from the object in hand: "keep my own handset ringing" has to
-            // follow the new number rather than start ringing whoever takes the old one (D130).
-            if (renumbered && extension.ForwardingList().Contains(stored!.Number, StringComparer.Ordinal))
-            {
-                extension.Forwarding = string.Join(" ", extension.ForwardingList()
-                    .Select(t => string.Equals(t, stored.Number, StringComparison.Ordinal) ? extension.Number : t));
-            }
+            if (stored != null && !string.Equals(stored.Number, extension.Number, StringComparison.Ordinal))
+                throw new ValidationFailedException("An extension's number cannot be changed. Delete it and create a new extension instead.");
 
             this.ThrowIfInvalid(extension);
 
@@ -97,9 +90,6 @@ namespace Techie.Pbx.Core.Data
 
             try
             {
-                if (renumbered)
-                    Renumbering.Extension(connection, transaction, stored!.Number, extension.Number);
-
                 var rows = connection.Execute(
                     "UPDATE Extensions SET " +
                     "Number = @Number, Name = @Name, Secret = @Secret, Enabled = @Enabled, " +

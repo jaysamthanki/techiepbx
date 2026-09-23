@@ -73,50 +73,6 @@ namespace Techie.Pbx.Core.Data
             }
         }
 
-        /// <summary>
-        /// An extension's number changed. Two destination kinds are keyed by it — the phone and
-        /// the mailbox — and three lists name it as well: other extensions' forwarding (D130), ring
-        /// group members (D53), and phone keys, both the lamps that watch it and the line a phone
-        /// registers as (D121, schema 020).
-        /// </summary>
-        public static void Extension(SqliteConnection connection, SqliteTransaction transaction, string from, string to)
-        {
-            foreach (var type in new[] { DestinationType.Extension, DestinationType.Voicemail })
-                Destinations(connection, transaction, new Destination(type, from), new Destination(type, to));
-
-            var forwarding = connection.Query<Extension>(
-                "SELECT ExtensionID, Forwarding FROM Extensions WHERE Forwarding <> ''", transaction: transaction);
-
-            foreach (var extension in forwarding)
-            {
-                var targets = extension.ForwardingList();
-                if (!targets.Contains(from, StringComparer.Ordinal))
-                    continue;
-
-                connection.Execute(
-                    "UPDATE Extensions SET Forwarding = @forwarding WHERE ExtensionID = @ExtensionID",
-                    new { forwarding = string.Join(" ", Replace(targets, from, to)), extension.ExtensionID },
-                    transaction);
-            }
-
-            var groups = connection.Query<RingGroup>(
-                "SELECT RingGroupID, Members FROM RingGroups WHERE Members <> ''", transaction: transaction);
-
-            foreach (var group in groups)
-            {
-                var members = group.MemberList();
-                if (!members.Contains(from, StringComparer.Ordinal))
-                    continue;
-
-                connection.Execute(
-                    "UPDATE RingGroups SET Members = @members WHERE RingGroupID = @RingGroupID",
-                    new { members = string.Join(",", Replace(members, from, to)), group.RingGroupID },
-                    transaction);
-            }
-
-            PhoneButtons(connection, transaction, new[] { PhoneButtonTarget.Blf, PhoneButtonTarget.Line }, from, to);
-        }
-
         private static void PhoneButtons(SqliteConnection connection, SqliteTransaction transaction, string[] targetTypes, string from, string to)
         {
             connection.Execute(
@@ -124,8 +80,5 @@ namespace Techie.Pbx.Core.Data
                 new { targetTypes, from, to },
                 transaction);
         }
-
-        private static IEnumerable<string> Replace(IEnumerable<string> tokens, string from, string to) =>
-            tokens.Select(t => string.Equals(t, from, StringComparison.Ordinal) ? to : t);
     }
 }

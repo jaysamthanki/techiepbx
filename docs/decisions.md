@@ -2976,3 +2976,13 @@ number counts as a delete. **Not cascaded, on purpose:** voicemail messages on d
 the folder named by the old extension number — moving them is a file operation that belongs
 to the Helper (piece 19), not the web app. **Open, for the user:** whether an extension
 renumber also pushes a config re-read (check-sync) at phones holding that line.
+
+### D138 amended. Extensions cannot be renumbered at all (2026-09-23, user decision)
+
+The user: "we dont allow extensions to be renumbered... that usually never happens." The
+extension sweep built this morning is removed. `ExtensionRepository.Update` refuses a
+changed number outright — "delete it and create a new extension instead" — because the
+number is the extension's identity: it names the phone, the mailbox on disk and every
+stored reference, and the honest path is delete-and-recreate (references then show as
+"gone" and hang up, D35). The IVR, ring group, time condition and CFC renumber cascades
+stand unchanged.

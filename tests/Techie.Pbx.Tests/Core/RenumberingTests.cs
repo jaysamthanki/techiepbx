@@ -7,9 +7,10 @@ using Techie.Pbx.Core.Models;
 namespace Techie.Pbx.Tests.Core
 {
     /// <summary>
-    /// Renumbering takes every reference with it (piece 37): an IVR, ring group, extension or call
-    /// flow control that gets a new number leaves nothing pointing at the old one — and a renumber
-    /// that is refused, however far it got, leaves nothing rewritten at all.
+    /// Renumbering takes every reference with it (piece 37): an IVR, ring group, time condition or
+    /// call flow control that gets a new number leaves nothing pointing at the old one — and a
+    /// renumber that is refused, however far it got, leaves nothing rewritten at all. Extensions
+    /// cannot be renumbered at all (D138 amended): their number is their identity.
     /// </summary>
     public class RenumberingTests : IDisposable
     {
@@ -367,96 +368,24 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
-        /// An extension is keyed by its number twice over — the phone and the mailbox — and is also
-        /// named by forwarding lists (D130), ring group members (D53) and phone keys, both lamps
-        /// and lines (D121). All of it moves.
+        /// An extension's number is its identity — the phone, the mailbox on disk, every reference
+        /// — and renumbering one never really happens, so it is refused outright (D138 amended).
+        /// Deleting and re-creating is the path, and a deleted extension's references show as
+        /// "gone" like any other (D35).
         /// </summary>
         [Fact]
-        public void Renumbering_an_extension_rewrites_destinations_forwarding_members_and_keys()
+        public void An_extension_number_change_is_refused()
         {
             this.AddExtension("1003", forwarding: "1002 7146085242");
-            this.PointEverythingAt(new Destination(DestinationType.Extension, "1002"), "1");
-            this.PointEverythingAt(new Destination(DestinationType.Voicemail, "1002"), "2");
-
-            var group = new RingGroup { Number = "600", Name = "Sales", Members = "1001,1002,1003" };
-            this.groups.Insert(group);
-
-            var watcher = this.AddPhone("0004f2aabb01", Key(1, PhoneButtonTarget.Line, "1001"), Key(2, PhoneButtonTarget.Blf, "1002"));
-            var owner = this.AddPhone("0004f2aabb02", Key(1, PhoneButtonTarget.Line, "1002"), Key(2, PhoneButtonTarget.Blf, "1001"));
-
-            this.marker.Clear();
 
             var loaded = this.extensions.GetByNumber("1002")!;
             loaded.Number = "1005";
-            this.extensions.Update(loaded);
 
-            Assert.Equal(0, this.References(new Destination(DestinationType.Extension, "1002")));
-            Assert.Equal(0, this.References(new Destination(DestinationType.Voicemail, "1002")));
-            Assert.Equal(EveryColumn, this.References(new Destination(DestinationType.Extension, "1005")));
-            Assert.Equal(EveryColumn, this.References(new Destination(DestinationType.Voicemail, "1005")));
+            var ex = Assert.Throws<ValidationFailedException>(() => this.extensions.Update(loaded));
 
-            Assert.Equal("1005 7146085242", this.extensions.GetByNumber("1003")!.Forwarding);
-            Assert.Equal("1001,1005,1003", this.groups.GetByID(group.RingGroupID)!.Members);
-            Assert.Equal(new[] { "Line:1001", "Blf:1005" }, this.TargetValues(watcher));
-            Assert.Equal(new[] { "Line:1005", "Blf:1001" }, this.TargetValues(owner));
-            Assert.True(this.marker.IsPending);
-        }
-
-        /// <summary>
-        /// "Keep my own handset ringing" is the extension's own number in its own forwarding list,
-        /// written from the object in hand rather than swept — it has to follow the new number, not
-        /// start ringing whoever is given the old one.
-        /// </summary>
-        [Fact]
-        public void Renumbering_an_extension_carries_its_own_forwarding_with_it()
-        {
-            this.AddExtension("1003", forwarding: "1003 7146085242");
-
-            var loaded = this.extensions.GetByNumber("1003")!;
-            loaded.Number = "1005";
-            this.extensions.Update(loaded);
-
-            Assert.Equal("1005 7146085242", this.extensions.GetByNumber("1005")!.Forwarding);
-        }
-
-        /// <summary>
-        /// A token is rewritten only when it is the whole number: 1002555 in a list is an outside
-        /// number, not extension 1002.
-        /// </summary>
-        [Fact]
-        public void Only_whole_tokens_are_rewritten()
-        {
-            this.AddExtension("1003", forwarding: "1002555 1002");
-
-            var loaded = this.extensions.GetByNumber("1002")!;
-            loaded.Number = "1005";
-            this.extensions.Update(loaded);
-
-            Assert.Equal("1002555 1005", this.extensions.GetByNumber("1003")!.Forwarding);
-        }
-
-        [Fact]
-        public void An_extension_renumber_refused_mid_way_rewrites_nothing()
-        {
-            this.AddExtension("1003", forwarding: "1002 7146085242");
-            this.PointEverythingAt(new Destination(DestinationType.Extension, "1002"), "1");
-
-            var group = new RingGroup { Number = "600", Name = "Sales", Members = "1002,1003" };
-            this.groups.Insert(group);
-
-            var owner = this.AddPhone("0004f2aabb02", Key(1, PhoneButtonTarget.Line, "1002"));
-
-            // 1001 is taken, and only the row's own UNIQUE says so — after the sweep has run.
-            var loaded = this.extensions.GetByNumber("1002")!;
-            loaded.Number = "1001";
-
-            Assert.Throws<ValidationFailedException>(() => this.extensions.Update(loaded));
-
-            Assert.Equal(EveryColumn, this.References(new Destination(DestinationType.Extension, "1002")));
+            Assert.Contains("cannot be changed", ex.Message);
+            Assert.Null(this.extensions.GetByNumber("1005"));
             Assert.Equal("1002 7146085242", this.extensions.GetByNumber("1003")!.Forwarding);
-            Assert.Equal("1002,1003", this.groups.GetByID(group.RingGroupID)!.Members);
-            Assert.Equal(new[] { "Line:1002" }, this.TargetValues(owner));
-            Assert.NotNull(this.extensions.GetByNumber("1002"));
         }
 
         [Fact]
