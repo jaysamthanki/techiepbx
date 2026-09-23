@@ -37,13 +37,23 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// </summary>
         private const string AttendantType = "automata";
 
-        /// <summary>
-        /// Polycom's built-in blind transfer, as a soft key action: a <c>$F...$</c> macro, which
-        /// needs enhanced feature keys on just as a macro of our own does (D144).
-        /// </summary>
-        private const string BlindTransferAction = "$Fblindxfer$";
-
         private const string BlindTransferLabel = "Blind Xfer";
+
+        /// <summary>
+        /// The name of the Blind Xfer macro, which is what its soft key's action names with a
+        /// leading <c>!</c>. The macro is a prompt for the destination extension followed by a
+        /// SIP REFER of the call to it, which is what a blind transfer is (D144, amended): the
+        /// phone's own <c>$Fblindxfer$</c> is not acted on by a Poly Edge.
+        /// </summary>
+        private const string BlindTransferMacroName = "blindxfer";
+
+        /// <summary>
+        /// The one prompt this renderer defines, <c>efk.efkprompt.1</c>, which the Blind Xfer
+        /// macro names as <c>$P1N{digits}$</c>: collect this many digits, then continue.
+        /// </summary>
+        private const int BlindTransferPromptIndex = 1;
+
+        private const string BlindTransferPromptLabel = "Transfer to:";
 
         /// <summary>
         /// Seconds the phone waits for another digit before dialling what it has, which is what
@@ -55,9 +65,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
         private const string ParkLabel = "Park";
 
         /// <summary>
-        /// The name of the one macro this renderer defines, which is what the Park soft key's
-        /// action names with a leading <c>!</c>. The macro itself is the park DTMF code, sent
-        /// into the call (D144).
+        /// The name of the Park macro, which is what the Park soft key's action names with a
+        /// leading <c>!</c>. The macro itself is the park DTMF code, sent into the call (D144).
         /// </summary>
         private const string ParkMacroName = "park";
 
@@ -273,19 +282,21 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// <summary>
         /// The on-call soft keys, the same on every phone (D144): Park, then Blind Xfer, appended
         /// to the set the phone shows during a call. Only for a phone that registers, because
-        /// only a phone that registers is ever on a call.
+        /// only a phone that registers is ever on a call. Each is an enhanced feature key macro
+        /// named by its soft key, since a Poly Edge acts on a macro of ours where it ignores the
+        /// phone's own <c>$Fblindxfer$</c>.
         ///
-        /// Park is an enhanced feature key that sends the park DTMF code into the call, so
-        /// Asterisk's <c>parkcall</c> featuremap parks it (D119): the next free slot, the slot
-        /// number spoken back, and the slot's lamp lit on every phone watching it. Not a blind
-        /// transfer to the code, because there is no dialplan extension at the code to transfer
-        /// to. It is written only when parking is on, and Blind Xfer takes its place as the first
-        /// key: a Park key that does nothing is worse than no key. The code is re-checked here,
-        /// as every renderer re-checks what it is handed, before it is written as a macro.
+        /// Park sends the park DTMF code into the call, so Asterisk's <c>parkcall</c> featuremap
+        /// parks it (D119): the next free slot, the slot number spoken back, and the slot's lamp
+        /// lit on every phone watching it. Not a blind transfer to the code, because there is no
+        /// dialplan extension at the code to transfer to. It is written only when parking is on,
+        /// and Blind Xfer takes its place as the first key: a Park key that does nothing is worse
+        /// than no key. The code is re-checked here, as every renderer re-checks what it is
+        /// handed, before it is written as a macro.
         ///
-        /// Blind Xfer is Polycom's own <c>$Fblindxfer$</c>, which the phone knows how to do
-        /// without any help from us; it still needs enhanced feature keys on, so that flag is
-        /// written whether or not there is a Park key to go with it.
+        /// Blind Xfer prompts for the destination and REFERs the call to it. The prompt collects
+        /// a fixed number of digits, the longest extension number this system has, so it follows
+        /// the numbering at every poll without a setting of its own.
         /// </summary>
         private static void AppendSoftKeys(StringBuilder sb, PolycomConfig config)
         {
@@ -294,6 +305,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("feature.enhancedFeatureKeys.enabled", "1"),
             });
 
+            var macros = new List<(string Name, string Value)>();
             var softKeys = new List<(string Name, string Value)>();
             var index = 1;
 
@@ -302,23 +314,42 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 if (!SettingsValidation.IsParkingDtmfCode(config.ParkDtmfCode))
                     throw new InvalidOperationException($"The park feature code '{config.ParkDtmfCode}' is not a star and one or two digits.");
 
-                PolycomXml.Comment(sb, "  ", "Written only when parking is enabled (D144): an EFK that sends the");
-                PolycomXml.Comment(sb, "  ", "park DTMF code mid-call, so Asterisk's parkcall featuremap parks it.");
-                PolycomXml.Element(sb, "  ", "efk", new[]
-                {
-                    PolycomXml.Constant("efk.efkList.1.mname", ParkMacroName),
-                    PolycomXml.Constant("efk.efkList.1.label", ParkLabel),
-                    PolycomXml.Constant("efk.efkList.1.status", "1"),
-                    PolycomXml.Attribute("efk.efkList.1.action.string", config.ParkDtmfCode, "park feature code"),
-                });
+                PolycomXml.Comment(sb, "  ", "Park is written only when parking is enabled (D144): an EFK that sends");
+                PolycomXml.Comment(sb, "  ", "the park DTMF code mid-call, so Asterisk's parkcall featuremap parks it.");
+
+                var park = Macro(macros, index, ParkMacroName, ParkLabel);
+                macros.Add(PolycomXml.Attribute($"{park}.action.string", config.ParkDtmfCode, "park feature code"));
 
                 SoftKey(softKeys, index++, ParkLabel, "!" + ParkMacroName);
             }
 
-            SoftKey(softKeys, index, BlindTransferLabel, BlindTransferAction);
+            PolycomXml.Comment(sb, "  ", "Blind Xfer (D144): an EFK whose prompt collects an extension number and");
+            PolycomXml.Comment(sb, "  ", "REFERs the call to it. The phone's own $Fblindxfer$ does nothing on a Poly Edge.");
 
+            var prompt = $"efk.efkprompt.{Number(BlindTransferPromptIndex)}";
+            var blindTransfer = Macro(macros, index, BlindTransferMacroName, BlindTransferLabel);
+            macros.Add(PolycomXml.Constant($"{blindTransfer}.action.string",
+                $"$P{Number(BlindTransferPromptIndex)}N{Number(ExtensionDigits(config))}$$Trefer$"));
+            macros.Add(PolycomXml.Constant($"{prompt}.status", "1"));
+            macros.Add(PolycomXml.Constant($"{prompt}.label", BlindTransferPromptLabel));
+            macros.Add(PolycomXml.Constant($"{prompt}.type", "numeric"));
+            macros.Add(PolycomXml.Constant($"{prompt}.userfeedback", "visible"));
+            macros.Add(PolycomXml.Constant($"{prompt}.digitmatching", "none"));
+
+            SoftKey(softKeys, index, BlindTransferLabel, "!" + BlindTransferMacroName);
+
+            PolycomXml.Element(sb, "  ", "efk", macros);
             PolycomXml.Element(sb, "  ", "softkey", softKeys);
         }
+
+        /// <summary>
+        /// How many digits the Blind Xfer prompt collects: the longest extension number this
+        /// system has, so the prompt ends the moment a whole extension has been keyed. Extension
+        /// numbers are two to six digits, and the clamp is the prompt's own range should that
+        /// ever change.
+        /// </summary>
+        private static int ExtensionDigits(PolycomConfig config) =>
+            Math.Clamp(config.Extensions.Max(e => e.Number.Length), 1, 12);
 
         /// <summary>
         /// The extension a line key registers as. The caller has already reduced the keys to the
@@ -339,6 +370,22 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 throw new InvalidOperationException($"Extension '{extension.Number}' is invalid: {string.Join(" ", errors)}");
 
             return extension;
+        }
+
+        /// <summary>
+        /// One enhanced feature key macro: its name, label and status, without its action, which
+        /// the caller adds under the returned <c>efk.efkList.N</c> key because the action is the
+        /// one part that differs in where it comes from. The name and label are literals of ours.
+        /// </summary>
+        private static string Macro(List<(string Name, string Value)> macros, int index, string name, string label)
+        {
+            var key = $"efk.efkList.{Number(index)}";
+
+            macros.Add(PolycomXml.Constant($"{key}.mname", name));
+            macros.Add(PolycomXml.Constant($"{key}.label", label));
+            macros.Add(PolycomXml.Constant($"{key}.status", "1"));
+
+            return key;
         }
 
         private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);

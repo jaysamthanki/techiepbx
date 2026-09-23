@@ -152,28 +152,53 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = PolycomConfigRenderer.Render(config);
 
+            Assert.Contains("efk.efkList.1.mname=\"park\"\n", actual);
             Assert.Contains("efk.efkList.1.action.string=\"*70\"\n", actual);
+            Assert.Contains("efk.efkList.2.mname=\"blindxfer\"\n", actual);
+            Assert.Contains("efk.efkList.2.action.string=\"$P1N4$$Trefer$\"\n", actual);
             Assert.Contains("softkey.1.label=\"Park\"\n", actual);
             Assert.Contains("softkey.1.action=\"!park\"\n", actual);
             Assert.Contains("softkey.2.label=\"Blind Xfer\"\n", actual);
-            Assert.Contains("softkey.2.action=\"$Fblindxfer$\"\n", actual);
+            Assert.Contains("softkey.2.action=\"!blindxfer\"\n", actual);
         }
 
         /// <summary>
         /// With parking off there is no Park key and no macro for it — a key that sends a code
-        /// Asterisk ignores is worse than no key — and Blind Xfer moves up to be the first soft
-        /// key. Enhanced feature keys stay on, because the $F$ macro Blind Xfer is needs them.
+        /// Asterisk ignores is worse than no key — and Blind Xfer moves up to be the first macro
+        /// and the first soft key. Enhanced feature keys stay on, because a macro needs them.
         /// </summary>
         [Fact]
         public void Parking_off_means_no_park_key_and_blind_transfer_first()
         {
             var actual = PolycomConfigRenderer.Render(SampleConfig());
 
-            Assert.DoesNotContain("efk", actual);
+            Assert.DoesNotContain("park", actual);
             Assert.DoesNotContain("Park", actual);
             Assert.Contains("feature.enhancedFeatureKeys.enabled=\"1\"\n", actual);
+            Assert.Contains("efk.efkList.1.mname=\"blindxfer\"\n", actual);
+            Assert.Contains("efk.efkList.1.action.string=\"$P1N4$$Trefer$\"\n", actual);
+            Assert.Contains("efk.efkprompt.1.label=\"Transfer to:\"\n", actual);
+            Assert.DoesNotContain("efk.efkList.2", actual);
             Assert.Contains("softkey.1.label=\"Blind Xfer\"\n", actual);
+            Assert.Contains("softkey.1.action=\"!blindxfer\"\n", actual);
             Assert.DoesNotContain("softkey.2", actual);
+        }
+
+        /// <summary>
+        /// The Blind Xfer prompt collects as many digits as the longest extension number on the
+        /// system (D144, amended), so it is derived from the extension set at each render rather
+        /// than being a setting: renumber the site and every phone's prompt follows at its next
+        /// poll.
+        /// </summary>
+        [Fact]
+        public void The_blind_transfer_prompt_collects_the_extension_length()
+        {
+            var config = SampleConfig();
+            config.Extensions.Add(new Extension { ExtensionID = 9, Number = "100003", Name = "Warehouse", Secret = "IIIIjjjjKKKKllll3333" });
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("efk.efkList.1.action.string=\"$P1N6$$Trefer$\"\n", actual);
         }
 
         /// <summary>

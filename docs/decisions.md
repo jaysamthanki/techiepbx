@@ -3154,3 +3154,20 @@ site-wide, not per-phone (user decision 2026-09-23; per-phone is a later piece o
 - Config written into the generated `exten<mac>.cfg`: `bg.background.enabled` plus
   `bg.color.bm.1.name` pointing at the gated URL. No image (never uploaded, or removed) means
   the `bg` block is not written — the factory background stays.
+
+**Amended 2026-09-23, after the desk test.** Park worked on a real Edge E450; Blind Xfer via
+`$Fblindxfer$` did nothing — that macro is not acted on by the Poly Edge's firmware. The EFK + named
+macro + softkey mechanism itself is proven (Park), so the fix is Poly's own FAQ recipe (example 6):
+Blind Xfer becomes a second EFK, `$P1N{n}$$Trefer$` — a prompt that collects the destination digits
+and issues a SIP REFER, which is what a blind transfer is. `n` is the site's extension length,
+derived from the extension set at render time (configs are generated per fetch, so the prompt
+always matches the numbering with no new setting). The prompt (`efk.efkprompt.1.*`, label
+"Transfer to:", numeric, visible, digitmatching none) rides in the same `<efk>` element.
+
+### D146. The line display name is "Ext - Name" (2026-09-23)
+Every provisioned phone shows its main line as the extension number, a space-dash space, and the
+extension's name — "100 - Jaysam" — rather than the number alone or the name alone. The desk test
+showed both failure modes: an Edge 450 showing bare "100" and a VVX 311 showing bare "Michael",
+and a user glancing at a phone wants both. Polycom `reg.1.displayName` and the Yealink equivalent
+are rendered from the same composition, so both brands show the identical shape. An extension with
+no name shows the number alone — a dangling dash is worse than the plain number.
