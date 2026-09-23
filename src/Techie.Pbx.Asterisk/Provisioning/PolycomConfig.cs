@@ -5,9 +5,9 @@ namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
     /// Everything <see cref="PolycomConfigRenderer"/> needs to write one phone's configuration:
-    /// the row, the keys on it, the extensions those keys name, and the three things that come
-    /// from the server rather than from any of them — where to find us, where to ask the time, and
-    /// what the time means here.
+    /// the row, the keys on it, the extensions those keys name, and the things that come from the
+    /// server rather than from any of them — where to find us, where to ask the time, what the
+    /// time means here, and whether there is anywhere to park a call (D144).
     ///
     /// Data in, text out: the renderer does no lookups, so the same inputs always produce the same
     /// file and a golden test can pin it (D79).
@@ -45,6 +45,20 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
         /// <summary>Seconds east of UTC, which is what the phone's clock is set from.</summary>
         public int GmtOffsetSeconds { get; set; }
+
+        /// <summary>
+        /// The DTMF that parks a call: <c>Parking.DtmfCode</c>, the <c>parkcall</c> entry of
+        /// features.conf (D119). The Park soft key sends it mid-call rather than transferring to
+        /// it, because it is a feature code and not a dialable extension (D144). Read only when
+        /// <see cref="ParkEnabled"/> is set.
+        /// </summary>
+        public string ParkDtmfCode { get; set; } = ParkingSettings.DefaultDtmfCode;
+
+        /// <summary>
+        /// Whether call parking is on (<c>Parking.Enabled</c>). Off means no Park soft key at all:
+        /// a key that sends a code Asterisk does nothing with is worse than no key (D144).
+        /// </summary>
+        public bool ParkEnabled { get; set; }
 
         public Phone Phone { get; set; } = new();
 

@@ -45,6 +45,11 @@ namespace Techie.Pbx.Web.Controllers
 
             var hostName = HostName(stored, requestHost);
 
+            // The same object features.conf is generated from, so the Park soft key sends the
+            // code Asterisk is actually listening for and appears only when there is a lot to
+            // park in (D144).
+            var parking = AsteriskSettings.Parking(stored);
+
             return new PolycomConfig
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
@@ -52,6 +57,8 @@ namespace Techie.Pbx.Web.Controllers
                 CallFlowControls = callFlowControls,
                 Extensions = allExtensions,
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
+                ParkDtmfCode = parking.DtmfCode,
+                ParkEnabled = parking.Enabled,
                 Phone = phone,
                 ServerAddress = ServerAddress(transport, hostName),
                 SipPort = transport.Port,

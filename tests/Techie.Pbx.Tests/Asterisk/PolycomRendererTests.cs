@@ -43,13 +43,19 @@ namespace Techie.Pbx.Tests.Asterisk
         private static PhoneButton SampleLine() =>
             new() { Position = 1, TargetType = PhoneButtonTarget.Line, TargetValue = "1001" };
 
-        /// <summary>A phone that registers and has no other key on it.</summary>
+        /// <summary>
+        /// A phone that registers and has no other key on it, on a site with parking switched off:
+        /// so its one on-call soft key is Blind Xfer (D144). The parking-on case is the keyed
+        /// phone, which has a parking slot lamp and so wants the Park key to go with it.
+        /// </summary>
         private static PolycomConfig SampleConfig() => new()
         {
             AdminPassword = "AdminPass123",
             Buttons = new List<PhoneButton> { SampleLine() },
             Extensions = SampleExtensions(),
             GmtOffsetSeconds = -25200,
+            ParkDtmfCode = "*3",
+            ParkEnabled = false,
             Phone = SamplePhone(),
             ServerAddress = "10.8.20.4",
             SipPort = 5060,
@@ -127,8 +133,79 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var config = SampleConfig();
             config.Buttons = SampleButtons();
+            config.ParkEnabled = true;
 
             Assert.Equal(Expected("polycom-phone-buttons.cfg"), PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// The Park soft key sends whatever the site's park feature code is (D144): change the
+        /// setting and every phone's key follows at its next poll, because the EFK carries the
+        /// live value rather than a copy of the default.
+        /// </summary>
+        [Fact]
+        public void The_park_key_sends_the_sites_park_code()
+        {
+            var config = SampleConfig();
+            config.ParkDtmfCode = "*70";
+            config.ParkEnabled = true;
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("efk.efkList.1.action.string=\"*70\"\n", actual);
+            Assert.Contains("softkey.1.label=\"Park\"\n", actual);
+            Assert.Contains("softkey.1.action=\"!park\"\n", actual);
+            Assert.Contains("softkey.2.label=\"Blind Xfer\"\n", actual);
+            Assert.Contains("softkey.2.action=\"$Fblindxfer$\"\n", actual);
+        }
+
+        /// <summary>
+        /// With parking off there is no Park key and no macro for it — a key that sends a code
+        /// Asterisk ignores is worse than no key — and Blind Xfer moves up to be the first soft
+        /// key. Enhanced feature keys stay on, because the $F$ macro Blind Xfer is needs them.
+        /// </summary>
+        [Fact]
+        public void Parking_off_means_no_park_key_and_blind_transfer_first()
+        {
+            var actual = PolycomConfigRenderer.Render(SampleConfig());
+
+            Assert.DoesNotContain("efk", actual);
+            Assert.DoesNotContain("Park", actual);
+            Assert.Contains("feature.enhancedFeatureKeys.enabled=\"1\"\n", actual);
+            Assert.Contains("softkey.1.label=\"Blind Xfer\"\n", actual);
+            Assert.DoesNotContain("softkey.2", actual);
+        }
+
+        /// <summary>
+        /// The park code is re-checked before it is written as a macro, as every renderer re-checks
+        /// what it is given: something that is not a star and one or two digits is refused rather
+        /// than sent into somebody's call as DTMF.
+        /// </summary>
+        [Fact]
+        public void An_invalid_park_code_is_refused_rather_than_rendered()
+        {
+            var config = SampleConfig();
+            config.ParkDtmfCode = "1001";
+            config.ParkEnabled = true;
+
+            Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// On-call soft keys are for a phone that can be on a call: an unassigned phone registers
+        /// as nothing, and its file stays the time and a poll (D78).
+        /// </summary>
+        [Fact]
+        public void A_phone_with_no_extension_is_given_no_soft_keys()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>();
+            config.ParkEnabled = true;
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.DoesNotContain("softkey", actual);
+            Assert.DoesNotContain("efk", actual);
         }
 
         /// <summary>

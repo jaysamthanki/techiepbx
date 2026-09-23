@@ -3123,3 +3123,34 @@ Not done, on purpose: no per-address or per-CIDR rules (source restriction is th
 firewall or a later piece), no rate limiting on 5060 (fail2ban owns that, D141), and no outbound
 filtering at all — an `output` chain on a PBX that has to reach trunks, ACME, Graph and NTP is a
 support burden with very little to show for it.
+
+### D144. Polycom on-call soft keys: a fixed Park + Blind Xfer pair (2026-09-23)
+Every provisioned Polycom gets two soft keys appended to the active-call set, the same for
+all of them — no per-phone soft key editor, because a fixed pair is surface-area-free and the
+per-phone case has not been asked for (user decision 2026-09-23).
+
+- **Blind Xfer**: Polycom's built-in `$Fblindxfer$` action, always present.
+- **Park**: an EFK that **sends DTMF `*3` mid-call** (the configurable `Parking.DtmfCode`),
+  not a blind transfer. `*3` is the features.conf `parkcall` featuremap entry (D119), not a
+  dialable dialplan extension — there is no `exten => *3` to REFER a call to, and adding one
+  would be new dialplan surface for no gain. The user chose "blind-transfer to the *3 park
+  code" by its behavior, and DTMF delivers the same behavior: next free slot, spoken slot
+  announcement, lamp keys showing where it landed. Park is written only when parking is
+  enabled; a Park key that 404s is worse than no key.
+
+### D145. Polycom background logo: one site-wide image through the provisioning gate (2026-09-23)
+One uploaded image, PNG or JPEG, set as the idle background on every provisioned Polycom —
+site-wide, not per-phone (user decision 2026-09-23; per-phone is a later piece only if asked for).
+
+- **Served through the existing `/polycom` provisioning endpoint**, behind the same basic auth
+  the phones already send for their config — not an anonymously readable wwwroot directory.
+  A world-readable file dir is new attack surface for zero benefit: every phone that wants the
+  logo already holds credentials. No new firewall exposure, no new path to guess.
+- **Stored in the app's data directory** like announcements and MOH tracks, not in wwwroot at
+  all — wwwroot ships with the app and would put uploads inside the deploy tree.
+- **Validate, don't convert**: magic-byte check that the upload really is a PNG or JPEG, a size
+  cap, and that is all. No server-side resizing per model — the phone scales whatever it gets,
+  and per-model image generation is surface area for a marginal payoff.
+- Config written into the generated `exten<mac>.cfg`: `bg.background.enabled` plus
+  `bg.color.bm.1.name` pointing at the gated URL. No image (never uploaded, or removed) means
+  the `bg` block is not written — the factory background stays.

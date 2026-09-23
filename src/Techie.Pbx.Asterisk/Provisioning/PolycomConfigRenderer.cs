@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Provisioning
@@ -18,6 +19,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// registration. That is what lets a phone auto-register itself, sit on a desk showing the
     /// right time, and start working the moment an admin assigns it an extension and it polls
     /// again (D78).
+    ///
+    /// A registered phone also gets the same two on-call soft keys as every other: Park, when
+    /// parking is on, and Blind Xfer (D144). Fixed, not per-phone: a pair every site wants is no
+    /// surface area, and a soft key editor would be.
     /// </summary>
     public static class PolycomConfigRenderer
     {
@@ -33,11 +38,28 @@ namespace Techie.Pbx.Asterisk.Provisioning
         private const string AttendantType = "automata";
 
         /// <summary>
+        /// Polycom's built-in blind transfer, as a soft key action: a <c>$F...$</c> macro, which
+        /// needs enhanced feature keys on just as a macro of our own does (D144).
+        /// </summary>
+        private const string BlindTransferAction = "$Fblindxfer$";
+
+        private const string BlindTransferLabel = "Blind Xfer";
+
+        /// <summary>
         /// Seconds the phone waits for another digit before dialling what it has, which is what
         /// every pattern in <see cref="PolycomDigitMap"/> that ends in <c>T</c> is waiting for. A
         /// user who does not want to wait presses <c>#</c>.
         /// </summary>
         private const int DigitMapTimeoutSeconds = 3;
+
+        private const string ParkLabel = "Park";
+
+        /// <summary>
+        /// The name of the one macro this renderer defines, which is what the Park soft key's
+        /// action names with a leading <c>!</c>. The macro itself is the park DTMF code, sent
+        /// into the call (D144).
+        /// </summary>
+        private const string ParkMacroName = "park";
 
         /// <summary>How long the phone's registration lasts before it renews, in seconds.</summary>
         private const int RegistrationExpiration = 3600;
@@ -178,6 +200,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
             });
 
             AppendAttendant(sb, config, buttons.Where(b => !b.IsLine).ToList(), lines.Count);
+            AppendSoftKeys(sb, config);
 
             sb.Append("</polycomConfig>\n");
 
@@ -248,6 +271,56 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         /// <summary>
+        /// The on-call soft keys, the same on every phone (D144): Park, then Blind Xfer, appended
+        /// to the set the phone shows during a call. Only for a phone that registers, because
+        /// only a phone that registers is ever on a call.
+        ///
+        /// Park is an enhanced feature key that sends the park DTMF code into the call, so
+        /// Asterisk's <c>parkcall</c> featuremap parks it (D119): the next free slot, the slot
+        /// number spoken back, and the slot's lamp lit on every phone watching it. Not a blind
+        /// transfer to the code, because there is no dialplan extension at the code to transfer
+        /// to. It is written only when parking is on, and Blind Xfer takes its place as the first
+        /// key: a Park key that does nothing is worse than no key. The code is re-checked here,
+        /// as every renderer re-checks what it is handed, before it is written as a macro.
+        ///
+        /// Blind Xfer is Polycom's own <c>$Fblindxfer$</c>, which the phone knows how to do
+        /// without any help from us; it still needs enhanced feature keys on, so that flag is
+        /// written whether or not there is a Park key to go with it.
+        /// </summary>
+        private static void AppendSoftKeys(StringBuilder sb, PolycomConfig config)
+        {
+            PolycomXml.Element(sb, "  ", "feature", new[]
+            {
+                PolycomXml.Constant("feature.enhancedFeatureKeys.enabled", "1"),
+            });
+
+            var softKeys = new List<(string Name, string Value)>();
+            var index = 1;
+
+            if (config.ParkEnabled)
+            {
+                if (!SettingsValidation.IsParkingDtmfCode(config.ParkDtmfCode))
+                    throw new InvalidOperationException($"The park feature code '{config.ParkDtmfCode}' is not a star and one or two digits.");
+
+                PolycomXml.Comment(sb, "  ", "Written only when parking is enabled (D144): an EFK that sends the");
+                PolycomXml.Comment(sb, "  ", "park DTMF code mid-call, so Asterisk's parkcall featuremap parks it.");
+                PolycomXml.Element(sb, "  ", "efk", new[]
+                {
+                    PolycomXml.Constant("efk.efkList.1.mname", ParkMacroName),
+                    PolycomXml.Constant("efk.efkList.1.label", ParkLabel),
+                    PolycomXml.Constant("efk.efkList.1.status", "1"),
+                    PolycomXml.Attribute("efk.efkList.1.action.string", config.ParkDtmfCode, "park feature code"),
+                });
+
+                SoftKey(softKeys, index++, ParkLabel, "!" + ParkMacroName);
+            }
+
+            SoftKey(softKeys, index, BlindTransferLabel, BlindTransferAction);
+
+            PolycomXml.Element(sb, "  ", "softkey", softKeys);
+        }
+
+        /// <summary>
         /// The extension a line key registers as. The caller has already reduced the keys to the
         /// ones that can work (<see cref="PhoneButton.Usable"/>), so a line naming an extension
         /// this renderer was not given is the caller's mistake and is refused rather than written
@@ -269,6 +342,21 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+        /// <summary>
+        /// One soft key, shown on the active-call screen and nowhere else. The label and the
+        /// action are literals of ours, never a stored value, which is what lets the action carry
+        /// the <c>$</c> and <c>!</c> a macro is spelled with.
+        /// </summary>
+        private static void SoftKey(List<(string Name, string Value)> softKeys, int index, string label, string action)
+        {
+            var key = $"softkey.{Number(index)}";
+
+            softKeys.Add(PolycomXml.Constant($"{key}.label", label));
+            softKeys.Add(PolycomXml.Constant($"{key}.enable", "1"));
+            softKeys.Add(PolycomXml.Constant($"{key}.use.active", "1"));
+            softKeys.Add(PolycomXml.Constant($"{key}.action", action));
+        }
 
         /// <summary>
         /// The keys in key order, re-validated as the phone and the extensions are: a row that
