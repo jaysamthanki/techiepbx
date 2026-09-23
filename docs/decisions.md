@@ -3171,3 +3171,11 @@ showed both failure modes: an Edge 450 showing bare "100" and a VVX 311 showing 
 and a user glancing at a phone wants both. Polycom `reg.1.displayName` and the Yealink equivalent
 are rendered from the same composition, so both brands show the identical shape. An extension with
 no name shows the number alone — a dangling dash is worse than the plain number.
+
+### D147. `res_pjsip_refer` joins the module allowlist: transfers are REFER (2026-09-23)
+Every transfer a Polycom or Yealink makes — blind or consultative — is a SIP REFER, and Asterisk
+only answers a REFER when `res_pjsip_refer.so` is loaded. It was not on our strict allowlist, so the
+desk test saw every transfer do nothing: the native consultative Transfer rang the far side fine
+(the INVITE path) but completing it was a REFER that Asterisk refused, and the soft keys were the
+same refusal. Park worked throughout because it is DTMF into the featuremap, not a REFER (D144).
+Not a phone-config bug at all — the provisioning from pieces 38/40 was right and is unchanged.

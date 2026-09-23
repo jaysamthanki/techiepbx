@@ -56,6 +56,7 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_exten_state.so",              // answer a phone's SUBSCRIBE for a hint: the BLF lamp (D121)
                 "res_pjsip_outbound_publish.so",      // res_pjsip_exten_state's load-time dependency; publishing itself is never configured (D121)
                 "res_pjsip_dialog_info_body_generator.so", // the dialog-info+xml body a BLF key asks for (D121)
+                "res_pjsip_refer.so",                  // answers a phone's REFER: the transfer every phone sends (D147)
             }),
 
             ("Bridging two people together", new[]
