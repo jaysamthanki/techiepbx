@@ -85,6 +85,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly TimeConditionRepository timeConditions;
         private readonly MohClassRepository mohClasses;
         private readonly MohFileRepository mohFiles;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -103,6 +104,7 @@ namespace Techie.Pbx.Asterisk.Config
             TimeConditionRepository timeConditions,
             MohClassRepository mohClasses,
             MohFileRepository mohFiles,
+            CallFlowControlRepository callFlowControls,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
@@ -120,6 +122,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.timeConditions = timeConditions;
             this.mohClasses = mohClasses;
             this.mohFiles = mohFiles;
+            this.callFlowControls = callFlowControls;
             this.ami = ami;
             this.pending = pending;
         }
@@ -162,6 +165,8 @@ namespace Techie.Pbx.Asterisk.Config
                 // more argument every caller has to pass: nothing but this renders them (D122).
                 new MohClassRepository(database),
                 mohFiles,
+                // Like the classes: nothing but the dialplan renders the switches (F9).
+                new CallFlowControlRepository(database),
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database))
             {
@@ -229,6 +234,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allIvrs = this.ivrs.GetAll();
             var allTimeConditions = this.timeConditions.GetAll();
             var allMohClasses = this.mohClasses.GetAll();
+            var allCallFlowControls = this.callFlowControls.GetAll();
             var allMohFiles = this.mohFiles.GetAll();
 
             // One certificate feeds both the TLS transport and the file it points at, so it is read
@@ -261,7 +267,7 @@ namespace Techie.Pbx.Asterisk.Config
                 // one is written as the class's name in the trunk's context (D122 amended).
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
-                    this.Timezone, this.parking, allMohClasses)),
+                    this.Timezone, this.parking, allMohClasses, allCallFlowControls)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
                 // Not an Asterisk file at all: what the mailcmd script should do with a message
                 // per mailbox, which app_voicemail has no way to tell it (D128). It is listed

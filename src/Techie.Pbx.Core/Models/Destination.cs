@@ -99,6 +99,13 @@ namespace Techie.Pbx.Core.Models
                         errors.Add("A time condition destination needs a play extension of 2 to 6 digits.");
                     break;
 
+                // A call flow control is pointed at by its feature code, a star and two or three
+                // digits (F9): the only destination whose value is not a plain number.
+                case DestinationType.CallFlowControl:
+                    if (!CallFlowControl.IsValidFeatureCode(this.Value))
+                        errors.Add("A call flow control destination needs a feature code: a * and 2 or 3 digits.");
+                    break;
+
                 case DestinationType.Hangup:
                     if (this.Value.Length > 0)
                         errors.Add("A Hangup destination has nothing to point at.");

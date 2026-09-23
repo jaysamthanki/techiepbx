@@ -11,6 +11,9 @@ namespace Techie.Pbx.Asterisk.Ami
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(AmiSession));
 
+        /// <summary>What DBGet answers for a key astdb does not have.</summary>
+        private const string DatabaseEntryNotFound = "Database entry not found";
+
         /// <summary>What PJSIPShowContacts answers when no phone is registered.</summary>
         private const string NoContactsFound = "No Contacts found";
 
@@ -27,18 +30,18 @@ namespace Techie.Pbx.Asterisk.Ami
             "No registrations found",
         };
 
-        private readonly AmiReader _reader;
-        private readonly TextWriter _writer;
+        private readonly AmiReader reader;
+        private readonly TextWriter writer;
 
-        private int _actionCounter;
+        private int actionCounter;
 
         public AmiSession(TextReader reader, TextWriter writer)
         {
-            _reader = new AmiReader(reader);
-            _writer = writer;
+            this.reader = new AmiReader(reader);
+            this.writer = writer;
         }
 
-        public string ReadGreeting() => _reader.ReadGreeting();
+        public string ReadGreeting() => this.reader.ReadGreeting();
 
         /// <summary>
         /// What Asterisk says about itself: when it started, when it last reloaded, how many calls
@@ -54,12 +57,29 @@ namespace Techie.Pbx.Asterisk.Ami
         public CoreStatus CoreStatus() => Ami.CoreStatus.FromResponse(this.Send(new AmiAction("CoreStatus")));
 
         /// <summary>
+        /// One value from Asterisk's own database, or null when there is no such key. The answer is
+        /// a list of one DBGetResponse event; a missing key is answered with an error instead,
+        /// which is tolerated as the empty list it means. Covered by the account's existing
+        /// "write = system" permission (DBGet is a system/reporting action in main/db.c), so
+        /// <c>ManagerConfRenderer</c> is unchanged.
+        /// </summary>
+        public string? DbGet(string family, string key)
+        {
+            var action = new AmiAction("DBGet").Add("Family", family).Add("Key", key);
+
+            return this.SendEventList(action, DatabaseEntryNotFound).Events
+                .Where(e => string.Equals(e.EventName, "DBGetResponse", StringComparison.OrdinalIgnoreCase))
+                .Select(e => e.Get("Val"))
+                .FirstOrDefault();
+        }
+
+        /// <summary>
         /// Logs in. Throws AmiException if Asterisk rejects the credentials. The secret is never
         /// logged.
         /// </summary>
         public void Login(string username, string secret)
         {
-            Send(new AmiAction("Login").Add("Username", username).Add("Secret", secret));
+            this.Send(new AmiAction("Login").Add("Username", username).Add("Secret", secret));
             Log.Info($"AMI login as '{username}' accepted");
         }
 
@@ -68,7 +88,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </summary>
         public void Logoff()
         {
-            Write(new AmiAction("Logoff"));
+            this.Write(new AmiAction("Logoff"));
         }
 
         /// <summary>
@@ -77,7 +97,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// said to tolerate.
         /// </summary>
         public AmiMessage Send(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null) =>
-            SendAndWait(action, toleratedErrors).Response;
+            this.SendAndWait(action, toleratedErrors).Response;
 
         /// <summary>
         /// Sends an action whose answer is a list: the response, then one event per item, then a
@@ -91,7 +111,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </param>
         public AmiEventList SendEventList(AmiAction action, params string[] emptyListMessages)
         {
-            var (actionID, response) = SendAndWait(action, emptyListMessages);
+            var (actionID, response) = this.SendAndWait(action, emptyListMessages);
             var events = new List<AmiMessage>();
 
             if (!response.IsSuccess)
@@ -99,7 +119,7 @@ namespace Techie.Pbx.Asterisk.Ami
 
             while (true)
             {
-                var message = ReadOrThrow();
+                var message = this.ReadOrThrow();
 
                 // List items always carry our ActionID; anything else is an unsolicited event.
                 if (message.EventName == null || !string.Equals(message.ActionID, actionID, StringComparison.Ordinal))
@@ -127,7 +147,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </param>
         public void Reload(string module, IReadOnlyCollection<string>? toleratedErrors = null)
         {
-            Send(new AmiAction("Reload").Add("Module", module), toleratedErrors);
+            this.Send(new AmiAction("Reload").Add("Module", module), toleratedErrors);
             Log.Info($"Reloaded Asterisk module '{module}'");
         }
 
@@ -155,7 +175,7 @@ namespace Techie.Pbx.Asterisk.Ami
                 written.Add($"{name}: {value}");
             }
 
-            Send(action);
+            this.Send(action);
             Log.Info($"Sent NOTIFY to endpoint '{endpoint}' ({string.Join(", ", written)})");
         }
 
@@ -185,7 +205,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </summary>
         public List<PjsipContact> ShowContacts()
         {
-            return SendEventList(new AmiAction("PJSIPShowContacts"), NoContactsFound).Events
+            return this.SendEventList(new AmiAction("PJSIPShowContacts"), NoContactsFound).Events
                 .Where(e => string.Equals(e.EventName, "ContactList", StringComparison.OrdinalIgnoreCase))
                 .Select(PjsipContact.FromEvent)
                 .ToList();
@@ -202,7 +222,7 @@ namespace Techie.Pbx.Asterisk.Ami
         /// </summary>
         public List<PjsipRegistration> ShowRegistrations()
         {
-            return SendEventList(new AmiAction("PJSIPShowRegistrationsOutbound"), NoRegistrationsFound).Events
+            return this.SendEventList(new AmiAction("PJSIPShowRegistrationsOutbound"), NoRegistrationsFound).Events
                 .Select(PjsipRegistration.FromEvent)
                 .ToList();
         }
@@ -215,7 +235,7 @@ namespace Techie.Pbx.Asterisk.Ami
         {
             while (true)
             {
-                var message = _reader.ReadMessage();
+                var message = this.reader.ReadMessage();
                 if (message == null)
                 {
                     Log.Info("AMI connection closed, stopped reading events");
@@ -232,11 +252,11 @@ namespace Techie.Pbx.Asterisk.Ami
 
         private (string ActionID, AmiMessage Response) SendAndWait(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null)
         {
-            var actionID = Write(action);
+            var actionID = this.Write(action);
 
             while (true)
             {
-                var message = ReadOrThrow();
+                var message = this.ReadOrThrow();
 
                 if (message.Response == null)
                 {
@@ -266,13 +286,13 @@ namespace Techie.Pbx.Asterisk.Ami
 
         private string Write(AmiAction action)
         {
-            var actionID = (++_actionCounter).ToString();
-            _writer.Write(action.ToProtocol(actionID));
-            _writer.Flush();
+            var actionID = (++this.actionCounter).ToString();
+            this.writer.Write(action.ToProtocol(actionID));
+            this.writer.Flush();
             return actionID;
         }
 
         private AmiMessage ReadOrThrow() =>
-            _reader.ReadMessage() ?? throw new AmiException("The AMI connection closed while waiting for a response.");
+            this.reader.ReadMessage() ?? throw new AmiException("The AMI connection closed while waiting for a response.");
     }
 }

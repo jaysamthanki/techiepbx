@@ -13,8 +13,8 @@ namespace Techie.Pbx.Core.Models
     /// extension on <see cref="Phone"/> any more — one key on the Buttons tab is one key on the
     /// handset, and the registration was the ninth line nobody had asked for (schema 020).
     ///
-    /// Three kinds exist today, <see cref="PhoneButtonTarget"/> names them, and the storage takes a
-    /// fourth without a schema change. What a key does on the phone is the provisioning renderer's
+    /// Four kinds exist, <see cref="PhoneButtonTarget"/> names them, and the fourth — call flow
+    /// control — arrived without a schema change. What a key does on the phone is the provisioning renderer's
     /// business; what a key may point at is this class's.
     /// </summary>
     public partial class PhoneButton
@@ -53,7 +53,8 @@ namespace Techie.Pbx.Core.Models
         public string TargetType { get; set; } = PhoneButtonTarget.None;
 
         /// <summary>
-        /// What the kind points at: an extension number, or a parking slot number. It is also what
+        /// What the kind points at: an extension number, a parking slot number, or a call flow
+        /// control's feature code. It is also what
         /// the phone subscribes to and dials, because both are extensions of the internal context
         /// in the generated dialplan — the slot's lamp works because that context carries a hint
         /// for it (D121).
@@ -65,10 +66,25 @@ namespace Techie.Pbx.Core.Models
         /// back to the number for an extension that has been deleted out from under the key; a slot
         /// is named by what it is, because a parking slot has no name of its own.
         /// </summary>
-        public string Label(IEnumerable<Extension> extensions)
+        public string Label(IEnumerable<Extension> extensions) =>
+            this.Label(extensions, new List<CallFlowControl>());
+
+        /// <summary>
+        /// The same, with the call flow controls a key may name: a switch is named by its own name,
+        /// falling back to its code for one deleted out from under the key.
+        /// </summary>
+        public string Label(IEnumerable<Extension> extensions, IEnumerable<CallFlowControl> callFlowControls)
         {
             if (string.Equals(this.TargetType, PhoneButtonTarget.ParkingSlot, StringComparison.Ordinal))
                 return $"Park {this.TargetValue}";
+
+            if (string.Equals(this.TargetType, PhoneButtonTarget.CallFlowControl, StringComparison.Ordinal))
+            {
+                var control = callFlowControls.FirstOrDefault(c =>
+                    string.Equals(c.FeatureCode, this.TargetValue, StringComparison.Ordinal));
+
+                return control?.Name ?? this.TargetValue;
+            }
 
             var extension = extensions.FirstOrDefault(e =>
                 string.Equals(e.Number, this.TargetValue, StringComparison.Ordinal));
@@ -135,16 +151,31 @@ namespace Techie.Pbx.Core.Models
         public static List<PhoneButton> Usable(
             IEnumerable<PhoneButton> buttons,
             IEnumerable<Extension> extensions,
-            IEnumerable<int> parkingSlots)
+            IEnumerable<int> parkingSlots) =>
+            Usable(buttons, extensions, parkingSlots, new List<CallFlowControl>());
+
+        /// <summary>
+        /// The same, with the call flow controls: a key on a switch that has been deleted, or whose
+        /// code has changed, has no hint to watch and would dial nothing, so it is dropped too.
+        /// </summary>
+        public static List<PhoneButton> Usable(
+            IEnumerable<PhoneButton> buttons,
+            IEnumerable<Extension> extensions,
+            IEnumerable<int> parkingSlots,
+            IEnumerable<CallFlowControl> callFlowControls)
         {
             var enabled = extensions.Where(e => e.Enabled).ToList();
             var slots = parkingSlots.ToList();
+            var codes = callFlowControls.Select(c => c.FeatureCode).ToList();
 
             var usable = buttons
                 .Where(b => b.IsAssigned && b.Validate().Count == 0)
-                .Where(b => string.Equals(b.TargetType, PhoneButtonTarget.ParkingSlot, StringComparison.Ordinal)
-                    ? slots.Contains(int.Parse(b.TargetValue, CultureInfo.InvariantCulture))
-                    : enabled.Any(e => string.Equals(e.Number, b.TargetValue, StringComparison.Ordinal)))
+                .Where(b => b.TargetType switch
+                {
+                    PhoneButtonTarget.ParkingSlot => slots.Contains(int.Parse(b.TargetValue, CultureInfo.InvariantCulture)),
+                    PhoneButtonTarget.CallFlowControl => codes.Contains(b.TargetValue, StringComparer.Ordinal),
+                    _ => enabled.Any(e => string.Equals(e.Number, b.TargetValue, StringComparison.Ordinal)),
+                })
                 .OrderBy(b => b.Position)
                 .ToList();
 
@@ -175,6 +206,12 @@ namespace Techie.Pbx.Core.Models
                 !SlotPattern().IsMatch(this.TargetValue))
             {
                 errors.Add("A key on a parking slot needs a slot number of 1 to 9.");
+            }
+
+            if (string.Equals(this.TargetType, PhoneButtonTarget.CallFlowControl, StringComparison.Ordinal) &&
+                !CallFlowControl.IsValidFeatureCode(this.TargetValue))
+            {
+                errors.Add("A key on a call flow control needs its feature code: a * and 2 or 3 digits.");
             }
 
             return errors;
@@ -236,7 +273,7 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[1-9]$")]
+        [GeneratedRegex(@"^[1-9]\z")]
         private static partial Regex SlotPattern();
     }
 }

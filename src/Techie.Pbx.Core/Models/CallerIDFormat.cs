@@ -90,10 +90,10 @@ namespace Techie.Pbx.Core.Models
             return true;
         }
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .'\-_&]{1,32}$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .'\-_&]{1,32}\z")]
         private static partial Regex NamePattern();
 
-        [GeneratedRegex(@"^[0-9]{1,15}$")]
+        [GeneratedRegex(@"^[0-9]{1,15}\z")]
         private static partial Regex NumberPattern();
     }
 }

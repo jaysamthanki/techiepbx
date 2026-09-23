@@ -181,7 +181,7 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^([01][0-9]|2[0-3]):[0-5][0-9]$")]
+        [GeneratedRegex(@"^([01][0-9]|2[0-3]):[0-5][0-9]\z")]
         private static partial Regex TimePattern();
     }
 }

@@ -262,7 +262,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         /// <summary>One bracketed digit class, wildcards and digits, nothing else.</summary>
-        [GeneratedRegex(@"^(\[[0-9]-[0-9]\]|[0-9x])+$")]
+        [GeneratedRegex(@"^(\[[0-9]-[0-9]\]|[0-9x])+\z")]
         private static partial Regex DialNowFormat();
 
         /// <summary>
@@ -296,7 +296,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 {
                     Line(sb, $"{key}.line", Number(lines.FindIndex(l => l.Position == button.Position) + 1));
                     Line(sb, $"{key}.type", Number(LineKeyLine));
-                    Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions), "line key label"));
+                    Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions, config.CallFlowControls), "line key label"));
 
                     continue;
                 }
@@ -304,7 +304,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 Line(sb, $"{key}.line", Number(LampAccount));
                 Line(sb, $"{key}.value", ConfText.Safe(button.TargetValue, "line key value"));
                 Line(sb, $"{key}.type", Number(LineKeyBlf));
-                Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions), "line key label"));
+                Line(sb, $"{key}.label", ConfText.Safe(button.Label(config.Extensions, config.CallFlowControls), "line key label"));
             }
         }
 

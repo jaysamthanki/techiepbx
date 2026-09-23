@@ -43,7 +43,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
             return true;
         }
 
-        [GeneratedRegex(@"^(?<mac>[0-9a-f]{12})\.cfg$")]
+        [GeneratedRegex(@"^(?<mac>[0-9a-f]{12})\.cfg\z")]
         private static partial Regex ConfigPattern();
     }
 }

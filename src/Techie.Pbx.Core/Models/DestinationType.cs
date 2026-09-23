@@ -15,6 +15,12 @@ namespace Techie.Pbx.Core.Models
         /// </summary>
         Announcement,
 
+        /// <summary>
+        /// Send the caller one of two ways depending on a switch a phone flips (F9). The value is
+        /// the switch's feature code, the number a phone dials to flip it.
+        /// </summary>
+        CallFlowControl,
+
         /// <summary>Ring a phone. The value is the extension number.</summary>
         Extension,
 

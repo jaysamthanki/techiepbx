@@ -18,6 +18,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly AnnouncementRepository announcements;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly IvrRepository ivrs;
@@ -29,6 +30,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
         public IndexModel()
         {
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inbound = new InboundRouteRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
@@ -73,6 +75,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
             var allAnnouncements = this.announcements.GetAll();
             var allIvrs = this.ivrs.GetAll();
             var allConditions = this.timeConditions.GetAll();
+            var allControls = this.callFlowControls.GetAll();
             var allTrunks = this.trunks.GetAll();
 
             var rows = this.inbound.GetAll()
@@ -80,7 +83,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
                 {
                     var trunk = allTrunks.FirstOrDefault(t => t.TrunkID == route.TrunkID);
                     var choice = DestinationCatalog.Find(
-                        allExtensions, allGroups, allAnnouncements, allIvrs, allConditions, route.ToDestination());
+                        allExtensions, allGroups, allAnnouncements, allIvrs, allConditions, allControls, route.ToDestination());
 
                     return new InboundRouteRow
                     {
@@ -196,7 +199,8 @@ namespace Techie.Pbx.Web.Pages.Inbound
                     this.ringGroups.GetAll(),
                     this.announcements.GetAll(),
                     this.ivrs.GetAll(),
-                    this.timeConditions.GetAll()),
+                    this.timeConditions.GetAll(),
+                    this.callFlowControls.GetAll()),
                 ElementID = "route-destination",
                 Name = "destination",
                 SelectedKey = string.IsNullOrEmpty(form.Destination) ? null : form.Destination,

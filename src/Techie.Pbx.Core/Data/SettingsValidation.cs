@@ -403,18 +403,18 @@ namespace Techie.Pbx.Core.Data
         /// the ACME account's expiry warnings, and a rule strict enough to be interesting would
         /// reject somebody's real address.
         /// </summary>
-        [GeneratedRegex(@"^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
+        [GeneratedRegex(@"^[^@\s]+@[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?\z")]
         private static partial Regex EmailPattern();
 
         /// <summary>A hostname or IP address, the same shape a trunk's server host has to be.</summary>
-        [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
+        [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?\z")]
         private static partial Regex HostPattern();
 
         /// <summary>
         /// A star and one or two digits: the whole vocabulary a mid-call feature code has, and
         /// narrow enough that nothing here could ever break out of a features.conf line (D119).
         /// </summary>
-        [GeneratedRegex(@"^\*[0-9]{1,2}$")]
+        [GeneratedRegex(@"^\*[0-9]{1,2}\z")]
         private static partial Regex ParkingDtmfPattern();
 
         /// <summary>
@@ -425,10 +425,10 @@ namespace Techie.Pbx.Core.Data
         /// The lower bound is <see cref="MinProvisioningPasswordLength"/>, written out here because
         /// an attribute needs a literal.
         /// </summary>
-        [GeneratedRegex(@"^[A-Za-z0-9._~\-]{8,64}$")]
+        [GeneratedRegex(@"^[A-Za-z0-9._~\-]{8,64}\z")]
         private static partial Regex ProvisioningPasswordPattern();
 
-        [GeneratedRegex(@"^[A-Za-z0-9._\-]{1,64}$")]
+        [GeneratedRegex(@"^[A-Za-z0-9._\-]{1,64}\z")]
         private static partial Regex ProvisioningUsernamePattern();
     }
 }

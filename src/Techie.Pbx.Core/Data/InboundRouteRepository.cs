@@ -129,8 +129,9 @@ namespace Techie.Pbx.Core.Data
                 var announcements = new AnnouncementRepository(this.database).GetAll();
                 var ivrs = new IvrRepository(this.database).GetAll();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
+                var controls = new CallFlowControlRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, route.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, controls, route.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
             }
 

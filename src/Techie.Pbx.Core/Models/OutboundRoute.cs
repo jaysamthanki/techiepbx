@@ -224,10 +224,10 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^([0-9](-[0-9])?)+$")]
+        [GeneratedRegex(@"^([0-9](-[0-9])?)+\z")]
         private static partial Regex CharacterSetPattern();
 
-        [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9\-]{0,31}$")]
+        [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9\-]{0,31}\z")]
         private static partial Regex NamePattern();
     }
 }

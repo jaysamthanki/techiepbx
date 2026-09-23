@@ -43,6 +43,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         private static string Describe(Destination destination) => destination.Type switch
         {
             DestinationType.Announcement => $"Announcement {destination.Value}",
+            DestinationType.CallFlowControl => $"Call flow {destination.Value}",
             DestinationType.Extension => $"Ext {destination.Value}",
             DestinationType.Hangup => "Hang up",
             DestinationType.Ivr => $"IVR {destination.Value}",

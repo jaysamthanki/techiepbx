@@ -19,6 +19,7 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly AnnouncementRepository announcements;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
         private readonly IvrRepository ivrs;
         private readonly RingGroupRepository ringGroups;
@@ -27,6 +28,7 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         public IndexModel()
         {
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
@@ -149,7 +151,8 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         /// <summary>Every place a call can be sent, given the groups already loaded (D35).</summary>
         private List<DestinationChoice> Catalog(List<RingGroup> allGroups) =>
             DestinationCatalog.All(
-                this.extensions.GetAll(), allGroups, this.announcements.GetAll(), this.ivrs.GetAll(), this.timeConditions.GetAll());
+                this.extensions.GetAll(), allGroups, this.announcements.GetAll(), this.ivrs.GetAll(), this.timeConditions.GetAll(),
+                this.callFlowControls.GetAll());
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.

@@ -48,7 +48,7 @@ namespace Techie.Pbx.Core.Reports
             return errors;
         }
 
-        [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9\-]{0,31}$")]
+        [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9\-]{0,31}\z")]
         private static partial Regex ExtensionPattern();
     }
 }

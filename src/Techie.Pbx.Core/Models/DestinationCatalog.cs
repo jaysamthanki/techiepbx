@@ -11,6 +11,7 @@ namespace Techie.Pbx.Core.Models
     public static class DestinationCatalog
     {
         public const string AnnouncementsGroup = "Announcements";
+        public const string CallFlowControlsGroup = "Call flow controls";
         public const string ExtensionsGroup = "Extensions";
         public const string IvrsGroup = "IVRs";
         public const string OtherGroup = "Other";
@@ -50,7 +51,16 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<RingGroup> ringGroups,
             IEnumerable<Announcement> announcements,
             IEnumerable<Ivr> ivrs,
-            IEnumerable<TimeCondition> timeConditions)
+            IEnumerable<TimeCondition> timeConditions) =>
+            All(extensions, ringGroups, announcements, ivrs, timeConditions, new List<CallFlowControl>());
+
+        public static List<DestinationChoice> All(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            IEnumerable<CallFlowControl> callFlowControls)
         {
             var usable = InNumberOrder(extensions);
             var announcementList = announcements.ToList();
@@ -136,6 +146,20 @@ namespace Techie.Pbx.Core.Models
                 });
             }
 
+            // A call flow control has no switch of its own to turn it off and always has a code,
+            // so every one is somewhere a call can go (F9). By code, the way the others go by number.
+            foreach (var control in callFlowControls
+                .OrderBy(c => c.FeatureCode.Length)
+                .ThenBy(c => c.FeatureCode, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = control.ToDestination(),
+                    GroupName = CallFlowControlsGroup,
+                    Label = $"{control.FeatureCode} {control.Name}",
+                });
+            }
+
             choices.Add(new DestinationChoice
             {
                 Destination = Destination.Hangup,
@@ -190,12 +214,22 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<Announcement> announcements,
             IEnumerable<Ivr> ivrs,
             IEnumerable<TimeCondition> timeConditions,
+            Destination? destination) =>
+            Find(extensions, ringGroups, announcements, ivrs, timeConditions, new List<CallFlowControl>(), destination);
+
+        public static DestinationChoice? Find(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            IEnumerable<CallFlowControl> callFlowControls,
             Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions, ringGroups, announcements, ivrs, timeConditions)
+            return All(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls)
                 .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 

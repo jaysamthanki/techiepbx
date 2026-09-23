@@ -38,6 +38,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         public TimezoneForm Timezone { get; private set; } = new();
 
         private readonly AnnouncementRepository announcements;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
         private readonly IvrRepository ivrs;
         private readonly RingGroupRepository ringGroups;
@@ -47,6 +48,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         public IndexModel()
         {
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.ivrs = new IvrRepository(PbxDatabase.Current);
             this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
@@ -318,7 +320,8 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         /// <summary>Every place a call can be sent, given the conditions already loaded (D35).</summary>
         private List<DestinationChoice> Catalog(List<TimeCondition> all) =>
             DestinationCatalog.All(
-                this.extensions.GetAll(), this.ringGroups.GetAll(), this.announcements.GetAll(), this.ivrs.GetAll(), all);
+                this.extensions.GetAll(), this.ringGroups.GetAll(), this.announcements.GetAll(), this.ivrs.GetAll(), all,
+                this.callFlowControls.GetAll());
 
         /// <summary>The answer to a change: no content to swap, and events for the page to react to.</summary>
         private IActionResult Changed(string message)

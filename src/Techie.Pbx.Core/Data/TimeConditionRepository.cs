@@ -144,10 +144,11 @@ namespace Techie.Pbx.Core.Data
             List<Announcement> announcements,
             List<Ivr> ivrs,
             List<TimeCondition> timeConditions,
+            List<CallFlowControl> callFlowControls,
             Destination destination,
             string what)
         {
-            if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, timeConditions, destination) == null)
+            if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, destination) == null)
                 errors.Add($"Where a call in {what} goes is not there any more. Choose another.");
         }
 
@@ -228,14 +229,15 @@ namespace Techie.Pbx.Core.Data
                 // because one condition handing over to another is how "closed" gets a second set
                 // of hours. Pointing at itself is refused by the model, not by this list.
                 var others = all.Where(t => t.TimeConditionID != condition.TimeConditionID).Append(condition).ToList();
+                var controls = new CallFlowControlRepository(this.database).GetAll();
 
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, condition.ToOpenDestination(), "open hours");
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, condition.ToClosedDestination(), "closed hours");
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, condition.ToHolidayDestination(), "holidays");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToOpenDestination(), "open hours");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToClosedDestination(), "closed hours");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToHolidayDestination(), "holidays");
 
                 foreach (var rule in condition.HolidayRules().Where(r => r.HasOverride))
                 {
-                    CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others,
+                    CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls,
                         rule.ToDestination()!, $"the holiday on {rule.HolidayDate}");
                 }
             }

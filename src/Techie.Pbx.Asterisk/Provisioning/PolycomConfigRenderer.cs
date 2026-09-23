@@ -238,7 +238,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 }
 
                 attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
-                attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions), "attendant label"));
+                attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions, config.CallFlowControls), "attendant label"));
                 attributes.Add(PolycomXml.Constant($"{resource}.type", AttendantType));
             }
 

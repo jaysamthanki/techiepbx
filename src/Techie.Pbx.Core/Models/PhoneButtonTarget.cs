@@ -6,9 +6,8 @@ namespace Techie.Pbx.Core.Models
     /// and compared as text, never as an ordinal.
     ///
     /// Adding a kind is adding a constant here, teaching <see cref="PhoneButton.Validate"/> what it
-    /// may point at and teaching the provisioning renderers how to write it. <b>Call flow control
-    /// is the one this list is shaped for</b> — it is not built, and nothing here pretends it is,
-    /// but it needs no schema change when it is (see 018_phone_buttons.sql).
+    /// may point at and teaching the provisioning renderers how to write it. Call flow control was
+    /// the one this list was shaped for, and it arrived without a schema change (F9).
     /// </summary>
     public static class PhoneButtonTarget
     {
@@ -17,6 +16,13 @@ namespace Techie.Pbx.Core.Models
         /// is free, ringing or busy. Called 'Extension' until schema 020 (D121).
         /// </summary>
         public const string Blf = "Blf";
+
+        /// <summary>
+        /// A call flow control's switch (F9): the lamp is lit while it is on, press to flip it. The
+        /// value is the switch's feature code, which is both what the phone dials and the hint the
+        /// lamp subscribes to.
+        /// </summary>
+        public const string CallFlowControl = "CallFlowControl";
 
         /// <summary>
         /// The extension <em>this</em> phone registers as. Every phone has at least one, and they
@@ -30,7 +36,7 @@ namespace Techie.Pbx.Core.Models
         /// <summary>A parking slot: the lamp is lit while a call is parked there, press to take it.</summary>
         public const string ParkingSlot = "ParkingSlot";
 
-        private static readonly HashSet<string> Known = new(StringComparer.Ordinal) { Blf, Line, ParkingSlot };
+        private static readonly HashSet<string> Known = new(StringComparer.Ordinal) { Blf, CallFlowControl, Line, ParkingSlot };
 
         /// <summary>
         /// Whether this kind names an extension number. Both do: a line is the extension the phone

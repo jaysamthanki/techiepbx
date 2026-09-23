@@ -30,6 +30,12 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// </summary>
         public List<PhoneButton> Buttons { get; set; } = new();
 
+        /// <summary>
+        /// The call flow controls a key may name, for the key's label: a switch is shown by its own
+        /// name (F9). What the key subscribes to and dials is its code, already on the button.
+        /// </summary>
+        public List<CallFlowControl> CallFlowControls { get; set; } = new();
+
         /// <summary>The codecs to offer, in preference order, from <c>Sip.Codecs</c>.</summary>
         public List<string> Codecs { get; set; } = new();
 

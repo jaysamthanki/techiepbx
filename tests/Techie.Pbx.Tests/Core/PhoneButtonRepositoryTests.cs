@@ -50,6 +50,9 @@ namespace Techie.Pbx.Tests.Core
         private long AddPhone(string mac = Mac) =>
             this.phones.Register(mac, "VVX_410", "5.9.5.0614", "10.8.20.31").PhoneID;
 
+        private void AddCallFlowControl(string code = "*28", string name = "Night mode") =>
+            new CallFlowControlRepository(this.database).Insert(new CallFlowControl { Name = name, FeatureCode = code });
+
         private static PhoneButton Key(int position, string targetType, string targetValue) =>
             new() { Position = position, TargetType = targetType, TargetValue = targetValue };
 
@@ -239,6 +242,95 @@ namespace Techie.Pbx.Tests.Core
             Assert.Contains("not there any more", ex.Message);
         }
 
+        /// <summary>
+        /// A key may watch and flip a call flow control (F9). It stores the switch's code, which is
+        /// both what the handset dials and the hint its lamp subscribes to.
+        /// </summary>
+        [Fact]
+        public void A_key_on_a_call_flow_control_is_saved_and_read_back()
+        {
+            this.AddExtension();
+            this.AddCallFlowControl();
+            var phoneID = this.AddPhone();
+
+            this.buttons.Replace(phoneID, new List<PhoneButton>
+            {
+                Line(),
+                Key(2, PhoneButtonTarget.CallFlowControl, "*28"),
+            });
+
+            var loaded = this.buttons.GetForPhone(phoneID);
+
+            Assert.Equal(new[] { "Line:1001", "CallFlowControl:*28" }, loaded.Select(b => b.Key));
+        }
+
+        /// <summary>A lamp watching a code no switch answers can never light, and pressing it does nothing.</summary>
+        [Fact]
+        public void A_key_on_a_call_flow_control_that_does_not_exist_is_refused()
+        {
+            this.AddExtension();
+            this.AddCallFlowControl();
+            var phoneID = this.AddPhone();
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.buttons.Replace(phoneID, new List<PhoneButton>
+            {
+                Line(),
+                Key(2, PhoneButtonTarget.CallFlowControl, "*29"),
+            }));
+
+            Assert.Contains("Key 2: call flow control *29 is not there any more", ex.Message);
+        }
+
+        /// <summary>A switch is not an extension, so it can be a lamp but never the line a phone registers as.</summary>
+        [Fact]
+        public void A_call_flow_control_cannot_be_the_first_key()
+        {
+            this.AddCallFlowControl();
+            var phoneID = this.AddPhone();
+
+            var ex = Assert.Throws<ValidationFailedException>(() =>
+                this.buttons.Replace(phoneID, new List<PhoneButton> { Key(1, PhoneButtonTarget.CallFlowControl, "*28") }));
+
+            Assert.Contains("Key 1 has to be the extension this phone registers as", ex.Message);
+        }
+
+        /// <summary>
+        /// The provisioning endpoint drops a key on a switch that has been deleted or whose code has
+        /// changed: there is no hint to watch any more.
+        /// </summary>
+        [Fact]
+        public void Usable_drops_a_key_whose_call_flow_control_has_gone()
+        {
+            var all = new List<Extension>
+            {
+                new() { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111" },
+            };
+
+            var controls = new List<CallFlowControl> { new() { CallFlowControlID = 1, Name = "Night mode", FeatureCode = "*28" } };
+
+            var assigned = new List<PhoneButton>
+            {
+                Line(),
+                Key(2, PhoneButtonTarget.CallFlowControl, "*28"),
+                Key(3, PhoneButtonTarget.CallFlowControl, "*29"),
+            };
+
+            Assert.Equal(new[] { 1, 2 }, PhoneButton.Usable(assigned, all, Array.Empty<int>(), controls).Select(b => b.Position));
+
+            // The older overload knows no switches, so it keeps none.
+            Assert.Equal(new[] { 1 }, PhoneButton.Usable(assigned, all, Array.Empty<int>()).Select(b => b.Position));
+        }
+
+        /// <summary>A key on a switch is labelled by its name, or by its code once the switch has gone.</summary>
+        [Fact]
+        public void A_key_on_a_call_flow_control_is_labelled_by_its_name()
+        {
+            var controls = new List<CallFlowControl> { new() { CallFlowControlID = 1, Name = "Night mode", FeatureCode = "*28" } };
+
+            Assert.Equal("Night mode", Key(2, PhoneButtonTarget.CallFlowControl, "*28").Label(new List<Extension>(), controls));
+            Assert.Equal("*29", Key(2, PhoneButtonTarget.CallFlowControl, "*29").Label(new List<Extension>(), controls));
+        }
+
         [Theory]
         [InlineData(0, PhoneButtonTarget.Line, "1001")]
         [InlineData(9, PhoneButtonTarget.Line, "1001")]
@@ -385,6 +477,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData("Line:1001", PhoneButtonTarget.Line, "1001")]
         [InlineData("Blf:1002", PhoneButtonTarget.Blf, "1002")]
         [InlineData("ParkingSlot:3", PhoneButtonTarget.ParkingSlot, "3")]
+        [InlineData("CallFlowControl:*28", PhoneButtonTarget.CallFlowControl, "*28")]
         public void A_posted_key_is_read_back_as_the_key_it_names(string posted, string targetType, string targetValue)
         {
             Assert.True(PhoneButton.TryParse(posted, 1, out var button));
@@ -401,6 +494,8 @@ namespace Techie.Pbx.Tests.Core
         [InlineData("Line:")]
         [InlineData("Extension:1001")]
         [InlineData("CallFlowControl:1")]
+        [InlineData("CallFlowControl:*2")]
+        [InlineData("CallFlowControl:*2845")]
         [InlineData("ParkingSlot:12")]
         [InlineData("Hangup")]
         public void Anything_else_is_not_a_key(string? posted)

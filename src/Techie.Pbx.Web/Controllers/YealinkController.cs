@@ -51,6 +51,7 @@ namespace Techie.Pbx.Web.Controllers
         private static readonly ILog Log = LogManager.GetLogger(typeof(YealinkController));
 
         private readonly PhoneButtonRepository buttons;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
@@ -58,6 +59,7 @@ namespace Techie.Pbx.Web.Controllers
         public YealinkController()
         {
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -135,11 +137,12 @@ namespace Techie.Pbx.Web.Controllers
             // slot the lot no longer has are both dropped here rather than written as a
             // registration that cannot work or a lamp that can never light.
             var allExtensions = this.extensions.GetAll();
+            var controls = this.callFlowControls.GetAll();
             var usable = PhoneButton.Usable(
-                this.buttons.GetForPhone(phone.PhoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
+                this.buttons.GetForPhone(phone.PhoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers, controls);
 
             var config = PhoneConfigFactory.Yealink(
-                phone, usable, allExtensions, stored, transport, this.Request.Scheme, this.Request.Host.Host);
+                phone, usable, allExtensions, controls, stored, transport, this.Request.Scheme, this.Request.Host.Host);
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");
 

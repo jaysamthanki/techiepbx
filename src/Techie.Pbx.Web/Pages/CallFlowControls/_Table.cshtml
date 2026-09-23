@@ -1,0 +1,32 @@
+@model List<CallFlowControlRow>
+@* Clicking anywhere on a row opens its edit form (D48). *@
+<table class="table table-sm table-hover"
+       data-toggle="table"
+       data-search="true"
+       data-sort-name="name"
+       data-sort-order="asc"
+       data-classes="table table-sm table-hover">
+    <thead>
+        <tr>
+            <th data-field="name" data-sortable="true">Name</th>
+            <th data-field="code" data-sortable="true">Feature code</th>
+            <th data-field="state" data-sortable="true">State</th>
+            <th data-field="normal">Normal →</th>
+            <th data-field="override">Override →</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in Model)
+        {
+            var editUrl = Url.Page("Index", "Form", new { callFlowControlID = row.CallFlowControlID });
+
+            <tr data-edit-url="@editUrl">
+                <td>@row.Name</td>
+                <td class="font-monospace">@row.FeatureCode</td>
+                <td><span class="badge @row.StateCssClass" title="@row.StateTitle">@row.StateText</span></td>
+                <td><partial name="~/Pages/TimeConditions/_Destination.cshtml" model="row.Normal" /></td>
+                <td><partial name="~/Pages/TimeConditions/_Destination.cshtml" model="row.Override" /></td>
+            </tr>
+        }
+    </tbody>
+</table>

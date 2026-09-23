@@ -175,10 +175,10 @@ namespace Techie.Pbx.Core.Models
         /// A DNS name with at least one dot in it: Let's Encrypt will not issue for a bare label,
         /// so accepting one here would only produce a failed order.
         /// </summary>
-        [GeneratedRegex(@"^[a-z0-9]([a-z0-9\-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,62}[a-z0-9])?)+$")]
+        [GeneratedRegex(@"^[a-z0-9]([a-z0-9\-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,62}[a-z0-9])?)+\z")]
         private static partial Regex HostnamePattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N}][\p{L}\p{N} .\-_]{0,63}$")]
+        [GeneratedRegex(@"^[\p{L}\p{N}][\p{L}\p{N} .\-_]{0,63}\z")]
         private static partial Regex NamePattern();
     }
 }

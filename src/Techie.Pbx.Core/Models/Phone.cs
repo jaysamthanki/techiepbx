@@ -136,16 +136,16 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[0-9A-Za-z.]{1,32}$")]
+        [GeneratedRegex(@"^[0-9A-Za-z.]{1,32}\z")]
         private static partial Regex FirmwarePattern();
 
-        [GeneratedRegex(@"^[0-9a-f]{12}$")]
+        [GeneratedRegex(@"^[0-9a-f]{12}\z")]
         private static partial Regex MacPattern();
 
-        [GeneratedRegex(@"^[0-9A-Za-z_.\-]{1,32}$")]
+        [GeneratedRegex(@"^[0-9A-Za-z_.\-]{1,32}\z")]
         private static partial Regex ModelPattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePattern();
     }
 }

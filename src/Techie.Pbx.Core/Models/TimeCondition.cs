@@ -179,10 +179,10 @@ namespace Techie.Pbx.Core.Models
                 .ThenBy(r => r.StartTime, StringComparer.Ordinal)
                 .ToList();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex DescriptionPattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePattern();
 
         /// <summary>

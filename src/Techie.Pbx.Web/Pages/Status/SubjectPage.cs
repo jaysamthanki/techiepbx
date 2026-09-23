@@ -24,6 +24,7 @@ namespace Techie.Pbx.Web.Pages.Status
             FindingSubject.RingGroups => "/RingGroups/Index",
             FindingSubject.Ivrs => "/Ivrs/Index",
             FindingSubject.TimeConditions => "/TimeConditions/Index",
+            FindingSubject.CallFlowControls => "/CallFlowControls/Index",
             _ => "/Settings/Index",
         };
     }

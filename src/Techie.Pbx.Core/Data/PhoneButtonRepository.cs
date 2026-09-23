@@ -120,6 +120,16 @@ namespace Techie.Pbx.Core.Data
                     errors.Add($"Key {button.Position}: another phone already registers as extension {button.TargetValue}.");
             }
 
+            // A key on a switch stores its code, so the same check for the same reason: nothing
+            // else stands between an admin and a lamp watching a code no switch answers (F9).
+            var codes = new CallFlowControlRepository(this.database).GetAll().Select(c => c.FeatureCode).ToList();
+
+            foreach (var button in buttons.Where(b => b.TargetType == PhoneButtonTarget.CallFlowControl))
+            {
+                if (!codes.Contains(button.TargetValue, StringComparer.Ordinal))
+                    errors.Add($"Key {button.Position}: call flow control {button.TargetValue} is not there any more. Choose another.");
+            }
+
             if (phoneID <= 0)
                 errors.Add("Keys can only be saved against a phone that exists.");
 

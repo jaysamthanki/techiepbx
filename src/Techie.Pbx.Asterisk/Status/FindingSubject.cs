@@ -18,6 +18,7 @@ namespace Techie.Pbx.Asterisk.Status
         RingGroups,
         Ivrs,
         TimeConditions,
+        CallFlowControls,
         Settings,
     }
 }

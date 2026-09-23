@@ -139,10 +139,10 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{0,23}$")]
+        [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{0,23}\z")]
         private static partial Regex DirectoryPattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N}][\p{L}\p{N} \-_]*$")]
+        [GeneratedRegex(@"^[\p{L}\p{N}][\p{L}\p{N} \-_]*\z")]
         private static partial Regex NamePattern();
     }
 }

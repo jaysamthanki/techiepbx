@@ -187,6 +187,17 @@ namespace Techie.Pbx.Asterisk.Status
                         rule.ToDestination(), rule.DestinationKey());
                 }
             }
+
+            foreach (var control in snapshot.CallFlowControls)
+            {
+                Missing(snapshot, findings, FindingSubject.CallFlowControls,
+                    $"Call flow control {control.Name} normally sends calls to",
+                    control.ToNormalDestination(), control.NormalDestinationKey());
+
+                Missing(snapshot, findings, FindingSubject.CallFlowControls,
+                    $"Call flow control {control.Name} sends calls while switched on to",
+                    control.ToOverrideDestination(), control.OverrideDestinationKey());
+            }
         }
 
         /// <summary>A filesystem filling up, which on an appliance is a slow way to lose a PBX.</summary>
@@ -221,6 +232,7 @@ namespace Techie.Pbx.Asterisk.Status
                 snapshot.Announcements,
                 snapshot.Ivrs,
                 snapshot.TimeConditions,
+                snapshot.CallFlowControls,
                 destination);
 
             if (found != null)

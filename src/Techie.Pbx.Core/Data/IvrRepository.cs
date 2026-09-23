@@ -253,13 +253,14 @@ namespace Techie.Pbx.Core.Data
                 // key 9 repeats the menu is allowed, and is the only reason this list includes it.
                 var others = all.Where(i => i.IvrID != ivr.IvrID).Append(ivr).ToList();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
+                var controls = new CallFlowControlRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, ivr.ToFinalDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, ivr.ToFinalDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
 
                 foreach (var entry in ivr.Entries)
                 {
-                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, entry.ToDestination()) == null)
+                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, entry.ToDestination()) == null)
                         errors.Add($"Where key {entry.Digit} goes is not there any more. Choose another.");
                 }
 

@@ -84,6 +84,8 @@ namespace Techie.Pbx.Asterisk.Config
                 "func_callerid.so",         // ${CALLERID(num)}, which *97 needs
                 "func_channel.so",          // CHANNEL(musicclass): what a caller hears while they are held (D122 amended)
                 "func_timeout.so",          // TIMEOUT(digit), the gap an IVR allows between keys (D61)
+                "func_db.so",               // DB(): the astdb key a call flow control's state is kept in (F9)
+                "func_devstate.so",         // DEVICE_STATE(): the Custom: device a call flow control's key lamp follows (F9)
             }),
 
             ("Call records for the reports page (F5)", new[]

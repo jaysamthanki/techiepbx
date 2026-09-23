@@ -25,6 +25,12 @@ namespace Techie.Pbx.Web.Pages.Phones
         /// </summary>
         public List<PhoneButtonForm> Buttons { get; set; } = new();
 
+        /// <summary>
+        /// The call flow controls a key may be put on (F9): the key's lamp is lit while the switch
+        /// is on, and pressing it flips it. Not posted back.
+        /// </summary>
+        public List<CallFlowControl> CallFlowControls { get; set; } = new();
+
         public bool Enabled { get; set; } = true;
         public List<string> Errors { get; set; } = new();
 

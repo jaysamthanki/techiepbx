@@ -12,7 +12,26 @@ namespace Techie.Pbx.Asterisk.Config
     public static class ExtensionsConfRenderer
     {
         public const string InternalContext = "internal";
-        public const string EchoTestNumber = "*43";
+        public const string EchoTestNumber = SystemCodes.EchoTest;
+
+        /// <summary>
+        /// Where a destination enters a call flow control (F9): one entry per switch, by its code,
+        /// that goes on into the switch's own context. Not the internal context, because there the
+        /// code is the toggle, and a call routed through a switch must never flip it.
+        /// </summary>
+        public const string CallFlowControlEntryContext = "cfc-entry";
+
+        /// <summary>Where a toggle goes to switch a call flow control back off.</summary>
+        public const string CallFlowControlOffLabel = "off";
+
+        /// <summary>Where a call flow control sends a call while it is switched on.</summary>
+        public const string CallFlowControlOverrideLabel = "override";
+
+        /// <summary>What a phone hears when its dial switched a call flow control on.</summary>
+        public const string CallFlowControlOnPrompt = "activated";
+
+        /// <summary>What a phone hears when its dial switched a call flow control back off.</summary>
+        public const string CallFlowControlOffPrompt = "de-activated";
 
         /// <summary>
         /// The options every generated Dial() carries, so that the features.conf featuremap is
@@ -60,7 +79,7 @@ namespace Techie.Pbx.Asterisk.Config
         private const int OutboundRingSeconds = 60;
 
         /// <summary>FreePBX's number for "listen to my own messages", which users already know.</summary>
-        public const string VoicemailMainNumber = "*97";
+        public const string VoicemailMainNumber = SystemCodes.VoicemailMain;
 
         /// <summary>
         /// Directed call pickup: dial this followed by the extension that is ringing to take the
@@ -69,7 +88,7 @@ namespace Techie.Pbx.Asterisk.Config
         /// system has no pickup groups, only the directed form, and a code that does nothing is
         /// worse than none. FreePBX's number, for the same reason as *97.
         /// </summary>
-        public const string PickupCode = "*8";
+        public const string PickupCode = SystemCodes.PickupPrefix;
 
         /// <summary>
         /// Where an IVR sends a caller who has run out of retries: a named extension in the menu's
@@ -227,7 +246,28 @@ namespace Techie.Pbx.Asterisk.Config
             IEnumerable<TimeCondition> timeConditions,
             string timezone,
             ParkingSettings parking,
-            IEnumerable<MohClass> mohClasses)
+            IEnumerable<MohClass> mohClasses) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, timezone, parking, mohClasses,
+                new List<CallFlowControl>());
+
+        /// <param name="callFlowControls">
+        /// The day/night switches (F9). Each gets a toggle and a hint on its code in the internal
+        /// context and a context of its own that reads the switch's state from astdb at call time,
+        /// so the file is the same whichever way a switch is set.
+        /// </param>
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            string timezone,
+            ParkingSettings parking,
+            IEnumerable<MohClass> mohClasses,
+            IEnumerable<CallFlowControl> callFlowControls)
         {
             parking.ThrowIfInvalid();
 
@@ -248,6 +288,7 @@ namespace Techie.Pbx.Asterisk.Config
             var announcementList = AnnouncementRenderOrder(announcementRows);
             var ivrList = IvrRenderOrder(ivrs, announcementRows);
             var timeConditionList = TimeConditionRenderOrder(timeConditions);
+            var callFlowControlList = CallFlowControlRenderOrder(callFlowControls);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -271,6 +312,9 @@ namespace Techie.Pbx.Asterisk.Config
             }
 
             AppendParkingSlots(sb, parking);
+
+            foreach (var control in callFlowControlList)
+                AppendCallFlowControlToggle(sb, control);
 
             sb.Append('\n');
             sb.Append("; Directed call pickup: the code above followed by the extension that is ringing\n");
@@ -381,6 +425,11 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var condition in timeConditionList)
                 AppendTimeConditionContext(sb, condition, timezone);
 
+            AppendCallFlowControlEntries(sb, callFlowControlList);
+
+            foreach (var control in callFlowControlList)
+                AppendCallFlowControlContext(sb, control);
+
             foreach (var trunk in trunkList)
                 AppendTrunkContext(sb, trunk, inboundList.Where(r => r.TrunkID == trunk.TrunkID).ToList(), mohClassList);
 
@@ -418,6 +467,28 @@ namespace Techie.Pbx.Asterisk.Config
                 .Where(a => a.IsPlayable)
                 .OrderBy(a => a.PlayExtension.Length)
                 .ThenBy(a => a.PlayExtension, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The call flow controls, by code, each re-validated so a row that reached the database
+        /// another way cannot reach a conf file. All of them: a switch has no enabled flag, and
+        /// its code is required, so every one has a toggle to write (F9).
+        /// </summary>
+        public static List<CallFlowControl> CallFlowControlRenderOrder(IEnumerable<CallFlowControl> callFlowControls)
+        {
+            var list = callFlowControls.ToList();
+
+            foreach (var control in list)
+            {
+                var errors = control.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"Call flow control '{control.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return list
+                .OrderBy(c => c.FeatureCode.Length)
+                .ThenBy(c => c.FeatureCode, StringComparer.Ordinal)
                 .ToList();
         }
 
@@ -581,6 +652,88 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($" same => n,Playback({prompt})\n");
             sb.Append(DestinationDialplan.Lines(Destination.Hangup));
         }
+
+        /// <summary>
+        /// One switch's own context: read its state from astdb and send the call one way or the
+        /// other through the shared helper (D36). Empty, missing or anything but 1 is off, so a
+        /// switch nobody has ever flipped routes normally. Like a time condition's, this context
+        /// includes nothing, so a call can never fall through to a route out.
+        /// </summary>
+        private static void AppendCallFlowControlContext(StringBuilder sb, CallFlowControl control)
+        {
+            var context = ConfText.Safe(control.Context, "call flow control context");
+            var code = ConfText.Safe(control.FeatureCode, "call flow control code");
+            var name = ConfText.Safe(control.Name, "call flow control name");
+            var state = CallFlowControlState(control);
+            var normal = control.ToNormalDestination();
+            var over = control.ToOverrideDestination();
+
+            sb.Append('\n');
+            sb.Append($"[{context}]\n");
+            sb.Append($"; {name}: normal or override, reached by the Goto on {code} in [{CallFlowControlEntryContext}].\n");
+            sb.Append($"; Which way is read from astdb at call time, so dialling {code} takes effect on the next call.\n");
+            sb.Append($"exten => s,1,NoOp(Call flow control {code} {name})\n");
+            sb.Append($" same => n,GotoIf($[\"${{DB({state})}}\" = \"{CallFlowControl.StateOn}\"]?{CallFlowControlOverrideLabel})\n");
+            sb.Append($" same => n,NoOp(Call flow control {code} normal to {ConfText.Safe(normal.Key, "destination")})\n");
+            sb.Append(DestinationDialplan.Lines(normal));
+            sb.Append($" same => n({CallFlowControlOverrideLabel}),NoOp(Call flow control {code} override to {ConfText.Safe(over.Key, "destination")})\n");
+            sb.Append(DestinationDialplan.Lines(over));
+        }
+
+        /// <summary>
+        /// The door a destination comes through, one entry per switch by its code (F9). Nothing at
+        /// all when there are no switches, so a system without them has no such context.
+        /// </summary>
+        private static void AppendCallFlowControlEntries(StringBuilder sb, List<CallFlowControl> controls)
+        {
+            if (controls.Count == 0)
+                return;
+
+            sb.Append('\n');
+            sb.Append($"[{CallFlowControlEntryContext}]\n");
+            sb.Append($"; The way into a call flow control from an inbound route, a menu or anything else that\n");
+            sb.Append($"; names one: by code, on to the switch's own context. Not [{InternalContext}], where the\n");
+            sb.Append("; code flips the switch instead.\n");
+
+            foreach (var control in controls)
+            {
+                var code = ConfText.Safe(control.FeatureCode, "call flow control code");
+                sb.Append($"exten => {code},1,Goto({ConfText.Safe(control.Context, "call flow control context")},s,1)\n");
+            }
+        }
+
+        /// <summary>
+        /// Dialling a switch's code from any phone flips it (F9): the astdb key goes to 1 or back
+        /// to 0, the Custom: device the key lamps watch goes to INUSE or NOT_INUSE with it, and the
+        /// caller hears which. The hint on the same code is what a phone key subscribes to, the
+        /// same way a parking slot's is (D121). func_devstate keeps Custom: states in astdb too, so
+        /// the lamp comes back the way it was after a restart.
+        /// </summary>
+        private static void AppendCallFlowControlToggle(StringBuilder sb, CallFlowControl control)
+        {
+            var code = ConfText.Safe(control.FeatureCode, "call flow control code");
+            var name = ConfText.Safe(control.Name, "call flow control name");
+            var device = ConfText.Safe(control.DeviceName, "call flow control device");
+            var state = CallFlowControlState(control);
+
+            sb.Append('\n');
+            sb.Append($"; {name} (call flow control): dial {code} to switch it on or off. The key lamp is lit while on.\n");
+            sb.Append($"exten => {code},hint,{device}\n");
+            sb.Append($"exten => {code},1,Answer()\n");
+            sb.Append($" same => n,GotoIf($[\"${{DB({state})}}\" = \"{CallFlowControl.StateOn}\"]?{CallFlowControlOffLabel})\n");
+            sb.Append($" same => n,Set(DB({state})={CallFlowControl.StateOn})\n");
+            sb.Append($" same => n,Set(DEVICE_STATE({device})=INUSE)\n");
+            sb.Append($" same => n,Playback({CallFlowControlOnPrompt})\n");
+            sb.Append(" same => n,Hangup()\n");
+            sb.Append($" same => n({CallFlowControlOffLabel}),Set(DB({state})={CallFlowControl.StateOff})\n");
+            sb.Append($" same => n,Set(DEVICE_STATE({device})=NOT_INUSE)\n");
+            sb.Append($" same => n,Playback({CallFlowControlOffPrompt})\n");
+            sb.Append(" same => n,Hangup()\n");
+        }
+
+        /// <summary>The switch's astdb key as DB() takes it: <c>TNPBX/CFC/&lt;ID&gt;</c>.</summary>
+        private static string CallFlowControlState(CallFlowControl control) =>
+            ConfText.Safe($"{CallFlowControl.StateFamily}/{control.StateKey}", "call flow control state key");
 
         /// <summary>
         /// One IVR's menu, in a context of its own (D59).

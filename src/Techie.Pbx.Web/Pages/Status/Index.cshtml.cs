@@ -26,6 +26,7 @@ namespace Techie.Pbx.Web.Pages.Status
 
         private readonly AnnouncementRepository announcements;
         private readonly PhoneButtonRepository buttons;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly CertificateRepository certificates;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inboundRoutes;
@@ -43,6 +44,7 @@ namespace Techie.Pbx.Web.Pages.Status
         {
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.certificates = new CertificateRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.inboundRoutes = new InboundRouteRepository(PbxDatabase.Current);
@@ -84,6 +86,7 @@ namespace Techie.Pbx.Web.Pages.Status
                 // the only thing that says so.
                 AmiReachable = trunkStates.Count == 0 || trunkStates.Values.Any(state => state != RegistrationState.Unknown),
                 Announcements = this.announcements.GetAll(),
+                CallFlowControls = this.callFlowControls.GetAll(),
                 Certificates = this.certificates.GetAll(),
                 ConfigPending = this.pending.IsPending,
                 Disks = Disks(),

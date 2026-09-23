@@ -17,6 +17,7 @@ namespace Techie.Pbx.Asterisk.Status
         public bool AmiReachable { get; set; }
 
         public List<Announcement> Announcements { get; set; } = new();
+        public List<CallFlowControl> CallFlowControls { get; set; } = new();
         public List<Certificate> Certificates { get; set; } = new();
 
         /// <summary>The database has changed and Asterisk has not been given it yet (D26).</summary>

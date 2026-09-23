@@ -1,4 +1,5 @@
 using System.Text;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Asterisk.Config
 {
@@ -36,7 +37,7 @@ namespace Techie.Pbx.Asterisk.Config
         public const string AttendedTransferFeature = "atxfer";
 
         /// <summary>The DTMF a user presses to start an attended transfer (D119).</summary>
-        public const string AttendedTransferCode = "*2";
+        public const string AttendedTransferCode = SystemCodes.AttendedTransfer;
 
         /// <summary>
         /// The DTMF a user presses to start a blind transfer. Written down here and <b>not</b>

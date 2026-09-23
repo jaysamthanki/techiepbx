@@ -2905,3 +2905,38 @@ destination picker to be the same: offer the full catalog, exclude only the thin
   Cross-feature loops — a failover to a time condition whose closed case hands back to the
   same group — are buildable from the UI and always were at save; the user decided the
   system will not police them, so no shared cross-feature walk will be built.
+
+### D137. Call flow control: state in astdb, the phone is the switch, and a routed call can never flip it (2026-09-23)
+
+F9, piece 36. The "closing early, flip to night mode" switch, FreePBX's Call Flow Control
+reduced to what the user asked for (their answers on who toggles, the lamp and multiple
+switches are in features.md).
+
+- **One row per switch** (`027_call_flow_controls.sql`): name, feature code, and two
+  destinations — normal when off, override when on — each the two fields D35 settled on.
+  There is deliberately **no State column**: the live state is Asterisk's own astdb, key
+  `TNPBX/CFC/<CallFlowControlID>`, written by the dialplan when a phone dials the code. A
+  flip therefore takes effect on the very next call with no apply and no involvement from
+  the app; the rendered dialplan reads the key at call time and is the same file whichever
+  way the switch is set.
+- **`*<code>` in the internal context is the toggle**, and **`cfc-entry` is where a
+  destination enters a switch** — two different doors into `cfc-<ID>`, so a call routed
+  through a switch can never flip it, only a phone dialling the code can. The toggle plays
+  `activated` / `de-activated` (installed core sounds) so the person at the phone knows
+  which way it went.
+- **The lamp is a hint on the code** — `Custom:tnpbx-cfc-<ID>`, the pattern the parking
+  slots use — set by the toggle with `DEVICE_STATE()`; two modules join the allowlist,
+  `func_db.so` (DB()) and `func_devstate.so`, both verified to exist in the Asterisk 22
+  build before listing. A phone key may target a switch: `PhoneButtons.TargetType` gains
+  the kind it was left CHECK-free for.
+- **`CallFlowControl` is a destination type**, so every picker offers every switch
+  automatically (D136), excluding itself on its own form; chaining one switch to another
+  is an ordinary destination and self-reference and CFC→CFC loops are refused at save.
+- **The page badge reads astdb over AMI `DBGet`** — a read-only action inside the existing
+  `write = system` permission, so `manager.conf` is unchanged — and shows Unknown without
+  AMI, the RegistrationStatus pattern.
+- **Found by the tests, fixed here:** every `GeneratedRegex` validator ended in `$`, which
+  in .NET also matches just before a trailing newline — `"*28\n"` passed the feature-code
+  check. All 51 validators now end in `\z`. Harmless before (the page trims what is posted
+  and `ConfText.Safe` refuses the control character), but the uniqueness check treated the
+  two as different codes.

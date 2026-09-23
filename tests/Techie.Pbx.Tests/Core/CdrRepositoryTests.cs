@@ -127,7 +127,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Null(stored.Did);
 
             using var check = this.database.Open();
-            Assert.Equal(26, check.ExecuteScalar<long>("PRAGMA user_version"));
+            Assert.Equal(27, check.ExecuteScalar<long>("PRAGMA user_version"));
         }
 
         [Fact]

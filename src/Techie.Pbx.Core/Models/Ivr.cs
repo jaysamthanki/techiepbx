@@ -156,10 +156,10 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex DescriptionPattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePattern();
     }
 }

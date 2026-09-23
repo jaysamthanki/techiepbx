@@ -37,7 +37,7 @@ namespace Techie.Pbx.Web.Controllers
 
         /// <summary>A Polycom's configuration, exactly as the provisioning controller would build it.</summary>
         public static PolycomConfig Polycom(
-            Phone phone, List<PhoneButton> usable, List<Extension> allExtensions,
+            Phone phone, List<PhoneButton> usable, List<Extension> allExtensions, List<CallFlowControl> callFlowControls,
             Dictionary<string, string> stored, PjsipTransport transport, string requestHost)
         {
             stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
@@ -49,6 +49,7 @@ namespace Techie.Pbx.Web.Controllers
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
                 Buttons = usable,
+                CallFlowControls = callFlowControls,
                 Extensions = allExtensions,
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
                 Phone = phone,
@@ -65,7 +66,7 @@ namespace Techie.Pbx.Web.Controllers
         /// coming back on its own schedule (D88).
         /// </summary>
         public static YealinkConfig Yealink(
-            Phone phone, List<PhoneButton> usable, List<Extension> allExtensions,
+            Phone phone, List<PhoneButton> usable, List<Extension> allExtensions, List<CallFlowControl> callFlowControls,
             Dictionary<string, string> stored, PjsipTransport transport,
             string requestScheme, string requestHost)
         {
@@ -80,6 +81,7 @@ namespace Techie.Pbx.Web.Controllers
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
                 Buttons = usable,
+                CallFlowControls = callFlowControls,
                 Codecs = transport.Codecs,
                 Extensions = allExtensions,
                 NtpServer = AsteriskSettings.NtpServer(stored),

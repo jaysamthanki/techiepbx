@@ -197,23 +197,23 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")]
+        [GeneratedRegex(@"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\z")]
         private static partial Regex EmailPattern();
 
         /// <summary>2 to 15 digits, the first of which is not a 0.</summary>
-        [GeneratedRegex(@"^[1-9][0-9]{1,14}$")]
+        [GeneratedRegex(@"^[1-9][0-9]{1,14}\z")]
         private static partial Regex ForwardingTargetPattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePattern();
 
-        [GeneratedRegex(@"^[0-9]{2,6}$")]
+        [GeneratedRegex(@"^[0-9]{2,6}\z")]
         private static partial Regex NumberPattern();
 
-        [GeneratedRegex(@"^[A-Za-z0-9]{16,64}$")]
+        [GeneratedRegex(@"^[A-Za-z0-9]{16,64}\z")]
         private static partial Regex SecretPattern();
 
-        [GeneratedRegex(@"^[0-9]{4,8}$")]
+        [GeneratedRegex(@"^[0-9]{4,8}\z")]
         private static partial Regex VoicemailPinPattern();
     }
 }

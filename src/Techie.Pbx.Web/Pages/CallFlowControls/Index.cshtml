@@ -1,0 +1,35 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Call flow control";
+
+    var formUrl = Url.Page("Index", "Form");
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Call flow control</h1>
+    <div class="d-flex gap-2">
+        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Add call flow control</button>
+    </div>
+</div>
+
+<p class="text-secondary">
+    A day/night switch. Point an inbound route at one: switched off, calls go to its normal
+    destination — usually the business-hours time condition — and switched on, they go straight to
+    the override, without waiting for the clock. Anyone can flip it by dialling its code, or with a
+    phone key assigned to it, whose lamp is lit while it is on. The switch takes effect on the next
+    call; no apply is needed for that.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="call-flow-controls-table" hx-get="@tableUrl" hx-trigger="load, callFlowControlsChanged from:body">
+    <p class="text-secondary">Loading call flow controls…</p>
+</div>
+
+<partial name="_FormModal" />

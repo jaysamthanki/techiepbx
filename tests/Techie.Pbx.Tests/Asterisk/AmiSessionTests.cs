@@ -12,9 +12,9 @@ namespace Techie.Pbx.Tests.Asterisk
         private const string Greeting = "Asterisk Call Manager/9.0.0\r\n";
         private const string LoginAccepted = "Response: Success\r\nActionID: 1\r\nMessage: Authentication accepted\r\n\r\n";
 
-        private readonly StringWriter _sent = new();
+        private readonly StringWriter sent = new();
 
-        private AmiSession Session(string canned) => new(new StringReader(canned), _sent);
+        private AmiSession Session(string canned) => new(new StringReader(canned), this.sent);
 
         private AmiSession LoggedIn(string canned)
         {
@@ -31,7 +31,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             Assert.Equal(
                 "Action: Login\r\nActionID: 1\r\nUsername: tnpbx\r\nSecret: not-a-real-secret\r\n\r\n",
-                _sent.ToString());
+                this.sent.ToString());
         }
 
         [Fact]
@@ -51,7 +51,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             session.Reload("res_pjsip");
 
-            Assert.EndsWith("Action: Reload\r\nActionID: 2\r\nModule: res_pjsip\r\n\r\n", _sent.ToString());
+            Assert.EndsWith("Action: Reload\r\nActionID: 2\r\nModule: res_pjsip\r\n\r\n", this.sent.ToString());
         }
 
         [Fact]
@@ -77,7 +77,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.EndsWith(
                 "Action: PJSIPNotify\r\nActionID: 2\r\nEndpoint: 1001\r\n" +
                 "Variable: Event=check-sync\r\nVariable: Content-Length=0\r\n\r\n",
-                _sent.ToString());
+                this.sent.ToString());
         }
 
         [Fact]
@@ -129,7 +129,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(4321, contacts[0].RoundTripMicroseconds);
             Assert.Equal("Unreachable", contacts[1].Status);
             Assert.Equal(0, contacts[1].RoundTripMicroseconds);
-            Assert.EndsWith("Action: PJSIPShowContacts\r\nActionID: 2\r\n\r\n", _sent.ToString());
+            Assert.EndsWith("Action: PJSIPShowContacts\r\nActionID: 2\r\n\r\n", this.sent.ToString());
         }
 
         [Fact]
@@ -152,6 +152,43 @@ namespace Techie.Pbx.Tests.Asterisk
             var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: No Contacts found\r\n\r\n");
 
             Assert.Empty(session.ShowContacts());
+        }
+
+        /// <summary>
+        /// A call flow control's state (F9): DBGet answers a list of one DBGetResponse, laid out as
+        /// main/db.c's manager_dbget writes it, and the value is what comes back.
+        /// </summary>
+        [Fact]
+        public void Db_get_reads_the_value_out_of_the_event_list()
+        {
+            var session = LoggedIn(
+                "Response: Success\r\nActionID: 2\r\nEventList: start\r\nMessage: Result will follow\r\n\r\n" +
+                "Event: DBGetResponse\r\nFamily: TNPBX\r\nKey: CFC/1\r\nVal: 1\r\nActionID: 2\r\n\r\n" +
+                "Event: DBGetComplete\r\nActionID: 2\r\nEventList: Complete\r\nListItems: 1\r\n\r\n");
+
+            Assert.Equal("1", session.DbGet("TNPBX", "CFC/1"));
+            Assert.EndsWith("Action: DBGet\r\nActionID: 2\r\nFamily: TNPBX\r\nKey: CFC/1\r\n\r\n", this.sent.ToString());
+        }
+
+        /// <summary>
+        /// A switch nobody has flipped has no key at all, and Asterisk answers that with an error
+        /// rather than an empty list. That is not a failure: it is null.
+        /// </summary>
+        [Fact]
+        public void Db_get_of_a_key_that_is_not_there_is_null()
+        {
+            var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: Database entry not found\r\n\r\n");
+
+            Assert.Null(session.DbGet("TNPBX", "CFC/7"));
+        }
+
+        [Fact]
+        public void Any_other_db_get_error_throws()
+        {
+            var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: Permission denied\r\n\r\n");
+
+            var ex = Assert.Throws<AmiException>(() => session.DbGet("TNPBX", "CFC/1"));
+            Assert.Contains("Permission denied", ex.Message);
         }
 
         [Fact]
@@ -201,7 +238,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal("00:01:17", channels[0].Duration);
             Assert.Equal(TimeSpan.FromSeconds(77), channels[0].DurationSpan);
             Assert.Equal(channels[0].BridgeId, channels[1].BridgeId);
-            Assert.EndsWith("Action: CoreShowChannels\r\nActionID: 2\r\n\r\n", _sent.ToString());
+            Assert.EndsWith("Action: CoreShowChannels\r\nActionID: 2\r\n\r\n", this.sent.ToString());
         }
 
         /// <summary>
@@ -237,7 +274,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal("09:01:33", status.CoreReloadTime);
             Assert.Equal(2, status.CoreCurrentCalls);
             Assert.Equal(new DateTimeOffset(2026, 9, 18, 7, 14, 2, TimeSpan.Zero), status.StartedUtc);
-            Assert.EndsWith("Action: CoreStatus\r\nActionID: 2\r\n\r\n", _sent.ToString());
+            Assert.EndsWith("Action: CoreStatus\r\nActionID: 2\r\n\r\n", this.sent.ToString());
         }
 
         /// <summary>A build that words those headers differently must not become an uptime of years.</summary>
@@ -295,7 +332,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             session.Logoff();
 
-            Assert.EndsWith("Action: Logoff\r\nActionID: 2\r\n\r\n", _sent.ToString());
+            Assert.EndsWith("Action: Logoff\r\nActionID: 2\r\n\r\n", this.sent.ToString());
         }
 
         [Fact]
@@ -308,7 +345,7 @@ namespace Techie.Pbx.Tests.Asterisk
             session.Reload("res_pjsip");
             session.Reload("pbx_config");
 
-            var sent = _sent.ToString();
+            var sent = this.sent.ToString();
             Assert.Contains("ActionID: 2", sent);
             Assert.Contains("ActionID: 3", sent);
         }

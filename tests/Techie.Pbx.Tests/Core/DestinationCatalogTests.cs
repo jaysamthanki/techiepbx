@@ -198,6 +198,96 @@ namespace Techie.Pbx.Tests.Core
                 DestinationCatalog.Except(all, null).Select(c => c.Destination.Key));
         }
 
+        /// <summary>
+        /// Call flow controls are a source of their own (F9), listed by code — shortest first, the
+        /// way the renderer writes them — and keyed by the code, which is what the dialplan's entry
+        /// context answers on.
+        /// </summary>
+        [Fact]
+        public void Call_flow_controls_are_on_the_list_by_code()
+        {
+            var choices = AllWithControls()
+                .Where(c => c.Destination.Type == DestinationType.CallFlowControl)
+                .ToList();
+
+            Assert.Equal(new[] { "*28", "*29", "*271" }, choices.Select(c => c.Destination.Value));
+            Assert.Equal(new[] { "CallFlowControl:*28", "CallFlowControl:*29", "CallFlowControl:*271" }, choices.Select(c => c.Destination.Key));
+            Assert.All(choices, c => Assert.Equal(DestinationCatalog.CallFlowControlsGroup, c.GroupName));
+            Assert.Equal("*28 Night mode", choices[0].Label);
+        }
+
+        [Fact]
+        public void Call_flow_controls_come_last_before_hanging_up()
+        {
+            var groups = AllWithControls().Select(c => c.GroupName).Distinct().ToList();
+
+            Assert.Equal(DestinationCatalog.CallFlowControlsGroup, groups[^2]);
+            Assert.Equal(DestinationCatalog.OtherGroup, groups[^1]);
+        }
+
+        [Fact]
+        public void Every_call_flow_control_offered_is_one_the_dialplan_could_be_written_for()
+        {
+            Assert.All(AllWithControls(), c => Assert.Empty(c.Destination.Validate()));
+        }
+
+        [Fact]
+        public void Find_labels_a_call_flow_control_and_answers_null_for_one_that_is_gone()
+        {
+            Assert.Equal(
+                "*29 Lunch",
+                DestinationCatalog.Find(
+                    SampleExtensions(), new List<RingGroup>(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
+                    SampleControls(), new Destination(DestinationType.CallFlowControl, "*29"))!.Label);
+
+            Assert.Null(DestinationCatalog.Find(
+                SampleExtensions(), new List<RingGroup>(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
+                SampleControls(), new Destination(DestinationType.CallFlowControl, "*30")));
+        }
+
+        /// <summary>A caller that knows nothing of call flow controls still gets the list it always did.</summary>
+        [Fact]
+        public void The_older_overloads_offer_no_call_flow_controls()
+        {
+            Assert.DoesNotContain(
+                DestinationType.CallFlowControl,
+                DestinationCatalog.All(
+                    SampleExtensions(), new List<RingGroup>(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>())
+                    .Select(c => c.Destination.Type));
+        }
+
+        /// <summary>
+        /// A switch's picker leaves off only the switch being edited: the others stay, because one
+        /// switch handing to another is how they chain (D136).
+        /// </summary>
+        [Fact]
+        public void Except_leaves_off_the_call_flow_control_being_edited()
+        {
+            var all = AllWithControls();
+
+            var keys = DestinationCatalog.Except(all, SampleControls()[0].ToDestination())
+                .Select(c => c.Destination.Key)
+                .ToList();
+
+            Assert.DoesNotContain("CallFlowControl:*28", keys);
+            Assert.Contains("CallFlowControl:*29", keys);
+            Assert.Contains("CallFlowControl:*271", keys);
+            Assert.Equal(all.Count - 1, keys.Count);
+        }
+
+        private static List<DestinationChoice> AllWithControls() =>
+            DestinationCatalog.All(
+                SampleExtensions(), SampleGroups(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
+                SampleControls());
+
+        /// <summary>Out of code order on purpose, to prove the catalog sorts them.</summary>
+        private static List<CallFlowControl> SampleControls() => new()
+        {
+            new CallFlowControl { CallFlowControlID = 1, Name = "Night mode", FeatureCode = "*28" },
+            new CallFlowControl { CallFlowControlID = 2, Name = "Holiday", FeatureCode = "*271" },
+            new CallFlowControl { CallFlowControlID = 3, Name = "Lunch", FeatureCode = "*29" },
+        };
+
         private static List<RingGroup> SampleGroups() => new()
         {
             new RingGroup { RingGroupID = 1, Number = "600", Name = "Support", Members = "1001" },

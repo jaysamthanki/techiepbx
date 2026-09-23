@@ -31,6 +31,12 @@ namespace Techie.Pbx.Asterisk.Provisioning
         public List<PhoneButton> Buttons { get; set; } = new();
 
         /// <summary>
+        /// The call flow controls a key may name, for the key's label: a switch is shown by its own
+        /// name (F9). What the key subscribes to and dials is its code, already on the button.
+        /// </summary>
+        public List<CallFlowControl> CallFlowControls { get; set; } = new();
+
+        /// <summary>
         /// The extensions the keys may name: where a line key's credentials come from and where a
         /// lamp's label does (D121). The whole list rather than one row, because a phone registers
         /// as one extension and watches several others.

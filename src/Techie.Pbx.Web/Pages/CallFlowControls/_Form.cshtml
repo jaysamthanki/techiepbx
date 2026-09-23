@@ -1,0 +1,75 @@
+@model CallFlowControlForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
+    and footer together, so a validation failure comes back with the modal still open.
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title">@(Model.IsNew ? "Add call flow control" : $"Edit call flow control {Model.Name}")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="callFlowControlID" value="@Model.CallFlowControlID" />
+
+    <div class="row">
+        <div class="col-4 mb-3">
+            <label class="form-label" for="cfc-code">Feature code</label>
+            <input class="form-control font-monospace" id="cfc-code" name="featureCode" value="@Model.FeatureCode"
+                   maxlength="4" autocomplete="off" placeholder="*28" required />
+            <div class="form-text">A * and 2 or 3 digits. Dial it to switch on or off.</div>
+        </div>
+        <div class="col-8 mb-3">
+            <label class="form-label" for="cfc-name">Name</label>
+            <input class="form-control" id="cfc-name" name="name" value="@Model.Name"
+                   maxlength="64" autocomplete="off" placeholder="Night mode" required />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="cfc-normal">Normally (switched off)</label>
+        <partial name="_DestinationSelect" model="Model.NormalDestinationChoices" />
+        <div class="form-text">Usually the business-hours time condition.</div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="cfc-override">Override (switched on)</label>
+        <partial name="_DestinationSelect" model="Model.OverrideDestinationChoices" />
+        <div class="form-text">Usually what the time condition does when closed: voicemail, a night menu.</div>
+    </div>
+    </div>
+
+    @* Deleting lives here now that the table has no button column (D48). *@
+    <div class="modal-footer justify-content-between">
+        <div>
+            @if (!Model.IsNew)
+            {
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@deleteUrl"
+                        hx-vals='{"callFlowControlID": @Model.CallFlowControlID}'
+                        hx-swap="none"
+                        hx-confirm="Delete call flow control @Model.Name? Its code and anything sent to it stop working at the next apply.">Delete</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>

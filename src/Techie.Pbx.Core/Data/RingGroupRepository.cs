@@ -185,8 +185,9 @@ namespace Techie.Pbx.Core.Data
 
                 var ivrs = new IvrRepository(this.database).GetAll();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
+                var controls = new CallFlowControlRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, conditions, group.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, conditions, controls, group.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
                 else if (LoopsBack(group, all))
                     errors.Add("That destination comes back round to this group, so a call nobody answers would ring for ever.");

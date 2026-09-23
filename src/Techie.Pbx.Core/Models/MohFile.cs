@@ -123,10 +123,10 @@ namespace Techie.Pbx.Core.Models
             return errors;
         }
 
-        [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{0,63}\.g722$")]
+        [GeneratedRegex(@"^[a-z0-9][a-z0-9\-]{0,63}\.g722\z")]
         private static partial Regex FilePattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePattern();
     }
 }

@@ -32,6 +32,7 @@ namespace Techie.Pbx.Web.Pages.Phones
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly PhoneButtonRepository buttons;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
@@ -39,6 +40,7 @@ namespace Techie.Pbx.Web.Pages.Phones
         public IndexModel()
         {
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
@@ -173,8 +175,9 @@ namespace Techie.Pbx.Web.Pages.Phones
             var stored = this.settings.GetAll();
             var transport = AsteriskSettings.Transport(stored);
             var allExtensions = this.extensions.GetAll();
+            var controls = this.callFlowControls.GetAll();
             var usable = PhoneButton.Usable(
-                this.buttons.GetForPhone(phoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers);
+                this.buttons.GetForPhone(phoneID), allExtensions, AsteriskSettings.Parking(stored).SlotNumbers, controls);
 
             // The config assembly is shared with the provisioning controllers
             // (PhoneConfigFactory), so what an admin previews here is exactly what a phone
@@ -182,13 +185,13 @@ namespace Techie.Pbx.Web.Pages.Phones
             if (phone.MatchesBrand(PhoneBrand.Polycom))
             {
                 var polycom = PhoneConfigFactory.Polycom(
-                    phone, usable, allExtensions, stored, transport, this.Request.Host.Host);
+                    phone, usable, allExtensions, controls, stored, transport, this.Request.Host.Host);
 
                 return this.Content(PolycomConfigRenderer.Render(polycom), "text/plain");
             }
 
             var yealink = PhoneConfigFactory.Yealink(
-                phone, usable, allExtensions, stored, transport, this.Request.Scheme, this.Request.Host.Host);
+                phone, usable, allExtensions, controls, stored, transport, this.Request.Scheme, this.Request.Host.Host);
 
             return this.Content(YealinkConfigRenderer.Render(yealink), "text/plain");
         }
@@ -327,6 +330,10 @@ namespace Techie.Pbx.Web.Pages.Phones
                 .ToList();
 
             form.ParkingSlots = AsteriskSettings.Parking(this.settings.GetAll()).SlotNumbers.ToList();
+            form.CallFlowControls = this.callFlowControls.GetAll()
+                .OrderBy(c => c.FeatureCode.Length)
+                .ThenBy(c => c.FeatureCode, StringComparer.Ordinal)
+                .ToList();
 
             return form;
         }

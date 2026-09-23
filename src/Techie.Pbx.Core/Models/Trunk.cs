@@ -140,22 +140,22 @@ namespace Techie.Pbx.Core.Models
             }
         }
 
-        [GeneratedRegex(@"^\+?[0-9]{2,20}$")]
+        [GeneratedRegex(@"^\+?[0-9]{2,20}\z")]
         private static partial Regex CallerIDNumberPattern();
 
-        [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?$")]
+        [GeneratedRegex(@"^[A-Za-z0-9]([A-Za-z0-9.\-]{0,253}[A-Za-z0-9])?\z")]
         private static partial Regex HostPattern();
 
-        [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9\-]{0,31}$")]
+        [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9\-]{0,31}\z")]
         private static partial Regex NamePattern();
 
-        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+$")]
+        [GeneratedRegex(@"^[\p{L}\p{N} .,'\-_()&]+\z")]
         private static partial Regex NamePartPattern();
 
         [GeneratedRegex(@"^[^\s;\[\]""\p{C}]+$")]
         private static partial Regex PasswordPattern();
 
-        [GeneratedRegex(@"^[A-Za-z0-9._\-+@]+$")]
+        [GeneratedRegex(@"^[A-Za-z0-9._\-+@]+\z")]
         private static partial Regex UserPattern();
     }
 }

@@ -46,10 +46,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
             return true;
         }
 
-        [GeneratedRegex(@"^exten(?<mac>[0-9a-f]{12})\.cfg$")]
+        [GeneratedRegex(@"^exten(?<mac>[0-9a-f]{12})\.cfg\z")]
         private static partial Regex ConfigPattern();
 
-        [GeneratedRegex(@"^(?<mac>[0-9a-f]{12})\.cfg$")]
+        [GeneratedRegex(@"^(?<mac>[0-9a-f]{12})\.cfg\z")]
         private static partial Regex MasterPattern();
     }
 }

@@ -79,6 +79,12 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.TimeCondition =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // Not the internal context: the switch's code there is the toggle, and a call sent
+                // to a switch must be routed by it, not flip it. The entry context carries one door
+                // per switch, by code, into that switch's own context (F9).
+                DestinationType.CallFlowControl =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.CallFlowControlEntryContext},{value},1)" },
+
                 DestinationType.Voicemail =>
                     new List<string>
                     {
