@@ -1,0 +1,29 @@
+# TNPBX jail: Asterisk PJSIP auth failures from /var/log/asterisk/security.log.
+# Installed as /etc/fail2ban/jail.d/tnpbx.local by scripts/fail2ban/install.sh.
+
+[tnpbx]
+enabled = true
+filter = tnpbx
+logpath = /var/log/asterisk/security.log
+# security.log is a plain append-only file Asterisk rotates itself; polling has
+# no inotify dependency and 1-second latency is nothing for a brute force.
+backend = polling
+
+# Five failed authentications inside ten minutes is never a healthy phone:
+# a real handset with a stale secret fails once per re-register cycle and gets
+# fixed, a scanner hammers.
+maxretry = 5
+findtime = 10m
+# Toll fraud is the threat this project exists to prevent; a scanner earns a
+# full day out. fail2ban's sqlite db re-applies surviving bans after restart.
+bantime = 24h
+
+# Trusted networks never ban: the admin's VPN paths (which may arrive NATed
+# through either VPN or the VM subnet) and the box itself. A misconfigured
+# desk phone must not lock the office out of the PBX.
+ignoreip = 127.0.0.1/8
+
+# Drop everything from the address, not just SIP: the box's only public
+# services are SIP/RTP, phone provisioning and the admin UI, and a source
+# attacking one has no business on any of them.
+action = nftables-allports

@@ -126,6 +126,6 @@ Deliberately deferred. Don't treat them as done.
 |---|---|---|
 | ~~Any user in the Entra tenant can sign in as an admin~~ | Closed 2026-09-23 (D139) | Enterprise app requires assignment; Entra refuses unassigned users at sign-in. Admin changes are an Entra-side workflow. |
 | ~~No break-glass login if Entra is unreachable~~ | Closed 2026-09-23 (D24, D140) | `LocalAuthenticationBypass` is always on; shipping default is loopback-only, deployments whitelist their trusted networks. If Entra is down, an admin on a whitelisted network (or on the box) can still sign in; every bypass request is logged. |
-| No firewall or fail2ban yet | SIP brute force | Lab VM is protected by the Azure NSG only |
+| ~~No firewall or fail2ban yet~~ | Half closed 2026-09-23 (D141) | fail2ban `tnpbx` jail live (lab-verified): SIP auth failures in security.log → 24h whole-IP nftables ban; trusted ranges ignored. Still open: the base firewall ruleset (Helper piece 19) and D7's own AMI-event blocker remain deferred. |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |

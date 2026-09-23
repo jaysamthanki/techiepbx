@@ -3004,3 +3004,18 @@ admin on the console). Deployments widen the list to their trusted networks (the
 the VM subnet and Jaysam's VPN ranges) and leave it on permanently; that is the accepted
 posture, not an outage-time toggle. Per-request IP logging and the startup WARNING stay the
 audit trail.
+
+### D141. fail2ban: tnpbx jail on Asterisk security events, whole-IP nftables bans (2026-09-23)
+Piece 20's fail2ban half (D7's second half — the own Helper/AMI blocker — stays deferred).
+Config lives in the repo at `scripts/fail2ban/` and `install.sh` copies it to `/etc/fail2ban`;
+the server never carries a hand-edit. The filter matches only the failure SecurityEvents
+(`InvalidPassword`, `InvalidAccountID`, `ChallengeResponseFailed`, `FailedACL`), capturing the
+address from `RemoteAddress="IPV4/UDP/<ip>/<port>"` — the `SuccessfulAuth`/`ChallengeSent`
+handshake noise of every healthy REGISTER never matches. Jail: polling backend, `maxretry 5`
+in `findtime 10m`, `bantime 24h`, `action = nftables-allports` (the box's only public services
+are SIP/RTP, provisioning and the admin UI — a source attacking one gets dropped from all),
+and `ignoreip` = loopback, VM subnet, and the admin VPN ranges so a misconfigured phone or a
+NATed admin path can never lock the office out. Lab-verified 2026-09-23: the filter matched 14
+real lines from an actual credential-guessing scanner (208.100.60.35, Sep 22) in the lab's
+existing security.log and nothing else in 46k lines; five planted failures banned 203.0.113.77
+into the `f2b-table` nft set within seconds, and five from an ignoreip range banned nothing.
