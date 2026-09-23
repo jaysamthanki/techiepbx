@@ -218,10 +218,17 @@ is the "the secretary is leaving early, flip us to night mode" button.
 - **Override ("on")**: the call goes straight to the override destination — the time
   condition's off-hours behaviour without waiting for the clock: voicemail, a night IVR,
   whatever the shared picker offers.
-- The state is toggled **from a phone**: a press on a provisioned key (and/or a feature
-  code) flips it, no web login needed. Open question at build time: who may toggle it
-  (any phone vs a named phone), whether a lamp shows the state, and whether the toggle
-  is per-CFC or one global switch with several named CFCs.
+- The state is toggled **from a phone** (the user's answers, 2026-09-23):
+  - **Who may toggle:** anyone with the button assigned on their phone, or anyone who
+    knows the CFC's feature code. No per-user restriction.
+  - **The key shows state:** the toggling key carries a lamp, lit to reflect the CFC's
+    current state — the same hint mechanism a parking slot uses.
+  - **How many:** several, each fully independent. Chaining one CFC to another happens
+    naturally because a CFC's destinations are the shared picker — one CFC's override
+    destination may point at another CFC — but there is no built-in chaining concept.
+- **Loops across destinations are the admin's to avoid, not the system's to police**
+  (user decision 2026-09-23): each repository's save check follows only its own kind, and
+  that is accepted. Do not build a cross-feature loop walker.
 
 ---
 

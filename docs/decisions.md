@@ -2900,8 +2900,8 @@ destination picker to be the same: offer the full catalog, exclude only the thin
   row labels, both of which now cover announcement / IVR / time condition failovers.
 - **Amends D52** in passing: a group's failover may now name anything the picker offers, not
   only "voicemail, another group, or an extension".
-- **Known gap, left open on purpose:** each repository's loop check still follows only its own
-  kind (ring group → ring group, IVR → IVR, D59). Cross-feature loops — a failover to a time
-  condition whose closed case hands back to the same group — are now buildable from the UI and
-  always were at save; one shared walk over every destination type is a real change and waits
-  for the user to ask for it.
+- **Known gap, resolved 2026-09-23 by the user: leave loops to the admin.** Each repository's
+  loop check still follows only its own kind (ring group → ring group, IVR → IVR, D59).
+  Cross-feature loops — a failover to a time condition whose closed case hands back to the
+  same group — are buildable from the UI and always were at save; the user decided the
+  system will not police them, so no shared cross-feature walk will be built.
