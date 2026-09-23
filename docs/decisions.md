@@ -2986,3 +2986,13 @@ number is the extension's identity: it names the phone, the mailbox on disk and 
 stored reference, and the honest path is delete-and-recreate (references then show as
 "gone" and hang up, D35). The IVR, ring group, time condition and CFC renumber cascades
 stand unchanged.
+
+### D139. Admin access is gated by Entra app assignment, not an app role (2026-09-23, user decision)
+The enterprise app's **User assignment required** is set to Yes in Entra, with self-signup
+disabled; the Entra admin assigns users or groups explicitly. Entra refuses sign-in for anyone
+not assigned, so no unassigned tenant user can ever reach a session, and TNPBX adds no
+`Pbx.Admin` role check of its own — every assignee is an admin, which is the current model.
+An app role is only worth adding if the UI ever needs access *levels*; until then it is
+surface area. Closes the "any user in the Entra tenant can sign in as an admin" known gap in
+[security.md](security.md#known-gaps). Operational note: assigning/removing admins is now an
+Entra-side workflow, outside this app.

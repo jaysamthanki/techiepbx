@@ -116,7 +116,7 @@ Deliberately deferred. Don't treat them as done.
 
 | Gap | Risk | Notes |
 |---|---|---|
-| Any user in the Entra tenant can sign in as an admin | Over-broad access | Add an app role (e.g. `Pbx.Admin`) and require it |
+| ~~Any user in the Entra tenant can sign in as an admin~~ | Closed 2026-09-23 (D139) | Enterprise app requires assignment; Entra refuses unassigned users at sign-in. Admin changes are an Entra-side workflow. |
 | No break-glass login if Entra is unreachable | Admin lockout | Deferred by user (D6) |
 | No firewall or fail2ban yet | SIP brute force | Lab VM is protected by the Azure NSG only |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
