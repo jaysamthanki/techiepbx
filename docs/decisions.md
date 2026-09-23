@@ -3179,3 +3179,15 @@ desk test saw every transfer do nothing: the native consultative Transfer rang t
 (the INVITE path) but completing it was a REFER that Asterisk refused, and the soft keys were the
 same refusal. Park worked throughout because it is DTMF into the featuremap, not a REFER (D144).
 Not a phone-config bug at all — the provisioning from pieces 38/40 was right and is unchanged.
+
+### D148. Parking-slot keys are attendant type `normal`, extension lamps stay `automata` (2026-09-23)
+A slot's lamp is lit exactly when pressing the key must dial the slot and retrieve the call — but
+`automata` is attendant-console semantics: a busy (lit) resource makes the key attempt a directed
+call pickup instead of dialling, and with no pickup code in our dialplan that is a silent nothing.
+That was the desk symptom: slot busy → press → nothing; slot empty → press → dials and reaches the
+"nobody parked" playback. Type `normal` keeps the lamp and makes the key dial unconditionally, which
+is what retrieval is. The FreePBX module's slot keys carry no type for the same reason — its
+generated configs are the production-proven shape. Extension lamps keep `automata` for now: their
+busy-press also does nothing (same pickup attempt), but nobody has asked for busy-lamp pickup and
+`normal` there would make a busy colleague's key plain-dial into a busy tone; revisit only if the
+desk test says the pickup behaviour is wanted.

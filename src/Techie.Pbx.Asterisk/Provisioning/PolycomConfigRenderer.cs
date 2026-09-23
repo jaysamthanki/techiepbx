@@ -36,7 +36,6 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// colleague (D121).
         /// </summary>
         private const string AttendantType = "automata";
-
         private const string BlindTransferLabel = "Blind Xfer";
 
         /// <summary>
@@ -61,6 +60,14 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// user who does not want to wait presses <c>#</c>.
         /// </summary>
         private const int DigitMapTimeoutSeconds = 3;
+
+
+        /// <summary>
+        /// The attendant type a parking slot gets instead (D148): pressing it always dials the
+        /// slot — retrieving the call — whether or not the lamp is lit. Automata would make a lit
+        /// slot attempt a directed pickup, which this system has no code for.
+        /// </summary>
+        private const string NormalAttendantType = "normal";
 
         private const string ParkLabel = "Park";
 
@@ -271,7 +278,16 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
                 attributes.Add(PolycomXml.Attribute($"{resource}.address", button.TargetValue, "attendant address"));
                 attributes.Add(PolycomXml.Attribute($"{resource}.label", button.Label(config.Extensions, config.CallFlowControls), "attendant label"));
-                attributes.Add(PolycomXml.Constant($"{resource}.type", AttendantType));
+
+                // A parking slot is type normal, an extension lamp automata (D148). Automata is
+                // attendant-console semantics: a busy resource makes the key attempt a directed
+                // pickup instead of dialling, which on this system is a silent nothing — a slot's
+                // lamp is lit exactly when the key must dial, so it must never change action with
+                // the lamp. The FreePBX module's slot keys carry no type at all for this reason.
+                attributes.Add(PolycomXml.Constant($"{resource}.type",
+                    string.Equals(button.TargetType, PhoneButtonTarget.ParkingSlot, StringComparison.Ordinal)
+                        ? NormalAttendantType
+                        : AttendantType));
             }
 
             PolycomXml.Comment(sb, "  ", "Keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
