@@ -50,10 +50,11 @@ software.
 
 ### Break-glass (Entra unreachable)
 `LocalAuthenticationBypass` (D24) is the break-glass path: trusted CIDRs in `AllowedNetworks`
-authenticate as `local-bypass` without Entra. Keep it **disabled by default** and enable it only
-for the duration of an outage, or scope `AllowedNetworks` so tightly (office VPN /32s behind the
-NSG) that leaving it on is acceptable. The startup WARNING and per-request IP logging make any
-use auditable.
+authenticate as `local-bypass` without Entra. It is **always on** (D140): the shipping default
+allows loopback only (`127.0.0.1/32` — on-box break-glass, nothing over the network), and each
+deployment widens `AllowedNetworks` to its trusted networks (the lab carries the VM subnet and
+the admin VPN ranges). Every bypass-authenticated request is logged with the remote IP, and a
+startup WARNING names the allowed networks.
 
 ### Asterisk config
 - Values reach conf files only through the renderers.
@@ -124,7 +125,7 @@ Deliberately deferred. Don't treat them as done.
 | Gap | Risk | Notes |
 |---|---|---|
 | ~~Any user in the Entra tenant can sign in as an admin~~ | Closed 2026-09-23 (D139) | Enterprise app requires assignment; Entra refuses unassigned users at sign-in. Admin changes are an Entra-side workflow. |
-| ~~No break-glass login if Entra is unreachable~~ | Closed 2026-09-23 (D24) | `LocalAuthenticationBypass` (`Enabled` + `AllowedNetworks` CIDRs) authenticates trusted-network IPs without Entra. If Entra is down, an admin on a whitelisted network (office VPN / NSG-limited) can still sign in. Enable it only while needed; every bypass request is logged. |
+| ~~No break-glass login if Entra is unreachable~~ | Closed 2026-09-23 (D24, D140) | `LocalAuthenticationBypass` is always on; shipping default is loopback-only, deployments whitelist their trusted networks. If Entra is down, an admin on a whitelisted network (or on the box) can still sign in; every bypass request is logged. |
 | No firewall or fail2ban yet | SIP brute force | Lab VM is protected by the Azure NSG only |
 | SIP secrets stored in plain text in DB and `pjsip.conf` | Secret exposure if files are read | Option: `auth_type = md5` with `md5_cred`, show password once at creation |
 | UDP SIP only, no TLS/SRTP | Eavesdropping | Add a TLS transport later |

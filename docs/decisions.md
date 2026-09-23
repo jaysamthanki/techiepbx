@@ -2996,3 +2996,11 @@ An app role is only worth adding if the UI ever needs access *levels*; until the
 surface area. Closes the "any user in the Entra tenant can sign in as an admin" known gap in
 [security.md](security.md#known-gaps). Operational note: assigning/removing admins is now an
 Entra-side workflow, outside this app.
+
+### D140. Bypass is always on; shipping default is loopback only (2026-09-23, user decision)
+`LocalAuthenticationBypass` ships `Enabled` with `AllowedNetworks = [ "127.0.0.1/32" ]` — a
+fresh install is safe by default while still giving an on-box break-glass path (Entra down,
+admin on the console). Deployments widen the list to their trusted networks (the lab carries
+the VM subnet and Jaysam's VPN ranges) and leave it on permanently; that is the accepted
+posture, not an outage-time toggle. Per-request IP logging and the startup WARNING stay the
+audit trail.
