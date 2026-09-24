@@ -3193,3 +3193,29 @@ generated configs are the production-proven shape.
 controls included.** A day/night key set on a Poly Edge showed it: the control switched on — the
 lamp lit — and the lit key's pickup attempt meant it could never be switched back off. A key whose
 action changes with its lamp is not a key anyone can trust, whatever the target is.
+
+### D149. Phone clocks: the phone's own daylight-saving rule is off and both time values override DHCP (2026-09-23)
+
+The user's Edge E450 showed 6pm at 5pm — exactly one hour fast. The served config was fetched from
+the lab VM before theorizing: `tcpIpApp.sntp.gmtOffset="-25200"` (correct PDT, computed at
+generation time as D82 records) but no `daylightSaving` setting, so the phone applied its own
+factory DST rule **on top** of a DST-correct offset. Double daylight saving, one hour fast.
+
+D82's design already assumed the phone adds nothing on its own; the missing half was saying so.
+The renderer now writes, into the same `tcpIpApp` element:
+
+- `tcpIpApp.sntp.daylightSaving.enable="0"` — D82's generation-time offset is the whole truth;
+  the phone's DST rule is off so it cannot add an hour a second time.
+- `tcpIpApp.sntp.address.overrideDHCP="1"` and `tcpIpApp.sntp.gmtOffset.overrideDHCP="1"` —
+  pin both values over whatever the site's DHCP server may be offering for the time, so the
+  config and the clock cannot disagree about who is in charge of either.
+
+The D82 caveat stands and is now the whole trade: a phone crosses a DST boundary at its next
+config poll (86400s), not the moment the clocks change. That is accepted rather than teaching
+every phone brand each zone's DST rule — one rule per phone family is more surface than one
+number the server already knows. Yealink's `local_time` block is untouched: its defaults leave
+the phone's DST off already (D92's not-verified note still applies).
+
+Verified live: deployed to the lab VM, the served config carries all three lines, and a
+`check-sync` NOTIFY pushed it to the registered Edge (contact `203.0.113.25`) — desk confirmation
+is the user's.
