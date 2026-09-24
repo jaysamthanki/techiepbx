@@ -31,8 +31,11 @@ namespace Techie.Pbx.Web.Controllers
     ///
     /// The background image (D145, D151) and the logo (D153) are the two files here that are not
     /// generated: uploads, stored in the data folder and served from this route so that they sit
-    /// behind exactly the same credentials and User-Agent check as the config that names them. No
-    /// anonymous directory, no second way in.
+    /// behind the same User-Agent check as the config that names them, but NOT the Basic auth:
+    /// a phone does not resend its provisioning credentials when it fetches a config's referenced
+    /// image — a real Edge E450 on 8.6.1 asked for its logo bare and never retried after the 401
+    /// (D155, verified live 2026-09-24). The credentials stay on the master and config files,
+    /// which are the ones that can change a phone's own settings.
     /// </summary>
     [ApiController]
     [AllowAnonymous]
@@ -80,9 +83,6 @@ namespace Techie.Pbx.Web.Controllers
         [HttpGet("{file}")]
         public IActionResult Get(string file)
         {
-            if (!this.IsAuthorized())
-                return this.Challenge401();
-
             if (!PolycomUserAgent.TryParse(this.Request.Headers.UserAgent, out var agent))
             {
                 Log.Warn($"Provisioning request for '{file}' from {this.Address()} refused: not a Polycom phone");
@@ -131,6 +131,9 @@ namespace Techie.Pbx.Web.Controllers
         /// </summary>
         private IActionResult Config(string mac, PolycomUserAgent agent)
         {
+            if (!this.IsAuthorized())
+                return this.Challenge401();
+
             var known = this.phones.GetByMac(mac);
 
             if (this.Refuse(known, agent, mac) is { } refusal)
@@ -215,6 +218,9 @@ namespace Techie.Pbx.Web.Controllers
         /// </summary>
         private IActionResult Master(string mac, PolycomUserAgent agent)
         {
+            if (!this.IsAuthorized())
+                return this.Challenge401();
+
             if (this.Refuse(this.phones.GetByMac(mac), agent, mac) is { } refusal)
                 return refusal;
 

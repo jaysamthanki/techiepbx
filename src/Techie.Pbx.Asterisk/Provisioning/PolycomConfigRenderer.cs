@@ -317,7 +317,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
             {
                 CheckImageUrl(config.BackgroundUrl, "background image");
 
-                PolycomXml.Comment(sb, "  ", "The site's background image (D145), fetched through the same gate as this file.");
+                PolycomXml.Comment(sb, "  ", "The site's background image (D145), fetched through the same User-Agent gate as this file, credentials not included (D155).");
                 attributes.Add(PolycomXml.Constant("bg.background.enabled", "1"));
                 attributes.Add(PolycomXml.Constant("bg.color.selection", "2,1"));
                 attributes.Add(PolycomXml.Attribute("bg.color.bm.1.name", config.BackgroundUrl, "background url"));
@@ -327,7 +327,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
             {
                 CheckImageUrl(config.LogoUrl, "logo");
 
-                PolycomXml.Comment(sb, "  ", "The site's logo (D153), fetched through the same gate as this file.");
+                PolycomXml.Comment(sb, "  ", "The site's logo (D153), fetched through the same User-Agent gate as this file, credentials not included (D155).");
                 attributes.Add(PolycomXml.Attribute("bg.logo", config.LogoUrl, "logo url"));
             }
 

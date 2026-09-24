@@ -3375,3 +3375,18 @@ user's.
 - **The form says so.** The background upload hint now says any size is accepted and that the
   server resizes to 320x240 (keeping a 320x240 upload as it is). The logo still has no upload
   UI (D153); when it gets one its hint says the same for 60x26.
+
+### D155. Polycom images are served on the User-Agent gate alone, without Basic auth (2026-09-24, piece 41, amends D151 and D153)
+
+- **The phone does not authenticate its image fetches.** The provisioning credentials ride a
+  phone's config requests (DHCP option 160 carries user:pass in the URL), but when a config
+  names an image the phone fetches it without resending them. Verified live: a real Edge E450
+  on PVOS 8.6.1, provisioned and registered, asked for `/polycom/logo.png` with a bare request
+  from `104.177.80.33` and never retried after the 401 — both the logo and the background sat
+  dead on otherwise healthy phones.
+- **So the two image files answer to the Polycom User-Agent check only.** The Basic-auth
+  challenge stays on the master and per-phone config files, the only files that can change a
+  phone's own settings and the only ones a phone ever sends its credentials with. The images
+  are a site's own branding, not secrets: a guessable name behind a brand-and-model UA gate is
+  the same protection FreePBX's endpoint list gives its wallpapers.
+- **Yealink images, if ever added, follow the same split.**
