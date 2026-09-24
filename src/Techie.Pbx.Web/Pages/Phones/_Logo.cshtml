@@ -19,7 +19,7 @@
 </div>
 @if (Model.HasImage)
 {
-    <img src="@Url.Page("Index", "LogoImage")?v=@DateTime.UtcNow.Ticks"
+    <img src="@Url.Page("Index", "LogoImage")&v=@DateTime.UtcNow.Ticks"
          alt="The current Polycom logo" class="mt-2"
          style="width: 180px; image-rendering: pixelated; background-color: var(--bs-tertiary-bg); border-radius: 4px; padding: 8px" />
 }

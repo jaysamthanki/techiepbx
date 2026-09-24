@@ -18,7 +18,7 @@
 </div>
 @if (Model.HasImage)
 {
-    <img src="@Url.Page("Index", "BackgroundImage")?v=@DateTime.UtcNow.Ticks"
+    <img src="@Url.Page("Index", "BackgroundImage")&v=@DateTime.UtcNow.Ticks"
          alt="The current Polycom background image" class="img-fluid rounded border mt-2"
          style="max-width: 320px" />
 }
