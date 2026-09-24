@@ -81,11 +81,20 @@ namespace Techie.Pbx.Asterisk.Provisioning
         public string UserPassword { get; set; } = "";
 
         /// <summary>
-        /// The offset the phone should apply to UTC, as Polycom wants it: a number of seconds,
-        /// with no notion of a zone and so no notion of daylight saving. It is worked out from the
-        /// System.Timezone setting <em>at the moment the file is generated</em>, which is the
-        /// consequence worth knowing: a phone crosses a DST boundary when it next polls for its
-        /// config, not when the clocks change (D82).
+        /// The offset the phone should apply to UTC, as Polycom wants it: a number of seconds. It
+        /// is the zone's <em>standard</em> offset, not whatever is in force at generation time: a
+        /// Polycom adds its own daylight-saving hour on top of the offset whatever the config says
+        /// (D149's attempt to switch that rule off from the config did not hold on a real Edge
+        /// E450), so the number must be the no-DST one and the phone's own rule supplies the summer
+        /// hour — the production-proven shape, exactly how the FreePBX module configured Pacific
+        /// sites at -28800 with no daylightSaving parameter at all (D150, amending D82).
+        ///
+        /// The standard offset is read from the zone's January and July offsets and taking the
+        /// smaller: daylight saving always adds, in either hemisphere, so the smaller of the two is
+        /// the standard one, and for a zone with no daylight saving the two are equal. The dates
+        /// are fixed, so the answer does not drift with the season or the moment the file is
+        /// generated — which also retires D82's caveat: the phone now crosses DST boundaries on
+        /// the phone's own rule, at the moment the clocks change, not at its next config poll.
         ///
         /// A zone this machine cannot resolve falls back to UTC rather than throwing, for the same
         /// reason a bad port does elsewhere: a bad setting must not make provisioning fail, and the
@@ -96,7 +105,11 @@ namespace Techie.Pbx.Asterisk.Provisioning
             try
             {
                 var zone = TimeZoneInfo.FindSystemTimeZoneById(timezone);
-                return (int)zone.GetUtcOffset(DateTimeOffset.UtcNow).TotalSeconds;
+                var january = zone.GetUtcOffset(new DateTimeOffset(2020, 1, 15, 0, 0, 0, TimeSpan.Zero));
+                var july = zone.GetUtcOffset(new DateTimeOffset(2020, 7, 15, 0, 0, 0, TimeSpan.Zero));
+                var standard = january < july ? january : july;
+
+                return (int)standard.TotalSeconds;
             }
             catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
             {

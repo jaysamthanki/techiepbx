@@ -99,19 +99,19 @@ namespace Techie.Pbx.Asterisk.Provisioning
             sb.Append("<polycomConfig>\n");
 
             // The time, and coming back for this file again: the two things every phone gets,
-            // whether or not anyone has told it which extension it is. The offset already carries
-            // whatever daylight saving is in force where the server is (D82), so the phone's own
-            // DST rule must be off or it applies an hour a second time: a phone an hour fast is
-            // the exact symptom of that (D149). The two overrideDHCP flags pin both values over
-            // anything the site's DHCP server may be offering for the time, so the config and the
-            // clock cannot disagree about who is in charge of either (D149).
+            // whether or not anyone has told it which extension it is. The offset is the zone's
+            // STANDARD one (D150): the phone adds its own daylight-saving hour on top whatever
+            // the config says — D149's attempt to switch that rule off did not hold on a real
+            // Edge E450 — so the number must not already contain the summer hour or it is
+            // counted twice and the phone runs fast (D149's one-hour-fast symptom). The two
+            // overrideDHCP flags pin both values over anything the site's DHCP server may be
+            // offering for the time (D149).
             PolycomXml.Element(sb, "  ", "tcpIpApp", new[]
             {
                 PolycomXml.Attribute("tcpIpApp.sntp.address", config.SntpAddress, "sntp address"),
                 PolycomXml.Constant("tcpIpApp.sntp.address.overrideDHCP", "1"),
                 PolycomXml.Constant("tcpIpApp.sntp.gmtOffset", Number(config.GmtOffsetSeconds)),
                 PolycomXml.Constant("tcpIpApp.sntp.gmtOffset.overrideDHCP", "1"),
-                PolycomXml.Constant("tcpIpApp.sntp.daylightSaving.enable", "0"),
             });
 
             PolycomXml.Element(sb, "  ", "prov", new[]

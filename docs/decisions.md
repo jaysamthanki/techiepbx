@@ -3219,3 +3219,34 @@ the phone's DST off already (D92's not-verified note still applies).
 Verified live: deployed to the lab VM, the served config carries all three lines, and a
 `check-sync` NOTIFY pushed it to the registered Edge (contact `203.0.113.25`) — desk confirmation
 is the user's.
+
+### D150. Phone clocks, the fix that held: the STANDARD offset and the phone's own DST rule (2026-09-23, amends D149 and D82)
+
+D149's fix did not hold: the desk Edge E450 rebooted onto the new config — offset -25200 with
+`tcpIpApp.sntp.daylightSaving.enable="0"` and both `overrideDHCP` flags — and still showed 6pm at
+5pm. The phone applies its own daylight-saving adjustment whatever the config says about it.
+
+The production reference had the answer all along: the user's FreePBX module offers only
+**standard** offsets (`-28800` labelled "GMT -8:00 Pacific Time") and writes no daylightSaving
+parameter at all. The phone's DST rule (on by default — which is why it added an hour even when
+unset) supplies the summer hour on top. Production phones stayed correct year-round that way.
+
+- `GmtOffsetFor` now returns the zone's **standard** offset: the smaller of its fixed January-15
+  and July-15 UTC offsets, because daylight saving always adds, in either hemisphere; the two are
+  equal for a zone with no DST. Deterministic, no generation-time drift.
+- The `daylightSaving.enable` line is **gone** — unset, exactly like the module: the phone's own
+  rule owns the summer hour.
+- Both `overrideDHCP` flags stay (D149): provisioned NTP address and offset win over DHCP.
+
+This retires D82's caveat entirely: a phone now crosses DST boundaries at the moment the clocks
+change, on its own rule — not at its next config poll. The trade it takes on instead: the phone's
+rule is a built-in US/EU calendar, so a site whose zone keeps different dates (or none —
+Arizona-style) needs a setting someday; none of this user's sites do.
+
+The Yealink renderer keeps the current-offset shape (D92): a Yealink's `local_time` block carries
+its own DST switches and its default leaves them off, so its offset is applied as-is and it
+self-heals at the next config poll. Not desk-verified yet, unchanged.
+
+Verified live: deployed to the lab VM, the served config carries `gmtOffset="-28800"`, and a
+`check-sync;reboot=true` NOTIFY rebooted the registered Edge onto it — desk confirmation is the
+user's.

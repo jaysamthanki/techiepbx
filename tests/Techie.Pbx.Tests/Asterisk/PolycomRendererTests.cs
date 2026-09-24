@@ -53,7 +53,8 @@ namespace Techie.Pbx.Tests.Asterisk
             AdminPassword = "AdminPass123",
             Buttons = new List<PhoneButton> { SampleLine() },
             Extensions = SampleExtensions(),
-            GmtOffsetSeconds = -25200,
+            // The standard offset, as GmtOffsetFor would produce it for this zone (D150).
+            GmtOffsetSeconds = -28800,
             ParkDtmfCode = "*3",
             ParkEnabled = false,
             Phone = SamplePhone(),
@@ -479,8 +480,9 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
-        /// The offset is worked out from the zone at the moment of generation, so it is a number of
-        /// seconds with no notion of daylight saving in it (D82).
+        /// The offset is the zone's standard one, read from fixed January and July dates so it never
+        /// drifts with the season (D150, amending D82): the phone adds its own daylight-saving hour,
+        /// so the number this system writes must not already contain it.
         /// </summary>
         [Fact]
         public void The_gmt_offset_comes_from_the_timezone_setting()
@@ -493,16 +495,28 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// A western zone must render as a negative number of seconds, not a magnitude with the
-        /// sign lost somewhere in the cast to int (D84). Not pinned to -28800 alone: Los Angeles is
-        /// -28800 (PST) or -25200 (PDT) depending on when the test runs, and pinning to one would
-        /// make this fail for two weeks every spring and autumn.
+        /// sign lost somewhere in the cast to int (D84). It is the STANDARD offset now, so
+        /// Los Angeles is -28800 year-round and the assertion can pin it exactly (D150) — which is
+        /// also the point: the Pacific daylight offset -25200 must never come back, because the
+        /// phone adds that hour itself and a config that carries it runs the clock fast (D149).
         /// </summary>
         [Fact]
         public void The_gmt_offset_is_negative_for_a_western_zone()
         {
             var offset = PolycomConfig.GmtOffsetFor("America/Los_Angeles");
 
-            Assert.True(offset is -28800 or -25200, $"Expected the Pacific standard or daylight offset, got {offset}.");
+            Assert.Equal(-28800, offset);
+        }
+
+        /// <summary>
+        /// The smaller of the January and July offsets is the standard one in either hemisphere
+        /// (D150): a southern zone's daylight saving falls in its January, so Sydney's standard
+        /// +10:00 is what comes back, never the summer +11:00.
+        /// </summary>
+        [Fact]
+        public void The_gmt_offset_is_the_standard_offset_in_either_hemisphere()
+        {
+            Assert.Equal(36000, PolycomConfig.GmtOffsetFor("Australia/Sydney"));
         }
 
         [Theory]
