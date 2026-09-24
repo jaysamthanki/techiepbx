@@ -2,10 +2,16 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <!-- Same official deploy shape as the web app: one self-contained single-file executable. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Techie.Pbx.Core\Techie.Pbx.Core.csproj" />
+    <PackageReference Include="log4net" Version="3.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Techie.Pbx.Contracts\Techie.Pbx.Contracts.csproj" />
   </ItemGroup>
 
