@@ -1,15 +1,25 @@
 @model LogoForm
 @*
-    The logo's one-line status, under the background's on the Phones page (D153). Refreshed by
-    the phoneLogoChanged event an upload or a remove answers with.
+    The logo's status line and preview, under the background's in the Settings tab's Polycom
+    pane (D153). Refreshed by the phoneLogoChanged event an upload or a remove answers with.
+    The preview is the logo's own 60x26 pixels, enlarged without smoothing: at that size it
+    is a wordmark, and blur would hide what the phone actually shows.
 *@
-<span class="fw-semibold">Polycom logo:</span>
+<div>
+    <span class="fw-semibold">Polycom logo:</span>
+    @if (Model.HasImage)
+    {
+        <span>@Model.Summary</span>
+        <span class="text-secondary">— shown on every provisioned Polycom.</span>
+    }
+    else
+    {
+        <span class="text-secondary">@Model.Summary</span>
+    }
+</div>
 @if (Model.HasImage)
 {
-    <span>@Model.Summary</span>
-    <span class="text-secondary">— shown on every provisioned Polycom.</span>
-}
-else
-{
-    <span class="text-secondary">@Model.Summary</span>
+    <img src="@Url.Page("Index", "LogoImage")?v=@DateTime.UtcNow.Ticks"
+         alt="The current Polycom logo" class="mt-2"
+         style="width: 180px; image-rendering: pixelated; background-color: var(--bs-tertiary-bg); border-radius: 4px; padding: 8px" />
 }

@@ -84,6 +84,19 @@ namespace Techie.Pbx.Web.Pages.Phones
             return this.Partial("_BackgroundForm", this.FillBackground(new BackgroundForm()));
         }
 
+        /// <summary>
+        /// The stored background image itself, for the preview beside its status line. Only this
+        /// page's own authenticated browser asks for it; phones fetch theirs through provisioning.
+        /// </summary>
+        public IActionResult OnGetBackgroundImage()
+        {
+            var image = this.background.Current();
+
+            return image == null
+                ? this.NotFound()
+                : this.File(System.IO.File.OpenRead(image.Path), BackgroundImageSignature.ContentType(image.Format));
+        }
+
         /// <summary>The edit form for one phone, which the page shows in the Bootstrap modal.</summary>
         public IActionResult OnGetForm(long phoneID)
         {
@@ -122,6 +135,19 @@ namespace Techie.Pbx.Web.Pages.Phones
         public PartialViewResult OnGetLogoForm()
         {
             return this.Partial("_LogoForm", this.FillLogo(new LogoForm()));
+        }
+
+        /// <summary>
+        /// The stored logo itself, for the preview beside its status line. Only this page's own
+        /// authenticated browser asks for it; phones fetch theirs through provisioning.
+        /// </summary>
+        public IActionResult OnGetLogoImage()
+        {
+            var image = this.logo.Current();
+
+            return image == null
+                ? this.NotFound()
+                : this.File(System.IO.File.OpenRead(image.Path), BackgroundImageSignature.ContentType(image.Format));
         }
 
         /// <summary>

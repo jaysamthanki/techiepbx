@@ -1,15 +1,24 @@
 @model BackgroundForm
 @*
-    The background image's one-line status, near the top of the Phones page (D151). Refreshed by
-    the phoneBackgroundChanged event an upload or a remove answers with.
+    The background image's status line and preview, in the Settings tab's Polycom pane (D151).
+    Refreshed by the phoneBackgroundChanged event an upload or a remove answers with. The
+    preview URL carries a tick so a replaced image is never served from the browser's cache.
 *@
-<span class="fw-semibold">Polycom background image:</span>
+<div>
+    <span class="fw-semibold">Polycom background image:</span>
+    @if (Model.HasImage)
+    {
+        <span>@Model.Summary</span>
+        <span class="text-secondary">— shown on every provisioned Polycom.</span>
+    }
+    else
+    {
+        <span class="text-secondary">@Model.Summary</span>
+    }
+</div>
 @if (Model.HasImage)
 {
-    <span>@Model.Summary</span>
-    <span class="text-secondary">— shown on every provisioned Polycom.</span>
-}
-else
-{
-    <span class="text-secondary">@Model.Summary</span>
+    <img src="@Url.Page("Index", "BackgroundImage")?v=@DateTime.UtcNow.Ticks"
+         alt="The current Polycom background image" class="img-fluid rounded border mt-2"
+         style="max-width: 320px" />
 }
