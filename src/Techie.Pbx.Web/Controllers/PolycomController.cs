@@ -25,14 +25,14 @@ namespace Techie.Pbx.Web.Controllers
     /// <item>401 with a challenge, for credentials that are missing, wrong, or not configured.</item>
     /// <item>403, for a User-Agent that is not a phone, a phone that is switched off, a known MAC
     /// registered to a different brand (D88), or one whose model has changed underneath us.</item>
-    /// <item>404, for any file name that is not one of the two we generate or the background image,
-    /// and for a background image the site does not have.</item>
+    /// <item>404, for any file name that is not one of the two we generate, the background image or
+    /// the logo, and for an image the site does not have.</item>
     /// </list>
     ///
-    /// The background image (D145, D151) is the one file here that is not generated: an upload,
-    /// stored in the data folder and served from this route so that it sits behind exactly the
-    /// same credentials and User-Agent check as the config that names it. No anonymous directory,
-    /// no second way in.
+    /// The background image (D145, D151) and the logo (D153) are the two files here that are not
+    /// generated: uploads, stored in the data folder and served from this route so that they sit
+    /// behind exactly the same credentials and User-Agent check as the config that names them. No
+    /// anonymous directory, no second way in.
     /// </summary>
     [ApiController]
     [AllowAnonymous]
@@ -56,6 +56,7 @@ namespace Techie.Pbx.Web.Controllers
         private readonly PhoneButtonRepository buttons;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
+        private readonly LogoStore logo;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
@@ -65,12 +66,13 @@ namespace Techie.Pbx.Web.Controllers
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.logo = new LogoStore(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
 
         /// <summary>
-        /// Both provisioning files and the background image, because all are one path segment and
+        /// Both provisioning files and the two images, because all are one path segment and
         /// telling them apart is this code's job rather than the router's: a MAC address is a
         /// strict pattern, and a routing template that matched loosely would hand a lookup
         /// something it should not. The gates run first, whichever file it is.
@@ -93,8 +95,11 @@ namespace Techie.Pbx.Web.Controllers
             if (PolycomFiles.TryParseConfig(file, out var configMac))
                 return this.Config(configMac, agent);
 
-            if (PolycomFiles.TryParseBackground(file, out var format))
-                return this.Background(format, agent);
+            if (PolycomFiles.TryParseBackground(file, out var backgroundFormat))
+                return this.Background(backgroundFormat, agent);
+
+            if (PolycomFiles.TryParseLogo(file, out var logoFormat))
+                return this.Logo(logoFormat, agent);
 
             Log.Warn($"Provisioning request for '{file}' from {this.Address()} refused: not a file we generate");
             return this.NotFound();
@@ -109,21 +114,8 @@ namespace Techie.Pbx.Web.Controllers
         /// background.png while the site now has a JPEG is a phone that has not polled since the
         /// change, and a 404 makes it keep its factory background until it does.
         /// </summary>
-        private IActionResult Background(BackgroundImageFormat format, PolycomUserAgent agent)
-        {
-            var image = this.background.Current();
-            var fileName = PolycomFiles.BackgroundFileName(format);
-
-            if (image == null || image.Format != format)
-            {
-                Log.Warn($"Background request for '{fileName}' from {this.Address()} ({agent.Model}) refused: the site has no such image");
-                return this.NotFound();
-            }
-
-            Log.Info($"Background image {fileName} served to {agent.Model} at {this.Address()}");
-
-            return this.PhysicalFile(image.Path, BackgroundImageSignature.ContentType(format));
-        }
+        private IActionResult Background(BackgroundImageFormat format, PolycomUserAgent agent) =>
+            this.Image(this.background, PolycomFiles.BackgroundFileName(format), format, "Background", agent);
 
         private IActionResult Challenge401()
         {
@@ -160,7 +152,7 @@ namespace Techie.Pbx.Web.Controllers
 
             var config = PhoneConfigFactory.Polycom(
                 phone, usable, allExtensions, controls, stored, transport,
-                this.Request.Scheme, this.Request.Host.Host, this.background.Current());
+                this.Request.Scheme, this.Request.Host.Host, this.background.Current(), this.logo.Current());
 
             Log.Info($"Provisioning config served to {mac} ({agent.Model}) at {this.Address()}, registers as {PhoneButton.LineNumber(usable) ?? "nothing"}, {usable.Count} keys");
 
@@ -170,6 +162,25 @@ namespace Techie.Pbx.Web.Controllers
         private IActionResult Forbid403(string message)
         {
             return this.StatusCode(StatusCodes.Status403Forbidden, new MessageResponse(message));
+        }
+
+        /// <summary>
+        /// One of the site's images, if it is there in the format asked for; otherwise a 404, so
+        /// the phone keeps its own until its next config fetch names the right file.
+        /// </summary>
+        private IActionResult Image(PolycomImageStore store, string fileName, BackgroundImageFormat format, string what, PolycomUserAgent agent)
+        {
+            var image = store.Current();
+
+            if (image == null || image.Format != format)
+            {
+                Log.Warn($"{what} request for '{fileName}' from {this.Address()} ({agent.Model}) refused: the site has no such image");
+                return this.NotFound();
+            }
+
+            Log.Info($"{what} image {fileName} served to {agent.Model} at {this.Address()}");
+
+            return this.PhysicalFile(image.Path, BackgroundImageSignature.ContentType(format));
         }
 
         /// <summary>
@@ -189,6 +200,13 @@ namespace Techie.Pbx.Web.Controllers
             Log.Warn($"Provisioning request from {this.Address()} refused: bad or missing credentials");
             return false;
         }
+
+        /// <summary>
+        /// The site's logo, which every phone's config names in <c>bg.logo</c> when there is one
+        /// (D153). Answered exactly as the background is.
+        /// </summary>
+        private IActionResult Logo(BackgroundImageFormat format, PolycomUserAgent agent) =>
+            this.Image(this.logo, PolycomFiles.LogoFileName(format), format, "Logo", agent);
 
         /// <summary>
         /// The master file, which names the config file and holds nothing else. An unknown MAC is

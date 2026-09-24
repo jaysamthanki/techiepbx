@@ -4,13 +4,12 @@ using Techie.Pbx.Asterisk.Provisioning;
 namespace Techie.Pbx.Tests.Asterisk
 {
     /// <summary>
-    /// The one site-wide Polycom background image in the data folder (D151, D152): at most one
-    /// file, under a fixed name, and nothing refused ever touches the image that is there.
+    /// The one site-wide Polycom background image in the data folder (D151, D152, D153): at most
+    /// one file, under a fixed name, exactly one of Poly's two background sizes, and nothing
+    /// refused ever touches the image that is there.
     /// </summary>
     public class BackgroundStoreTests : IDisposable
     {
-        private static readonly byte[] PngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-
         private readonly string directory = Directory.CreateTempSubdirectory("tnpbx-background-store-").FullName;
         private readonly BackgroundStore store;
 
@@ -21,16 +20,13 @@ namespace Techie.Pbx.Tests.Asterisk
 
         public void Dispose() => Directory.Delete(this.directory, recursive: true);
 
-        private static MemoryStream Jpeg(int bytes = 4096) => Image(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }, bytes);
+        /// <summary>A JPEG of the E100–E400 background size, unless a test says otherwise.</summary>
+        private static MemoryStream Jpeg(int bytes = 4096, int width = 320, int height = 240) =>
+            new(FakeImages.Jpeg(width, height, bytes));
 
-        private static MemoryStream Image(byte[] signature, int bytes)
-        {
-            var content = new byte[bytes];
-            signature.CopyTo(content, 0);
-            return new MemoryStream(content);
-        }
-
-        private static MemoryStream Png(int bytes = 4096) => Image(PngSignature, bytes);
+        /// <summary>A PNG of the E100–E400 background size, unless a test says otherwise.</summary>
+        private static MemoryStream Png(int bytes = 4096, int width = 320, int height = 240) =>
+            new(FakeImages.Png(width, height, bytes));
 
         [Fact]
         public void A_new_install_has_no_image()
@@ -106,6 +102,54 @@ namespace Techie.Pbx.Tests.Asterisk
             this.store.Save(Jpeg());
 
             Assert.True(this.store.Delete());
+            Assert.Null(this.store.Current());
+            Assert.Empty(Directory.GetFiles(this.directory));
+        }
+
+        /// <summary>Both of Poly's background sizes are accepted, in either format (D153).</summary>
+        [Theory]
+        [InlineData(320, 240)]
+        [InlineData(800, 480)]
+        public void Either_background_size_is_accepted(int width, int height)
+        {
+            Assert.Equal(BackgroundImageFormat.Png, this.store.Save(Png(width: width, height: height)).Format);
+            Assert.Equal(BackgroundImageFormat.Jpeg, this.store.Save(Jpeg(width: width, height: height)).Format);
+        }
+
+        /// <summary>
+        /// Anything else is refused, with a message naming the sizes that are accepted and the one
+        /// the file is — and the image already there is untouched. A logo-sized image is no
+        /// exception, and neither is one a pixel out.
+        /// </summary>
+        [Theory]
+        [InlineData(1024, 600)]
+        [InlineData(321, 240)]
+        [InlineData(240, 320)]
+        [InlineData(60, 26)]
+        [InlineData(182, 78)]
+        public void Any_other_size_is_refused_and_changes_nothing(int width, int height)
+        {
+            this.store.Save(Png());
+
+            var refused = Assert.Throws<BackgroundUploadException>(() => this.store.Save(Jpeg(width: width, height: height)));
+
+            Assert.Equal($"The background image must be exactly 320x240 or 800x480 pixels; this file is {width}x{height}.", refused.Message);
+            Assert.Equal(BackgroundImageFormat.Png, this.store.Current()!.Format);
+            Assert.Single(Directory.GetFiles(this.directory));
+        }
+
+        /// <summary>A JPEG signature with no readable frame header has no size to check, so it is refused.</summary>
+        [Fact]
+        public void A_jpeg_whose_size_cannot_be_read_is_refused()
+        {
+            var content = new byte[4096];
+            new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }.CopyTo(content, 0);
+
+            using var unreadable = new MemoryStream(content);
+
+            var refused = Assert.Throws<BackgroundUploadException>(() => this.store.Save(unreadable));
+
+            Assert.Contains("320x240 or 800x480", refused.Message);
             Assert.Null(this.store.Current());
             Assert.Empty(Directory.GetFiles(this.directory));
         }

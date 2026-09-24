@@ -199,9 +199,86 @@ namespace Techie.Pbx.Tests.Asterisk
         [InlineData("background.gif")]
         [InlineData("../Data/polycom-background.png")]
         [InlineData("polycom-background.png")]
+        [InlineData("logo.png")]
         public void Anything_else_is_not_the_background(string? fileName)
         {
             Assert.False(PolycomFiles.TryParseBackground(fileName, out _));
+        }
+
+        /// <summary>
+        /// A site with a logo and no background (D153): the same file as a phone with neither,
+        /// plus a <c>bg</c> element holding only <c>bg.logo</c> — the factory background stays.
+        /// </summary>
+        [Fact]
+        public void A_phone_on_a_site_with_a_logo_matches_expected_file()
+        {
+            var config = SampleConfig();
+            config.LogoUrl = "http://pbx.example.com/polycom/logo.png";
+
+            Assert.Equal(Expected("polycom-phone-logo.cfg"), PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>Both images: one <c>bg</c> element, the background's three lines and then the logo's.</summary>
+        [Fact]
+        public void A_phone_on_a_site_with_a_background_and_a_logo_matches_expected_file()
+        {
+            var config = SampleConfig();
+            config.BackgroundUrl = "http://pbx.example.com/polycom/background.png";
+            config.LogoUrl = "http://pbx.example.com/polycom/logo.png";
+
+            Assert.Equal(Expected("polycom-phone-background-logo.cfg"), PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>No logo means no <c>bg.logo</c> line, whether or not there is a background.</summary>
+        [Fact]
+        public void No_logo_means_no_logo_line()
+        {
+            var config = SampleConfig();
+            config.BackgroundUrl = "http://pbx.example.com/polycom/background.png";
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.DoesNotContain("bg.logo", actual);
+            Assert.Equal(Expected("polycom-phone-background.cfg"), actual);
+        }
+
+        /// <summary>The logo's URL is re-checked exactly as the background's is.</summary>
+        [Theory]
+        [InlineData("logo.png")]
+        [InlineData("/polycom/logo.png")]
+        [InlineData("ftp://pbx.example.com/polycom/logo.png")]
+        [InlineData("file:///etc/passwd")]
+        [InlineData("http://pbx.example.com/polycom/logo.png\"/><x a=\"")]
+        public void A_logo_url_that_is_not_absolute_http_is_refused(string url)
+        {
+            var config = SampleConfig();
+            config.LogoUrl = url;
+
+            Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
+        }
+
+        [Theory]
+        [InlineData("logo.png", BackgroundImageFormat.Png)]
+        [InlineData("logo.jpg", BackgroundImageFormat.Jpeg)]
+        public void A_logo_file_name_is_read_back_as_its_format(string fileName, BackgroundImageFormat format)
+        {
+            Assert.True(PolycomFiles.TryParseLogo(fileName, out var parsed));
+            Assert.Equal(format, parsed);
+            Assert.Equal(fileName, PolycomFiles.LogoFileName(format));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("logo.jpeg")]
+        [InlineData("Logo.png")]
+        [InlineData("logo.gif")]
+        [InlineData("../Data/polycom-logo.png")]
+        [InlineData("polycom-logo.png")]
+        [InlineData("background.png")]
+        public void Anything_else_is_not_the_logo(string? fileName)
+        {
+            Assert.False(PolycomFiles.TryParseLogo(fileName, out _));
         }
 
         /// <summary>

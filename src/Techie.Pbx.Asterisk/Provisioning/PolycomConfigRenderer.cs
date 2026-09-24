@@ -156,7 +156,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("da.optIn", "OptedOut"),
             });
 
-            AppendBackground(sb, config);
+            AppendImages(sb, config);
 
             var buttons = Validated(config.Buttons);
             var lines = PhoneButton.Lines(buttons);
@@ -291,38 +291,48 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         /// <summary>
-        /// The site's background image (D145), for every phone whether or not it registers yet: it
-        /// is phone-level, like the time. Written only when there is an image, so a site without
-        /// one gets exactly the file it always did and the phone keeps its factory background.
+        /// The site's background image (D145) and logo (D153), for every phone whether or not it
+        /// registers yet: they are phone-level, like the time. Each is written only when there is
+        /// an image, so a site without either gets exactly the file it always did and the phone
+        /// keeps its factory background and Poly's own logo.
         ///
-        /// Three parameters, in the order Poly's own guides give them (D151):
+        /// The background is three parameters, in the order Poly's own guides give them (D151):
         /// <c>bg.background.enabled</c> turns custom backgrounds on, <c>bg.color.selection</c>
         /// <c>2,1</c> picks "custom background, number 1", and <c>bg.color.bm.1.name</c> is where
         /// number 1 is — the guides give the selection as the step that makes the phone use the
         /// image, so it is written even though D145 named only the other two. No
         /// <c>.em.name</c>: expansion modules are not something this system knows about.
         ///
-        /// The URL is re-checked, as every value a renderer is handed is: an absolute http or
+        /// The logo is one, <c>bg.logo</c>, naming the hosted file (D153). It stands on its own:
+        /// a logo with no background leaves the phone's factory background alone.
+        ///
+        /// Each URL is re-checked, as every value a renderer is handed is: an absolute http or
         /// https URL and nothing else, before it goes through the usual attribute escaping.
         /// </summary>
-        private static void AppendBackground(StringBuilder sb, PolycomConfig config)
+        private static void AppendImages(StringBuilder sb, PolycomConfig config)
         {
-            if (config.BackgroundUrl.Length == 0)
-                return;
+            var attributes = new List<(string Name, string Value)>();
 
-            var valid = Uri.TryCreate(config.BackgroundUrl, UriKind.Absolute, out var url)
-                && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
-
-            if (!valid)
-                throw new InvalidOperationException($"The background image URL '{config.BackgroundUrl}' is not an absolute http or https URL.");
-
-            PolycomXml.Comment(sb, "  ", "The site's background image (D145), fetched through the same gate as this file.");
-            PolycomXml.Element(sb, "  ", "bg", new[]
+            if (config.BackgroundUrl.Length > 0)
             {
-                PolycomXml.Constant("bg.background.enabled", "1"),
-                PolycomXml.Constant("bg.color.selection", "2,1"),
-                PolycomXml.Attribute("bg.color.bm.1.name", config.BackgroundUrl, "background url"),
-            });
+                CheckImageUrl(config.BackgroundUrl, "background image");
+
+                PolycomXml.Comment(sb, "  ", "The site's background image (D145), fetched through the same gate as this file.");
+                attributes.Add(PolycomXml.Constant("bg.background.enabled", "1"));
+                attributes.Add(PolycomXml.Constant("bg.color.selection", "2,1"));
+                attributes.Add(PolycomXml.Attribute("bg.color.bm.1.name", config.BackgroundUrl, "background url"));
+            }
+
+            if (config.LogoUrl.Length > 0)
+            {
+                CheckImageUrl(config.LogoUrl, "logo");
+
+                PolycomXml.Comment(sb, "  ", "The site's logo (D153), fetched through the same gate as this file.");
+                attributes.Add(PolycomXml.Attribute("bg.logo", config.LogoUrl, "logo url"));
+            }
+
+            if (attributes.Count > 0)
+                PolycomXml.Element(sb, "  ", "bg", attributes);
         }
 
         /// <summary>
@@ -386,6 +396,16 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
             PolycomXml.Element(sb, "  ", "efk", macros);
             PolycomXml.Element(sb, "  ", "softkey", softKeys);
+        }
+
+        /// <summary>Refuses an image URL that is not absolute http or https (D151, D153).</summary>
+        private static void CheckImageUrl(string value, string what)
+        {
+            var valid = Uri.TryCreate(value, UriKind.Absolute, out var url)
+                && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
+
+            if (!valid)
+                throw new InvalidOperationException($"The {what} URL '{value}' is not an absolute http or https URL.");
         }
 
         /// <summary>

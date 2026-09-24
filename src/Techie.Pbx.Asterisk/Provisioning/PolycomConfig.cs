@@ -23,9 +23,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
         /// <summary>
         /// The absolute URL of the site's background image, behind the same <c>/polycom</c> gate
-        /// as this file (D145, D151), or empty when no image has been uploaded. Empty means the
-        /// <c>bg</c> element is not written at all and the phone keeps its own background: the
-        /// file is byte for byte what it was before the feature existed.
+        /// as this file (D145, D151), or empty when no image has been uploaded. Empty means none
+        /// of the background parameters are written and the phone keeps its own background; with
+        /// no logo either, the <c>bg</c> element is not written at all and the file is byte for
+        /// byte what it was before the feature existed.
         /// </summary>
         public string BackgroundUrl { get; set; } = "";
 
@@ -53,6 +54,13 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
         /// <summary>Seconds east of UTC, which is what the phone's clock is set from.</summary>
         public int GmtOffsetSeconds { get; set; }
+
+        /// <summary>
+        /// The absolute URL of the site's logo, behind the same <c>/polycom</c> gate as this file
+        /// (D153), or empty when no logo has been uploaded. Empty means no <c>bg.logo</c> line and
+        /// the phone keeps Poly's own logo.
+        /// </summary>
+        public string LogoUrl { get; set; } = "";
 
         /// <summary>
         /// The DTMF that parks a call: <c>Parking.DtmfCode</c>, the <c>parkcall</c> entry of

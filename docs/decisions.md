@@ -3299,3 +3299,35 @@ user's.
 - **Not checked: progressive JPEG**, which Poly says the phones do not display. Telling it apart
   means walking the JPEG's markers, which is parsing rather than a signature check; the upload
   form says "not a progressive JPEG" instead.
+
+### D153. Polycom logo, and both images must be exactly one of Poly's sizes (2026-09-24, piece 41, amends D145 and D152)
+- **A site-wide logo beside the background.** One uploaded PNG or JPEG, kept exactly as the
+  background is (D151): `Data/polycom-logo.png` or `Data/polycom-logo.jpg`, one fixed name per
+  format, same magic-byte check and 2 MB cap (D152), spooled and renamed into place, no schema
+  change and no settings key. Served as `/polycom/logo.png` or `/polycom/logo.jpg` behind the same
+  basic-auth + Polycom User-Agent gate; only the name matching the stored format answers.
+- **Rendered as `bg.logo="<absolute URL>"`** inside the same `<bg>` element as the background,
+  after the background's three lines when both exist. The parameter name is the user's, from Poly's
+  parameter reference (not yet checked against a desk phone). No logo means no line and the phone
+  keeps Poly's own; neither image means no `<bg>` element, so every existing golden file is
+  unchanged. The URL is built and re-checked (absolute http/https, then `ConfText.Safe` + XML
+  escaping) exactly as the background's is.
+- **Exact pixel sizes, amending D145/D152's "validate, don't convert — the phone scales it".**
+  Poly's Edge E admin guide gives optimal sizes per screen class: background **320x240** (E100,
+  E220, E300, E400 series) or **800x480** (E500 series); logo **60x26** (E100–E400) or **182x78**
+  (E500). An upload must be exactly one of the two for its kind, or it is refused with a message
+  naming the accepted sizes and the file's own (`The background image must be exactly 320x240 or
+  800x480 pixels; this file is WxH.`). Strict on purpose (user decision 2026-09-24): these are
+  site-wide images for one mixed-model, mostly-E450 fleet, and an image of any other size is one
+  the phone rescales or crops — the admin should hear that at upload, not see it on a desk.
+  Still no converting or resizing on our side.
+- **Width and height are read from the header, with no image package**: PNG's IHDR chunk (fixed
+  offset, big-endian), and for JPEG a walk of the segment markers by their length fields to the
+  first start-of-frame (C0–CF less C4/C8/CC). A file whose size cannot be read — truncated, or a
+  JPEG that reaches its scan data first — is refused. Still not checked: progressive JPEG (D152),
+  though the marker walk now sees the frame type and could.
+- **Shared, not duplicated:** `BackgroundStore` and `LogoStore` are thin subclasses of
+  `PolycomImageStore`, which holds the spool/validate/rename logic and differs per image only in
+  file stem, name and accepted sizes. No interface.
+- **No UI yet.** The logo has no upload form; that is a later run. Until then a logo can only be
+  put in place by hand on the server, and the background form's hint now states the exact sizes.

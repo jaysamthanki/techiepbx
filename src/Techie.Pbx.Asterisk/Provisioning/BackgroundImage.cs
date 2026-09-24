@@ -1,8 +1,9 @@
 namespace Techie.Pbx.Asterisk.Provisioning
 {
     /// <summary>
-    /// The site's Polycom background image as it is on disk right now (D145). Read off the file
-    /// every time rather than out of the database, so it cannot claim an image that is not there.
+    /// The site's Polycom background image (D145) or logo (D153) as it is on disk right now. Read
+    /// off the file every time rather than out of the database, so it cannot claim an image that
+    /// is not there.
     /// </summary>
     public class BackgroundImage
     {

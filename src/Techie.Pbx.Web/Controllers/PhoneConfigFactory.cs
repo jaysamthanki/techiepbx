@@ -37,15 +37,15 @@ namespace Techie.Pbx.Web.Controllers
 
         /// <summary>
         /// A Polycom's configuration, exactly as the provisioning controller would build it. The
-        /// background image, when the site has one, is named by an absolute URL built the way the
-        /// Yealink provisioning URL is — the request's scheme and the phone-facing host name — on
-        /// the <c>/polycom</c> route, so the phone fetches it through the same gate it fetched
-        /// this config through (D145, D151).
+        /// background image and the logo, when the site has them, are each named by an absolute
+        /// URL built the way the Yealink provisioning URL is — the request's scheme and the
+        /// phone-facing host name — on the <c>/polycom</c> route, so the phone fetches them through
+        /// the same gate it fetched this config through (D145, D151, D153).
         /// </summary>
         public static PolycomConfig Polycom(
             Phone phone, List<PhoneButton> usable, List<Extension> allExtensions, List<CallFlowControl> callFlowControls,
             Dictionary<string, string> stored, PjsipTransport transport,
-            string requestScheme, string requestHost, BackgroundImage? background)
+            string requestScheme, string requestHost, BackgroundImage? background, BackgroundImage? logo)
         {
             stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
             stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
@@ -57,9 +57,9 @@ namespace Techie.Pbx.Web.Controllers
             // park in (D144).
             var parking = AsteriskSettings.Parking(stored);
 
-            var backgroundUrl = background == null
-                ? ""
-                : requestScheme + "://" + hostName + PolycomController.RoutePrefix + "/" + PolycomFiles.BackgroundFileName(background.Format);
+            var imageBase = requestScheme + "://" + hostName + PolycomController.RoutePrefix + "/";
+            var backgroundUrl = background == null ? "" : imageBase + PolycomFiles.BackgroundFileName(background.Format);
+            var logoUrl = logo == null ? "" : imageBase + PolycomFiles.LogoFileName(logo.Format);
 
             return new PolycomConfig
             {
@@ -69,6 +69,7 @@ namespace Techie.Pbx.Web.Controllers
                 CallFlowControls = callFlowControls,
                 Extensions = allExtensions,
                 GmtOffsetSeconds = PolycomConfig.GmtOffsetFor(AsteriskSettings.Timezone(stored)),
+                LogoUrl = logoUrl,
                 ParkDtmfCode = parking.DtmfCode,
                 ParkEnabled = parking.Enabled,
                 Phone = phone,

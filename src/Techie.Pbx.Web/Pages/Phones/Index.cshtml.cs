@@ -40,6 +40,7 @@ namespace Techie.Pbx.Web.Pages.Phones
         private readonly PhoneButtonRepository buttons;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
+        private readonly LogoStore logo;
         private readonly PhoneRepository phones;
         private readonly SettingsRepository settings;
 
@@ -49,6 +50,7 @@ namespace Techie.Pbx.Web.Pages.Phones
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.logo = new LogoStore(PbxDatabase.Current);
             this.phones = new PhoneRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
@@ -232,7 +234,7 @@ namespace Techie.Pbx.Web.Pages.Phones
             {
                 var polycom = PhoneConfigFactory.Polycom(
                     phone, usable, allExtensions, controls, stored, transport,
-                    this.Request.Scheme, this.Request.Host.Host, this.background.Current());
+                    this.Request.Scheme, this.Request.Host.Host, this.background.Current(), this.logo.Current());
 
                 return this.Content(PolycomConfigRenderer.Render(polycom), "text/plain");
             }
