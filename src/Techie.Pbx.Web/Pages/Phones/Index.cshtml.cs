@@ -27,9 +27,10 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// generated per request, so saving one takes effect at that phone's next poll and nothing is
     /// written to /etc/asterisk (D79) — which is why nothing here raises the config-pending marker.
     ///
-    /// It also carries the one site-wide Polycom background image (D145, D151): a status line near
-    /// the top and a modal to upload or remove it. Not per-phone, and like everything else here it
-    /// changes no generated file — every phone's config names the image from its next fetch.
+    /// It also carries the one site-wide Polycom background image (D145, D151) and logo (D153): a
+    /// status line each near the top and a modal to upload or remove each. Not per-phone, and like
+    /// everything else here they change no generated file — every phone's config names the images
+    /// from its next fetch.
     /// </summary>
     [RequestSizeLimit(BackgroundStore.MaxUploadBytes + (1024 * 1024))]
     public class IndexModel : PageModel
@@ -109,6 +110,18 @@ namespace Techie.Pbx.Web.Pages.Phones
                 PhoneID = phone.PhoneID,
                 RebootHint = this.RebootHint(phone, assigned),
             }));
+        }
+
+        /// <summary>The logo's status line, under the background's (D153).</summary>
+        public PartialViewResult OnGetLogo()
+        {
+            return this.Partial("_Logo", this.FillLogo(new LogoForm()));
+        }
+
+        /// <summary>The upload/remove form for the logo, which the page shows in the modal.</summary>
+        public PartialViewResult OnGetLogoForm()
+        {
+            return this.Partial("_LogoForm", this.FillLogo(new LogoForm()));
         }
 
         /// <summary>
@@ -201,9 +214,36 @@ namespace Techie.Pbx.Web.Pages.Phones
             }
 
             Log.Info($"Polycom background image {(removed ? "removed" : "remove requested, but none was set")} by {this.User.Identity?.Name}");
-            return this.BackgroundChanged(removed
+            return this.ImageChanged("phoneBackgroundChanged", removed
                 ? "Background image removed. Polycom phones go back to their own at their next config fetch."
                 : "There was no background image to remove.");
+        }
+
+        /// <summary>
+        /// Removes the site's logo. Nothing else changes: the next config any Polycom fetches has
+        /// no <c>bg.logo</c> line, and the phone goes back to Poly's own logo (D153).
+        /// </summary>
+        public IActionResult OnPostRemoveLogo()
+        {
+            bool removed;
+
+            try
+            {
+                removed = this.logo.Delete();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"The Polycom logo could not be removed: {ex.Message}", ex);
+                return this.Partial("_LogoForm", this.FillLogo(new LogoForm
+                {
+                    Errors = new List<string> { "The logo could not be removed from the data folder. Check that the web user may write to it." },
+                }));
+            }
+
+            Log.Info($"Polycom logo {(removed ? "removed" : "remove requested, but none was set")} by {this.User.Identity?.Name}");
+            return this.ImageChanged("phoneLogoChanged", removed
+                ? "Logo removed. Polycom phones go back to Poly's own at their next config fetch."
+                : "There was no logo to remove.");
         }
 
         /// <summary>
@@ -359,24 +399,45 @@ namespace Techie.Pbx.Web.Pages.Phones
             }
 
             Log.Info($"Polycom background image uploaded ({BackgroundImageSignature.Describe(image.Format)}, {image.Bytes} bytes) by {this.User.Identity?.Name}");
-            return this.BackgroundChanged("Background image saved. Polycom phones pick it up at their next config fetch, or straight away if you reboot one.");
+            return this.ImageChanged("phoneBackgroundChanged", "Background image saved. Polycom phones pick it up at their next config fetch, or straight away if you reboot one.");
         }
 
         /// <summary>
-        /// The answer to a background change: no content to swap, the status line refreshed, and a
-        /// toast. No "phonesChanged" — no phone row changed — and no "configChanged": the image is
-        /// named in configs generated per request, so there is nothing to apply (D79).
+        /// Stores an uploaded logo, replacing whatever was there (D153), resized to fit inside 60x26
+        /// on transparency unless it is that size already (D154). Otherwise exactly the background's
+        /// save: the contents decide PNG or JPEG, and anything refused comes back as a message on
+        /// the form with the current logo untouched.
         /// </summary>
-        private IActionResult BackgroundChanged(string message)
+        public IActionResult OnPostSaveLogo(LogoForm form)
         {
-            var events = new Dictionary<string, object?>
+            if (form.Image is not { Length: > 0 })
             {
-                ["phoneBackgroundChanged"] = null,
-                ["pbxToast"] = new { message },
-            };
+                form.Errors = new List<string> { "Choose an image to upload." };
+                return this.Partial("_LogoForm", this.FillLogo(form));
+            }
 
-            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
-            return new StatusCodeResult(StatusCodes.Status204NoContent);
+            BackgroundImage image;
+
+            try
+            {
+                using var upload = form.Image.OpenReadStream();
+                image = this.logo.Save(upload);
+            }
+            catch (BackgroundUploadException ex)
+            {
+                Log.Warn($"Polycom logo upload refused: {ex.Message}");
+                form.Errors = new List<string> { ex.Message };
+                return this.Partial("_LogoForm", this.FillLogo(form));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"The Polycom logo could not be written: {ex.Message}", ex);
+                form.Errors = new List<string> { "The logo could not be written to the data folder. Check that the web user may write to it." };
+                return this.Partial("_LogoForm", this.FillLogo(form));
+            }
+
+            Log.Info($"Polycom logo uploaded ({BackgroundImageSignature.Describe(image.Format)}, {image.Bytes} bytes) by {this.User.Identity?.Name}");
+            return this.ImageChanged("phoneLogoChanged", "Logo saved. Polycom phones pick it up at their next config fetch, or straight away if you reboot one.");
         }
 
         /// <summary>
@@ -448,11 +509,38 @@ namespace Techie.Pbx.Web.Pages.Phones
             var image = this.background.Current();
 
             form.HasImage = image != null;
-            form.Summary = image == null
-                ? "None — Polycom phones show their own background."
-                : $"{BackgroundImageSignature.Describe(image.Format)}, {Math.Max(1, image.Bytes / 1024)} KB";
+            form.Summary = Summary(image, "None — Polycom phones show their own background.");
 
             return form;
+        }
+
+        /// <summary>What the logo form and status line cannot know for themselves: what is on disk now.</summary>
+        private LogoForm FillLogo(LogoForm form)
+        {
+            var image = this.logo.Current();
+
+            form.HasImage = image != null;
+            form.Summary = Summary(image, "None — Polycom phones show Poly's own logo.");
+
+            return form;
+        }
+
+        /// <summary>
+        /// The answer to a background or logo change: no content to swap, that image's status line
+        /// refreshed by <paramref name="refreshEvent"/>, and a toast. No "phonesChanged" — no phone
+        /// row changed — and no "configChanged": the images are named in configs generated per
+        /// request, so there is nothing to apply (D79).
+        /// </summary>
+        private IActionResult ImageChanged(string refreshEvent, string message)
+        {
+            var events = new Dictionary<string, object?>
+            {
+                [refreshEvent] = null,
+                ["pbxToast"] = new { message },
+            };
+
+            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
+            return new StatusCodeResult(StatusCodes.Status204NoContent);
         }
 
         /// <summary>
@@ -533,6 +621,12 @@ namespace Techie.Pbx.Web.Pages.Phones
 
             return this.Fill(form);
         }
+
+        /// <summary>How a stored image reads on its status line, e.g. "PNG, 142 KB", or <paramref name="none"/>.</summary>
+        private static string Summary(BackgroundImage? image, string none) =>
+            image == null
+                ? none
+                : $"{BackgroundImageSignature.Describe(image.Format)}, {Math.Max(1, image.Bytes / 1024)} KB";
 
         /// <summary>A setting's stored value, or null.</summary>
         private static string? Value(IReadOnlyDictionary<string, string> settings, string key) =>

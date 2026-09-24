@@ -7,6 +7,8 @@
     var polycomSettingsUrl = Url.Page("Index", "PolycomSettings");
     var backgroundUrl = Url.Page("Index", "Background");
     var backgroundFormUrl = Url.Page("Index", "BackgroundForm");
+    var logoUrl = Url.Page("Index", "Logo");
+    var logoFormUrl = Url.Page("Index", "LogoForm");
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -25,19 +27,32 @@
 }
 
 @*
-    The one site-wide background image control (D145, D151): the current state, and a button
-    that opens the upload/remove form in the shared modal. Not per-phone, on purpose.
+    The site-wide Polycom images (D145, D151, D153): the background and the logo, each with its
+    current state and a button that opens its upload/remove form in the shared modal. Not
+    per-phone, on purpose.
 *@
 <div class="card mb-3">
-    <div class="card-body d-flex justify-content-between align-items-center gap-3">
-        <div id="phones-background" hx-get="@backgroundUrl" hx-trigger="load, phoneBackgroundChanged from:body">
-            <span class="text-secondary">Loading…</span>
+    <div class="card-body d-flex flex-column gap-2">
+        <div class="d-flex justify-content-between align-items-center gap-3">
+            <div id="phones-background" hx-get="@backgroundUrl" hx-trigger="load, phoneBackgroundChanged from:body">
+                <span class="text-secondary">Loading…</span>
+            </div>
+            <button type="button" class="btn btn-outline-primary text-nowrap"
+                    hx-get="@backgroundFormUrl"
+                    hx-target="#form-modal-content"
+                    data-bs-toggle="modal"
+                    data-bs-target="#form-modal">Background image…</button>
         </div>
-        <button type="button" class="btn btn-outline-primary text-nowrap"
-                hx-get="@backgroundFormUrl"
-                hx-target="#form-modal-content"
-                data-bs-toggle="modal"
-                data-bs-target="#form-modal">Background image…</button>
+        <div class="d-flex justify-content-between align-items-center gap-3">
+            <div id="phones-logo" hx-get="@logoUrl" hx-trigger="load, phoneLogoChanged from:body">
+                <span class="text-secondary">Loading…</span>
+            </div>
+            <button type="button" class="btn btn-outline-primary text-nowrap"
+                    hx-get="@logoFormUrl"
+                    hx-target="#form-modal-content"
+                    data-bs-toggle="modal"
+                    data-bs-target="#form-modal">Logo…</button>
+        </div>
     </div>
 </div>
 
