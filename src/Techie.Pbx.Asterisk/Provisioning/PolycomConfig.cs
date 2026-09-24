@@ -22,6 +22,14 @@ namespace Techie.Pbx.Asterisk.Provisioning
         public string AdminPassword { get; set; } = "";
 
         /// <summary>
+        /// The absolute URL of the site's background image, behind the same <c>/polycom</c> gate
+        /// as this file (D145, D151), or empty when no image has been uploaded. Empty means the
+        /// <c>bg</c> element is not written at all and the phone keeps its own background: the
+        /// file is byte for byte what it was before the feature existed.
+        /// </summary>
+        public string BackgroundUrl { get; set; } = "";
+
+        /// <summary>
         /// The assignable keys, already reduced to the ones that can work by
         /// <see cref="PhoneButton.Usable"/>: this renderer writes what it is given rather than
         /// deciding whether a target is still there. The line keys among them are what this phone

@@ -1,0 +1,15 @@
+@model BackgroundForm
+@*
+    The background image's one-line status, near the top of the Phones page (D151). Refreshed by
+    the phoneBackgroundChanged event an upload or a remove answers with.
+*@
+<span class="fw-semibold">Polycom background image:</span>
+@if (Model.HasImage)
+{
+    <span>@Model.Summary</span>
+    <span class="text-secondary">— shown on every provisioned Polycom.</span>
+}
+else
+{
+    <span class="text-secondary">@Model.Summary</span>
+}

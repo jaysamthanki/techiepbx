@@ -26,11 +26,17 @@ namespace Techie.Pbx.Web.Pages.Phones
     /// right and the phone is the one that knows it. And there is **no apply**: a phone's config is
     /// generated per request, so saving one takes effect at that phone's next poll and nothing is
     /// written to /etc/asterisk (D79) — which is why nothing here raises the config-pending marker.
+    ///
+    /// It also carries the one site-wide Polycom background image (D145, D151): a status line near
+    /// the top and a modal to upload or remove it. Not per-phone, and like everything else here it
+    /// changes no generated file — every phone's config names the image from its next fetch.
     /// </summary>
+    [RequestSizeLimit(BackgroundStore.MaxUploadBytes + (1024 * 1024))]
     public class IndexModel : PageModel
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly BackgroundStore background;
         private readonly PhoneButtonRepository buttons;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
@@ -39,6 +45,7 @@ namespace Techie.Pbx.Web.Pages.Phones
 
         public IndexModel()
         {
+            this.background = new BackgroundStore(PbxDatabase.Current);
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
@@ -60,6 +67,18 @@ namespace Techie.Pbx.Web.Pages.Phones
             this.ProvisioningConfigured =
                 !string.IsNullOrWhiteSpace(Value(stored, SettingsKeys.ProvisioningUsername)) &&
                 !string.IsNullOrWhiteSpace(Value(stored, SettingsKeys.ProvisioningPassword));
+        }
+
+        /// <summary>The background image's status line near the top of the page (D151).</summary>
+        public PartialViewResult OnGetBackground()
+        {
+            return this.Partial("_Background", this.FillBackground(new BackgroundForm()));
+        }
+
+        /// <summary>The upload/remove form for the background image, which the page shows in the modal.</summary>
+        public PartialViewResult OnGetBackgroundForm()
+        {
+            return this.Partial("_BackgroundForm", this.FillBackground(new BackgroundForm()));
         }
 
         /// <summary>The edit form for one phone, which the page shows in the Bootstrap modal.</summary>
@@ -158,7 +177,34 @@ namespace Techie.Pbx.Web.Pages.Phones
             return this.Changed($"Phone {phone.Mac} deleted.");
         }
 
-                /// <summary>
+        /// <summary>
+        /// Removes the site's background image. Nothing else changes: the next config any Polycom
+        /// fetches has no <c>bg</c> element, and the phone goes back to its own background (D145).
+        /// </summary>
+        public IActionResult OnPostRemoveBackground()
+        {
+            bool removed;
+
+            try
+            {
+                removed = this.background.Delete();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"The Polycom background image could not be removed: {ex.Message}", ex);
+                return this.Partial("_BackgroundForm", this.FillBackground(new BackgroundForm
+                {
+                    Errors = new List<string> { "The image could not be removed from the data folder. Check that the web user may write to it." },
+                }));
+            }
+
+            Log.Info($"Polycom background image {(removed ? "removed" : "remove requested, but none was set")} by {this.User.Identity?.Name}");
+            return this.BackgroundChanged(removed
+                ? "Background image removed. Polycom phones go back to their own at their next config fetch."
+                : "There was no background image to remove.");
+        }
+
+        /// <summary>
         /// The configuration the phone would be served if it asked for it right now: what the
         /// View config button in the edit modal opens (D121). Read-only — it builds exactly what
         /// the provisioning controller would build from the same rows, without updating anything
@@ -185,7 +231,8 @@ namespace Techie.Pbx.Web.Pages.Phones
             if (phone.MatchesBrand(PhoneBrand.Polycom))
             {
                 var polycom = PhoneConfigFactory.Polycom(
-                    phone, usable, allExtensions, controls, stored, transport, this.Request.Host.Host);
+                    phone, usable, allExtensions, controls, stored, transport,
+                    this.Request.Scheme, this.Request.Host.Host, this.background.Current());
 
                 return this.Content(PolycomConfigRenderer.Render(polycom), "text/plain");
             }
@@ -196,7 +243,7 @@ namespace Techie.Pbx.Web.Pages.Phones
             return this.Content(YealinkConfigRenderer.Render(yealink), "text/plain");
         }
 
-/// <summary>
+        /// <summary>
         /// Reboots the phone, for when the daily poll (D79) is too slow to wait for. Confirmed with
         /// sweetalert2 before htmx ever calls this (D42).
         ///
@@ -276,6 +323,60 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
+        /// Stores an uploaded background image, replacing whatever was there (D151, D152). The
+        /// contents decide whether it is a PNG or a JPEG, never the file name, and anything refused
+        /// comes back as a message on the form with the current image untouched.
+        /// </summary>
+        public IActionResult OnPostSaveBackground(BackgroundForm form)
+        {
+            if (form.Image is not { Length: > 0 })
+            {
+                form.Errors = new List<string> { "Choose an image to upload." };
+                return this.Partial("_BackgroundForm", this.FillBackground(form));
+            }
+
+            BackgroundImage image;
+
+            try
+            {
+                using var upload = form.Image.OpenReadStream();
+                image = this.background.Save(upload);
+            }
+            catch (BackgroundUploadException ex)
+            {
+                Log.Warn($"Polycom background upload refused: {ex.Message}");
+                form.Errors = new List<string> { ex.Message };
+                return this.Partial("_BackgroundForm", this.FillBackground(form));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Error($"The Polycom background image could not be written: {ex.Message}", ex);
+                form.Errors = new List<string> { "The image could not be written to the data folder. Check that the web user may write to it." };
+                return this.Partial("_BackgroundForm", this.FillBackground(form));
+            }
+
+            Log.Info($"Polycom background image uploaded ({BackgroundImageSignature.Describe(image.Format)}, {image.Bytes} bytes) by {this.User.Identity?.Name}");
+            return this.BackgroundChanged("Background image saved. Polycom phones pick it up at their next config fetch, or straight away if you reboot one.");
+        }
+
+        /// <summary>
+        /// The answer to a background change: no content to swap, the status line refreshed, and a
+        /// toast. No "phonesChanged" — no phone row changed — and no "configChanged": the image is
+        /// named in configs generated per request, so there is nothing to apply (D79).
+        /// </summary>
+        private IActionResult BackgroundChanged(string message)
+        {
+            var events = new Dictionary<string, object?>
+            {
+                ["phoneBackgroundChanged"] = null,
+                ["pbxToast"] = new { message },
+            };
+
+            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(events);
+            return new StatusCodeResult(StatusCodes.Status204NoContent);
+        }
+
+        /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
         /// "phonesChanged" refreshes the table and "pbxToast" says what happened. There is no
         /// "configChanged": a phone changes no generated file, so there is nothing to apply (D79).
@@ -334,6 +435,19 @@ namespace Techie.Pbx.Web.Pages.Phones
                 .OrderBy(c => c.FeatureCode.Length)
                 .ThenBy(c => c.FeatureCode, StringComparer.Ordinal)
                 .ToList();
+
+            return form;
+        }
+
+        /// <summary>What the background form and status line cannot know for themselves: what is on disk now.</summary>
+        private BackgroundForm FillBackground(BackgroundForm form)
+        {
+            var image = this.background.Current();
+
+            form.HasImage = image != null;
+            form.Summary = image == null
+                ? "None — Polycom phones show their own background."
+                : $"{BackgroundImageSignature.Describe(image.Format)}, {Math.Max(1, image.Bytes / 1024)} KB";
 
             return form;
         }

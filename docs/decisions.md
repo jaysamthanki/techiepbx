@@ -3250,3 +3250,52 @@ self-heals at the next config poll. Not desk-verified yet, unchanged.
 Verified live: deployed to the lab VM, the served config carries `gmtOffset="-28800"`, and a
 `check-sync;reboot=true` NOTIFY rebooted the registered Edge onto it — desk confirmation is the
 user's.
+
+### D151. Polycom background: the parameter shape, where the image lives, and how a phone gets it (2026-09-23, piece 39, implements D145)
+- **Three parameters, not two.** The user's FreePBX module (`~/polycomphones`) has no background
+  handling at all, so it could not supply the shape. Poly's own documents do — the Lens FAQ
+  "custom background" recipe and the Edge E admin guide (chapter 14) — and both give the same
+  three lines: `bg.background.enabled="1"`, `bg.color.selection="2,1"` ("custom background,
+  index 1"), and `bg.color.bm.1.name="<absolute URL>"`. D145 named only the first and the last;
+  the selection is the guides' step that makes the phone use the image, so it is written too.
+  No `bg.color.bm.1.em.name`: expansion modules are not something this system knows about.
+- **Written into `exten<mac>.cfg` in a `<bg>` element after `<da>`**, for every phone including
+  an unassigned one — the background is phone-level, like the time. No image means no element
+  and no comment: the file is byte-for-byte what it was before (the existing golden files are
+  unchanged; `polycom-phone-background.cfg` pins the with-image state). The renderer re-checks the
+  URL is absolute http/https before the usual `ConfText.Safe` + XML escaping.
+- **Stored in the data folder** beside the database (D25) as `Data/polycom-background.png` or
+  `Data/polycom-background.jpg` — one fixed name per format, never a browser-supplied name, and
+  saving one format removes the other. **No schema change and no settings key**: the file existing
+  is the whole state, and `app-deploy.sh` already preserves `Data/`. The upload is spooled in the
+  same folder and renamed into place, so a phone fetching mid-save gets the old image or the new.
+- **Served as `/polycom/background.png` or `/polycom/background.jpg`** by `PolycomController`,
+  after the same basic-auth and Polycom User-Agent gates as the config files. Only the name
+  matching the stored format answers; anything else is a 404. The URL in the config is built the
+  way the Yealink provisioning URL is: request scheme + phone-facing host name (`System.Hostname`
+  or the request host, D105) + `/polycom/` + the file name, no port (80 always binds and
+  `/polycom` is exempt from the HTTPS redirect, D77/D99). The name ends in the real extension
+  because the guides name the image file in the URL.
+- **No credentials in the URL.** The phone is expected to answer the 401 challenge with the
+  provisioning credentials it already used for the config. **Not verified on a desk phone** — if
+  a Poly does not, the fallback is to embed `user:pass@` the way DHCP option 160 does, which
+  would need a decision of its own because it writes the provisioning password into every config.
+- **UI:** one status line and a "Background image…" button above the tabs on the Phones page,
+  opening an upload/remove form in the shared modal (204 + `HX-Trigger` of
+  `phoneBackgroundChanged` and `pbxToast`). Upload and remove change nothing else — no apply, no
+  push to the phones; each phone picks it up at its next config fetch or a reboot.
+
+### D152. Background image validation: PNG or JPEG by magic bytes, capped at 2 MB (2026-09-23, piece 39)
+- **Magic bytes decide, never the name or content type**: the full eight-byte PNG signature
+  (`89 50 4E 47 0D 0A 1A 0A` — all eight, since the line-ending bytes exist to catch a file mangled
+  as text) or a JPEG's `FF D8 FF`. Anything else — GIF, BMP, SVG, a text file called `logo.png` —
+  is refused with the current image untouched. No decoding, converting or resizing (D145): the
+  phone scales what it gets.
+- **Cap: 2 MB**, enforced while the upload is spooled, not after, and the Phones page's request
+  limit is the cap plus 1 MB of multipart overhead, as MOH and announcements do theirs. In the same
+  spirit as those caps (20 MB / 40 MB for audio that is minutes long): the largest Poly screen is
+  about 1024x600 and an image that size is a few hundred kilobytes, so 2 MB allows an unoptimised
+  export without handing every phone something large to fetch at each boot.
+- **Not checked: progressive JPEG**, which Poly says the phones do not display. Telling it apart
+  means walking the JPEG's markers, which is parsing rather than a signature check; the upload
+  form says "not a progressive JPEG" instead.

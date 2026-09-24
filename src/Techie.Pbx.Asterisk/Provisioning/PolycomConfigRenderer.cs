@@ -156,6 +156,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 PolycomXml.Constant("da.optIn", "OptedOut"),
             });
 
+            AppendBackground(sb, config);
+
             var buttons = Validated(config.Buttons);
             var lines = PhoneButton.Lines(buttons);
 
@@ -286,6 +288,41 @@ namespace Techie.Pbx.Asterisk.Provisioning
             PolycomXml.Comment(sb, "  ", "Keys assigned in TNPBX: a lamp and a quick dial each. An extension's lamp");
             PolycomXml.Comment(sb, "  ", "follows its hint; a parking slot's is lit while a call is sitting in it.");
             PolycomXml.Element(sb, "  ", "attendant", attributes);
+        }
+
+        /// <summary>
+        /// The site's background image (D145), for every phone whether or not it registers yet: it
+        /// is phone-level, like the time. Written only when there is an image, so a site without
+        /// one gets exactly the file it always did and the phone keeps its factory background.
+        ///
+        /// Three parameters, in the order Poly's own guides give them (D151):
+        /// <c>bg.background.enabled</c> turns custom backgrounds on, <c>bg.color.selection</c>
+        /// <c>2,1</c> picks "custom background, number 1", and <c>bg.color.bm.1.name</c> is where
+        /// number 1 is — the guides give the selection as the step that makes the phone use the
+        /// image, so it is written even though D145 named only the other two. No
+        /// <c>.em.name</c>: expansion modules are not something this system knows about.
+        ///
+        /// The URL is re-checked, as every value a renderer is handed is: an absolute http or
+        /// https URL and nothing else, before it goes through the usual attribute escaping.
+        /// </summary>
+        private static void AppendBackground(StringBuilder sb, PolycomConfig config)
+        {
+            if (config.BackgroundUrl.Length == 0)
+                return;
+
+            var valid = Uri.TryCreate(config.BackgroundUrl, UriKind.Absolute, out var url)
+                && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
+
+            if (!valid)
+                throw new InvalidOperationException($"The background image URL '{config.BackgroundUrl}' is not an absolute http or https URL.");
+
+            PolycomXml.Comment(sb, "  ", "The site's background image (D145), fetched through the same gate as this file.");
+            PolycomXml.Element(sb, "  ", "bg", new[]
+            {
+                PolycomXml.Constant("bg.background.enabled", "1"),
+                PolycomXml.Constant("bg.color.selection", "2,1"),
+                PolycomXml.Attribute("bg.color.bm.1.name", config.BackgroundUrl, "background url"),
+            });
         }
 
         /// <summary>

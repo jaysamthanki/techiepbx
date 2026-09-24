@@ -123,6 +123,88 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// A site with a background image (D145, D151): the same file as a phone with no image,
+        /// plus the <c>bg</c> element — enabled, custom selection 1, and the gated URL.
+        /// </summary>
+        [Fact]
+        public void A_phone_on_a_site_with_a_background_matches_expected_file()
+        {
+            var config = SampleConfig();
+            config.BackgroundUrl = "http://pbx.example.com/polycom/background.png";
+
+            Assert.Equal(Expected("polycom-phone-background.cfg"), PolycomConfigRenderer.Render(config));
+        }
+
+        /// <summary>
+        /// No image means no <c>bg</c> element at all (D145): the file is byte for byte what it
+        /// was before the feature existed, which the unchanged golden files also pin.
+        /// </summary>
+        [Fact]
+        public void No_background_means_no_bg_element()
+        {
+            var actual = PolycomConfigRenderer.Render(SampleConfig());
+
+            Assert.DoesNotContain("<bg", actual);
+            Assert.DoesNotContain("bg.", actual);
+            Assert.Equal(Expected("polycom-phone.cfg"), actual);
+        }
+
+        /// <summary>
+        /// The background is phone-level like the time, so a phone nobody has assigned yet shows
+        /// the site's image while it waits for an extension.
+        /// </summary>
+        [Fact]
+        public void An_unassigned_phone_still_gets_the_background()
+        {
+            var config = SampleConfig();
+            config.Buttons = new List<PhoneButton>();
+            config.BackgroundUrl = "https://pbx.example.com/polycom/background.jpg";
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            Assert.Contains("bg.color.bm.1.name=\"https://pbx.example.com/polycom/background.jpg\"\n", actual);
+            Assert.DoesNotContain("reg.1.", actual);
+        }
+
+        /// <summary>The URL is re-checked like any other value a renderer is handed: absolute http or https only.</summary>
+        [Theory]
+        [InlineData("background.png")]
+        [InlineData("/polycom/background.png")]
+        [InlineData("ftp://pbx.example.com/polycom/background.png")]
+        [InlineData("file:///etc/passwd")]
+        [InlineData("http://pbx.example.com/polycom/background.png\"/><x a=\"")]
+        public void A_background_url_that_is_not_absolute_http_is_refused(string url)
+        {
+            var config = SampleConfig();
+            config.BackgroundUrl = url;
+
+            Assert.Throws<InvalidOperationException>(() => PolycomConfigRenderer.Render(config));
+        }
+
+        [Theory]
+        [InlineData("background.png", BackgroundImageFormat.Png)]
+        [InlineData("background.jpg", BackgroundImageFormat.Jpeg)]
+        public void A_background_file_name_is_read_back_as_its_format(string fileName, BackgroundImageFormat format)
+        {
+            Assert.True(PolycomFiles.TryParseBackground(fileName, out var parsed));
+            Assert.Equal(format, parsed);
+            Assert.Equal(fileName, PolycomFiles.BackgroundFileName(format));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("background.jpeg")]
+        [InlineData("Background.png")]
+        [InlineData("background.gif")]
+        [InlineData("../Data/polycom-background.png")]
+        [InlineData("polycom-background.png")]
+        public void Anything_else_is_not_the_background(string? fileName)
+        {
+            Assert.False(PolycomFiles.TryParseBackground(fileName, out _));
+        }
+
+        /// <summary>
         /// A phone with keys on it (D121). Key 1 is the registration and does not appear in the
         /// resource list at all; the lamps on keys 2 and 4 are resources 1 and 3, because the
         /// registration has taken the first line key and a resource lands on the key its index

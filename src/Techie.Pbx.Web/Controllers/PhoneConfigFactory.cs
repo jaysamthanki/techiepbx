@@ -35,10 +35,17 @@ namespace Techie.Pbx.Web.Controllers
         public static string ServerAddress(PjsipTransport transport, string hostName) =>
             transport.BindAddress.Length == 0 || transport.BindAddress == AnyAddress ? hostName : transport.BindAddress;
 
-        /// <summary>A Polycom's configuration, exactly as the provisioning controller would build it.</summary>
+        /// <summary>
+        /// A Polycom's configuration, exactly as the provisioning controller would build it. The
+        /// background image, when the site has one, is named by an absolute URL built the way the
+        /// Yealink provisioning URL is — the request's scheme and the phone-facing host name — on
+        /// the <c>/polycom</c> route, so the phone fetches it through the same gate it fetched
+        /// this config through (D145, D151).
+        /// </summary>
         public static PolycomConfig Polycom(
             Phone phone, List<PhoneButton> usable, List<Extension> allExtensions, List<CallFlowControl> callFlowControls,
-            Dictionary<string, string> stored, PjsipTransport transport, string requestHost)
+            Dictionary<string, string> stored, PjsipTransport transport,
+            string requestScheme, string requestHost, BackgroundImage? background)
         {
             stored.TryGetValue(SettingsKeys.ProvisioningAdminPassword, out var adminPassword);
             stored.TryGetValue(SettingsKeys.ProvisioningUserPassword, out var userPassword);
@@ -50,9 +57,14 @@ namespace Techie.Pbx.Web.Controllers
             // park in (D144).
             var parking = AsteriskSettings.Parking(stored);
 
+            var backgroundUrl = background == null
+                ? ""
+                : requestScheme + "://" + hostName + PolycomController.RoutePrefix + "/" + PolycomFiles.BackgroundFileName(background.Format);
+
             return new PolycomConfig
             {
                 AdminPassword = (adminPassword ?? "").Trim(),
+                BackgroundUrl = backgroundUrl,
                 Buttons = usable,
                 CallFlowControls = callFlowControls,
                 Extensions = allExtensions,
