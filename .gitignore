@@ -481,6 +481,10 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+# Agent working files and Asterisk source study snippets — never release content
+.claude-brief*
+.src_*
+
 # log4net output
 logs/
 

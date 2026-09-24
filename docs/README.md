@@ -7,7 +7,7 @@
 | [decisions.md](decisions.md) | Log of decisions made and why. Add to it, don't rewrite history. |
 | [security.md](security.md) | Threat model and the security rules the code has to follow |
 | [database.md](database.md) | Schema conventions, migrations, current tables |
-| [lab-environment.md](lab-environment.md) | The Azure lab VM, how it was built, how to test against it |
+
 | [roadmap.md](roadmap.md) | Build order and status, mapped to features |
 
 Coding conventions for agents and humans are in [../CLAUDE.md](../CLAUDE.md).

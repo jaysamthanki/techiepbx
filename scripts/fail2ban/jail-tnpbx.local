@@ -18,9 +18,9 @@ findtime = 10m
 # full day out. fail2ban's sqlite db re-applies surviving bans after restart.
 bantime = 24h
 
-# Trusted networks never ban: the admin's VPN paths (which may arrive NATed
-# through either VPN or the VM subnet) and the box itself. A misconfigured
-# desk phone must not lock the office out of the PBX.
+# Trusted networks never ban: the admin's own networks and the box itself. A misconfigured
+# desk phone must not lock the office out of the PBX. Put YOUR trusted ranges here (the
+# VPN/subnet your admins reach the PBX from) before installing:
 ignoreip = 127.0.0.1/8
 
 # Drop everything from the address, not just SIP: the box's only public

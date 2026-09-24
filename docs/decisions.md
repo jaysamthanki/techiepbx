@@ -3217,7 +3217,7 @@ number the server already knows. Yealink's `local_time` block is untouched: its 
 the phone's DST off already (D92's not-verified note still applies).
 
 Verified live: deployed to the lab VM, the served config carries all three lines, and a
-`check-sync` NOTIFY pushed it to the registered Edge (contact `203.0.113.25`) — desk confirmation
+`check-sync` NOTIFY pushed it to the registered Edge (contact (remote, NAT-mapped)) — desk confirmation
 is the user's.
 
 ### D150. Phone clocks, the fix that held: the STANDARD offset and the phone's own DST rule (2026-09-23, amends D149 and D82)
