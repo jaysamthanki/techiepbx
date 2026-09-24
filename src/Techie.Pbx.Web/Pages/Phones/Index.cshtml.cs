@@ -325,9 +325,10 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// Stores an uploaded background image, replacing whatever was there (D151, D152). The
-        /// contents decide whether it is a PNG or a JPEG, never the file name, and anything refused
-        /// comes back as a message on the form with the current image untouched.
+        /// Stores an uploaded background image, replacing whatever was there (D151, D152), resized
+        /// to 320x240 unless it is that size already (D154). The contents decide whether it is a
+        /// PNG or a JPEG, never the file name, and anything refused comes back as a message on the
+        /// form with the current image untouched.
         /// </summary>
         public IActionResult OnPostSaveBackground(BackgroundForm form)
         {

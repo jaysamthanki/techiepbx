@@ -3331,3 +3331,47 @@ user's.
   file stem, name and accepted sizes. No interface.
 - **No UI yet.** The logo has no upload form; that is a later run. Until then a logo can only be
   put in place by hand on the server, and the background form's hint now states the exact sizes.
+
+### D154. Polycom background and logo: any size is accepted and resized, not refused (2026-09-24, piece 41, amends D153)
+- **Resize, don't reject (user decision 2026-09-24).** D153's exact-size rule refused anything
+  that was not one of Poly's sizes. Now any size of PNG or JPEG is accepted and the server makes
+  it into the one size the site serves. D153's refusal, its multi-size list and its message are
+  gone.
+- **One target per image, the E400-series size**: background **320x240**, logo **60x26**. Poly
+  still publishes a size per screen class (D153), but a site has one background and one logo for
+  a mixed, mostly-E450 fleet, so both are served at the E100–E400 size. An 800x480 or 182x78
+  upload (the E500 sizes) is no longer special — it is resized like anything else.
+- **How it is fitted.** The background is scaled to **cover** 320x240 and centre-cropped: the
+  screen is always filled and the edges are what is lost, as with any wallpaper. The logo is
+  scaled to **fit inside** 60x26 and centred on transparent padding, so a wordmark is never
+  cropped or distorted. The crop is taken in the source's own pixels before scaling, so an
+  extreme shape (1x3000) never makes the resampler produce anything bigger than the target. A
+  photo's Exif rotation is applied first.
+- **Output is always PNG after a resize** — the logo needs the alpha channel, and one format
+  keeps it simple — with no metadata carried over. **An upload that is already exactly the
+  target size is stored byte for byte, in its own format, never decoded or re-encoded**: what
+  the admin made is what the phone gets. So a 320x240 JPEG is still stored and served as
+  `.jpg`, and both file names and both golden files stay valid.
+- **Still D152/D153 at the front door.** The 2 MB cap is on the uploaded file, enforced while
+  it is spooled and before anything decodes it; the magic-byte check still decides PNG or JPEG;
+  the header-read size (`ImageDimensions`, no decode) is what decides "already the right size".
+  Only then does anything decode it. Storage names, the `LogoStore`/`BackgroundStore` split,
+  serving paths and the `bg`/`bg.logo` rendering are unchanged.
+- **A pixel cap before decoding: 25 megapixels.** The byte cap does not bound what a file
+  decodes to — a 50 KB PNG can declare 6000x5000 — so the header is identified first and
+  anything over 25 megapixels (100 MB decoded at four bytes a pixel) is refused with a message
+  naming its size. That is past a 24-megapixel camera photo. A file that cannot be decoded is
+  refused with a message, and a refused upload never touches the stored image.
+- **First image dependency: SixLabors.ImageSharp 3.1.12, in `Techie.Pbx.Asterisk` only** (and
+  the test project, to build real fixtures of any size). Decoding PNG and JPEG and resampling
+  well is a great deal more code, and more risk, than a maintained library; the header reads
+  D153 hand-rolled were a few lines, a decoder is not. Fully managed (no native libraries, so
+  nothing new for the installer's package list or the single-file publish). It is handed a
+  configuration that registers the PNG and JPEG codecs only, so its other decoders (GIF, BMP,
+  TIFF, WebP, …) are unreachable from an upload. **Licence:** the Six Labors Split License, which
+  grants Apache 2.0 to software consuming it under an open-source licence — TNPBX is GPL-3.0,
+  and Apache 2.0 is GPLv3-compatible. A closed-source fork by a company over US$1M revenue would
+  need Six Labors' commercial licence.
+- **The form says so.** The background upload hint now says any size is accepted and that the
+  server resizes to 320x240 (keeping a 320x240 upload as it is). The logo still has no upload
+  UI (D153); when it gets one its hint says the same for 60x26.

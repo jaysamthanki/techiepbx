@@ -7,7 +7,8 @@ namespace Techie.Pbx.Asterisk.Provisioning
     ///
     /// A gate, not a decoder, in the same spirit as <c>AudioSignature</c>: it answers "does this
     /// start the way a PNG or a JPEG starts", and the phone is what decides whether the rest of
-    /// the file is any good. Nothing is converted or resized on this side.
+    /// the file is any good. It is also what stands between an upload and the image decoder: a
+    /// file that is to be resized (D154) has passed this first.
     /// </summary>
     public static class BackgroundImageSignature
     {

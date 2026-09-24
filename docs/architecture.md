@@ -51,7 +51,7 @@ Sudo rules were rejected: see [decisions.md](decisions.md).
 |---|---|---|
 | `Techie.Pbx.Web` | Razor Pages + htmx partials, API controllers, auth, `PbxDatabase`, startup | Core, Asterisk, Contracts |
 | `Techie.Pbx.Core` | Models + validation, `Database` (SQLite + schema scripts), repositories, `SettingsKeys`, `SecretGenerator`, shell scripts | Dapper, Microsoft.Data.Sqlite, log4net |
-| `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, `ConfigApplier`, AMI client | Core |
+| `Techie.Pbx.Asterisk` | Conf renderers, `ConfFileWriter`, `ConfigApplier`, AMI client, phone provisioning | Core, SixLabors.ImageSharp (phone image resizing, D154) |
 | `Techie.Pbx.Contracts` | Messages between Web and Helper: `HelperRequest`/`HelperReply`, `FirewallRule` | none |
 | `Techie.Pbx.Helper` | Root helper: Unix socket listener, peer UID check, `NftRuleset` renderer, nft invocation | Core, Contracts |
 | `Techie.Pbx.Tests` | xUnit tests, expected conf files | Core, Asterisk |

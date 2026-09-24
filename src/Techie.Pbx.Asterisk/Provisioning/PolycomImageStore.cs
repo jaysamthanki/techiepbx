@@ -13,16 +13,22 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// built from anything the browser sent. Saving a new image removes the other format's file,
     /// so the two can never both be there.
     ///
-    /// The two stores differ only in the file name and the pixel sizes they accept, which is why
-    /// this is a base class with no behaviour of its own to override rather than anything more.
+    /// Any size of upload is accepted and made into the one size the site serves (D154, amending
+    /// D153's exact-size rule): an upload that is already that size is stored byte for byte, in
+    /// its own format; anything else is resized by <see cref="PolycomImageResizer"/> and stored as
+    /// a PNG.
+    ///
+    /// The two stores differ only in the file name, the target size and how an image is fitted to
+    /// it, which is why this is a base class with no behaviour of its own to override rather than
+    /// anything more.
     /// </summary>
     public abstract class PolycomImageStore
     {
         /// <summary>
-        /// The cap on an upload (D152). The largest size either image may be is 800x480 (D153), and
-        /// an image that size is a few hundred kilobytes; two megabytes leaves room for an
-        /// unoptimised export without letting the phone be handed something it has to struggle
-        /// to download on every boot.
+        /// The cap on an upload (D152), checked on the file as it arrives and before anything
+        /// decodes it (D154). What a phone is handed is at most 320x240 whatever was uploaded,
+        /// so this now bounds the work the server does rather than what a phone downloads; two
+        /// megabytes still takes an unoptimised export or a photo.
         /// </summary>
         public const long MaxUploadBytes = 2L * 1024 * 1024;
 
@@ -30,24 +36,28 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
         private static readonly BackgroundImageFormat[] Formats = { BackgroundImageFormat.Png, BackgroundImageFormat.Jpeg };
 
-        /// <summary>The pixel sizes an upload must be exactly one of (D153).</summary>
-        private readonly (int Width, int Height)[] acceptedSizes;
-
         /// <summary>The stored file's name without its extension, which the format supplies.</summary>
         private readonly string fileStem;
+
+        /// <summary>How an upload of any other size is made into <see cref="targetSize"/>.</summary>
+        private readonly PolycomImageFit fit;
 
         /// <summary>What the image is, for a log line or a message an admin reads: "background", "logo".</summary>
         private readonly string name;
 
+        /// <summary>The one size the site serves this image at (D154).</summary>
+        private readonly (int Width, int Height) targetSize;
+
         /// <summary>The data folder: the directory the database is in.</summary>
         public string DataDirectory { get; }
 
-        protected PolycomImageStore(string dataDirectory, string fileStem, string name, params (int Width, int Height)[] acceptedSizes)
+        protected PolycomImageStore(string dataDirectory, string fileStem, string name, (int Width, int Height) targetSize, PolycomImageFit fit)
         {
             this.DataDirectory = Path.GetFullPath(dataDirectory);
-            this.acceptedSizes = acceptedSizes;
             this.fileStem = fileStem;
+            this.fit = fit;
             this.name = name;
+            this.targetSize = targetSize;
         }
 
         /// <summary>The image there is now, or null when none has been uploaded or it was removed.</summary>
@@ -94,11 +104,13 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// Takes an upload and makes it the site's image, replacing whatever was there.
         ///
         /// The upload is spooled to a temporary file in the data folder first, with the size cap
-        /// enforced as it is read, and checked for a PNG or JPEG signature and for one of the
-        /// accepted pixel sizes before it goes anywhere near the name a phone is served from.
-        /// Anything refused leaves the current image completely untouched. The spool is in the
-        /// same folder as the target so that putting it in place is a rename, and a phone fetching
-        /// mid-save gets the old image or the new one, never half of either.
+        /// enforced as it is read, and checked for a PNG or JPEG signature before anything else
+        /// looks at it. If its header says it is already the target size it is kept exactly as
+        /// uploaded; otherwise it is decoded, resized and the PNG that makes is written over the
+        /// spool. Only then does it go anywhere near the name a phone is served from, and anything
+        /// refused leaves the current image completely untouched. The spool is in the same folder
+        /// as the target so that putting it in place is a rename, and a phone fetching mid-save
+        /// gets the old image or the new one, never half of either.
         /// </summary>
         public BackgroundImage Save(Stream upload)
         {
@@ -112,7 +124,20 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
                 // At most the cap, so reading it whole is cheaper than being clever with a stream.
                 var bytes = File.ReadAllBytes(spool);
-                var format = this.Validate(bytes);
+                var format = BackgroundImageSignature.Detect(bytes)
+                    ?? throw new BackgroundUploadException("That is not a PNG or JPEG image. Only those two are accepted, and the file's contents decide, not its name.");
+
+                // Already the right size: never re-encoded, so what the admin made is what the
+                // phone shows, to the byte (D154).
+                var size = ImageDimensions.Read(bytes, format);
+                var resized = size != this.targetSize;
+
+                if (resized)
+                {
+                    File.WriteAllBytes(spool, PolycomImageResizer.Resize(bytes, this.targetSize, this.fit));
+                    format = BackgroundImageFormat.Png;
+                }
+
                 var target = this.PathFor(format);
 
                 File.Move(spool, target, overwrite: true);
@@ -127,7 +152,10 @@ namespace Techie.Pbx.Asterisk.Provisioning
                 }
 
                 var image = new BackgroundImage { Bytes = new FileInfo(target).Length, Format = format, Path = target };
-                Log.Info($"Polycom {this.name} image stored ({BackgroundImageSignature.Describe(format)}, {image.Bytes} bytes)");
+                var from = size == null ? "" : $" from {size.Value.Width}x{size.Value.Height}";
+                Log.Info(resized
+                    ? $"Polycom {this.name} image resized{from} to {this.targetSize.Width}x{this.targetSize.Height} and stored (PNG, {image.Bytes} bytes)"
+                    : $"Polycom {this.name} image stored as uploaded ({BackgroundImageSignature.Describe(format)}, {image.Bytes} bytes)");
 
                 return image;
             }
@@ -161,36 +189,6 @@ namespace Techie.Pbx.Asterisk.Provisioning
 
             if (total == 0)
                 throw new BackgroundUploadException("That file is empty.");
-        }
-
-        /// <summary>
-        /// The upload's format, once it has been shown to be a PNG or JPEG of exactly one of the
-        /// accepted sizes; otherwise a message saying which sizes those are.
-        ///
-        /// Exact, not "at most" or "roughly" (D153): these are site-wide images, one for a fleet of
-        /// mixed models, and Poly's guides give one optimal size per screen class. An image that is
-        /// any other size is one the phone rescales or crops, and what the admin sees on the desk is
-        /// then not what they uploaded — so the size is checked here, where it can be explained,
-        /// rather than discovered on a phone.
-        /// </summary>
-        private BackgroundImageFormat Validate(byte[] bytes)
-        {
-            var detected = BackgroundImageSignature.Detect(bytes);
-
-            if (detected == null)
-                throw new BackgroundUploadException("That is not a PNG or JPEG image. Only those two are accepted, and the file's contents decide, not its name.");
-
-            var format = detected.Value;
-            var accepted = string.Join(" or ", this.acceptedSizes.Select(s => $"{s.Width}x{s.Height}"));
-            var size = ImageDimensions.Read(bytes, format);
-
-            if (size == null)
-                throw new BackgroundUploadException($"The width and height could not be read from that {BackgroundImageSignature.Describe(format)} file, so it cannot be checked against the {this.name} sizes ({accepted} pixels). It may be damaged.");
-
-            if (!this.acceptedSizes.Contains(size.Value))
-                throw new BackgroundUploadException($"The {this.name} image must be exactly {accepted} pixels; this file is {size.Value.Width}x{size.Value.Height}.");
-
-            return format;
         }
     }
 }

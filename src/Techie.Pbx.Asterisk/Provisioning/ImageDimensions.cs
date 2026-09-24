@@ -3,8 +3,9 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// <summary>
     /// How many pixels wide and high an uploaded PNG or JPEG says it is, read from its header
     /// (D153). Still a gate, not a decoder, like <see cref="BackgroundImageSignature"/>: it reads
-    /// the two numbers the file declares and nothing else. No external package, because two
-    /// fixed-layout headers are a few lines each.
+    /// the two numbers the file declares and nothing else. Since D154 it decides whether an upload
+    /// is already the target size and can be stored untouched, without the file being decoded;
+    /// anything else goes to <see cref="PolycomImageResizer"/>, which does decode it.
     ///
     /// PNG puts them at a fixed place: the first chunk after the signature must be IHDR, and its
     /// data starts with the width and then the height, four bytes each, big-endian.

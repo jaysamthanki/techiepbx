@@ -3,8 +3,9 @@ using Techie.Pbx.Asterisk.Provisioning;
 namespace Techie.Pbx.Tests.Asterisk
 {
     /// <summary>
-    /// The one site-wide Polycom logo in the data folder (D153): kept exactly as the background
-    /// is, under its own fixed name, and exactly one of Poly's two logo sizes.
+    /// The one site-wide Polycom logo in the data folder (D153, D154): kept exactly as the
+    /// background is, under its own fixed name, and always 60x26 — as uploaded when it was that
+    /// size, resized to a transparent-padded PNG when it was not.
     /// </summary>
     public class LogoStoreTests : IDisposable
     {
@@ -18,10 +19,10 @@ namespace Techie.Pbx.Tests.Asterisk
 
         public void Dispose() => Directory.Delete(this.directory, recursive: true);
 
-        /// <summary>A JPEG of the E100–E400 logo size, unless a test says otherwise.</summary>
+        /// <summary>A header-only JPEG of the 60x26 logo size, unless a test says otherwise.</summary>
         private static MemoryStream Jpeg(int width = 60, int height = 26) => new(FakeImages.Jpeg(width, height));
 
-        /// <summary>A PNG of the E100–E400 logo size, unless a test says otherwise.</summary>
+        /// <summary>A header-only PNG of the 60x26 logo size, unless a test says otherwise.</summary>
         private static MemoryStream Png(int width = 60, int height = 26) => new(FakeImages.Png(width, height));
 
         [Fact]
@@ -39,40 +40,45 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Path.Combine(this.directory, "polycom-logo.png"), png.Path);
             Assert.Equal(BackgroundImageFormat.Png, this.store.Current()!.Format);
 
-            var jpeg = this.store.Save(Jpeg(182, 78));
+            var jpeg = this.store.Save(Jpeg());
 
             Assert.Equal(Path.Combine(this.directory, "polycom-logo.jpg"), jpeg.Path);
             Assert.Equal(BackgroundImageFormat.Jpeg, this.store.Current()!.Format);
             Assert.Single(Directory.GetFiles(this.directory));
         }
 
-        /// <summary>Both of Poly's logo sizes are accepted (D153).</summary>
-        [Theory]
-        [InlineData(60, 26)]
-        [InlineData(182, 78)]
-        public void Either_logo_size_is_accepted(int width, int height)
+        /// <summary>Already 60x26: stored byte for byte, in its own format (D154).</summary>
+        [Fact]
+        public void A_logo_already_60x26_is_stored_byte_for_byte()
         {
-            Assert.Equal(BackgroundImageFormat.Png, this.store.Save(Png(width, height)).Format);
+            var jpeg = EncodedImages.Jpeg(60, 26);
+            var image = this.store.Save(new MemoryStream(jpeg));
+
+            Assert.Equal(BackgroundImageFormat.Jpeg, image.Format);
+            Assert.Equal(jpeg, File.ReadAllBytes(image.Path));
         }
 
         /// <summary>
-        /// Anything else is refused with the accepted sizes named, the logo already there untouched.
-        /// A background-sized image is no exception.
+        /// Any other size, E500's 182x78 and a background-sized image included, is resized to a
+        /// 60x26 PNG (D154), replacing the JPEG that was there.
         /// </summary>
         [Theory]
+        [InlineData(182, 78)]
         [InlineData(320, 240)]
-        [InlineData(800, 480)]
         [InlineData(61, 26)]
         [InlineData(26, 60)]
-        public void Any_other_size_is_refused_and_changes_nothing(int width, int height)
+        public void Any_other_size_is_resized_to_a_60x26_png(int width, int height)
         {
-            this.store.Save(Png());
+            this.store.Save(Jpeg());
 
-            var refused = Assert.Throws<BackgroundUploadException>(() => this.store.Save(Jpeg(width, height)));
+            var image = this.store.Save(new MemoryStream(EncodedImages.Jpeg(width, height)));
 
-            Assert.Equal($"The logo image must be exactly 60x26 or 182x78 pixels; this file is {width}x{height}.", refused.Message);
+            Assert.Equal(Path.Combine(this.directory, "polycom-logo.png"), image.Path);
             Assert.Equal(BackgroundImageFormat.Png, this.store.Current()!.Format);
             Assert.Single(Directory.GetFiles(this.directory));
+
+            using var stored = EncodedImages.Decode(File.ReadAllBytes(image.Path));
+            Assert.Equal((60, 26), (stored.Width, stored.Height));
         }
 
         /// <summary>The magic-byte check and the cap are the background's, unchanged (D152).</summary>

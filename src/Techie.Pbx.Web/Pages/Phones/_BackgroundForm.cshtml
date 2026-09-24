@@ -53,8 +53,10 @@
         <input class="form-control" type="file" id="phones-background-image" name="image"
                accept="@BackgroundImageSignature.AcceptAttribute" />
         <div class="form-text">
-            PNG or JPEG, up to @maxMegabytes MB, and not a progressive JPEG. It must be exactly
-            320×240 (Edge E100–E400) or 800×480 (Edge E500) pixels, and is not resized.
+            PNG or JPEG, up to @maxMegabytes MB, and not a progressive JPEG. Any size is accepted:
+            the server resizes it to 320×240 pixels (Poly's Edge E100–E400 size), filling the
+            screen and cropping the edges if its shape is different, and stores the result as a
+            PNG. An image that is already 320×240 is kept exactly as uploaded.
             It replaces whatever is there now.
         </div>
     </div>

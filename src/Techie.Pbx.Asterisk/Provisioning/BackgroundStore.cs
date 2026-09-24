@@ -5,13 +5,13 @@ namespace Techie.Pbx.Asterisk.Provisioning
     /// <summary>
     /// The one site-wide Polycom background image (D145, D151), stored as
     /// <c>polycom-background.png</c> or <c>.jpg</c> in the data folder. Everything about how it is
-    /// kept is <see cref="PolycomImageStore"/>'s; what is particular to the background is the name
-    /// and the two sizes it must be.
+    /// kept is <see cref="PolycomImageStore"/>'s; what is particular to the background is the name,
+    /// the size and how an upload is fitted to it.
     ///
-    /// Exactly 320x240 or 800x480 (D153): Poly's optimal background sizes for the Edge E100–E400
-    /// screens and the E500 series. The site's fleet is mixed-model but mostly E450, and one image
-    /// serves all of it, so the check is strict on purpose — an image of any other size is one the
-    /// phone scales, and the admin should hear that at upload rather than see it on a desk.
+    /// 320x240 (D154): Poly's optimal background size for the Edge E100–E400 screens. The site has
+    /// one background for a mixed-model, mostly-E450 fleet, so it is served at the E400 size
+    /// whatever was uploaded. An upload of any other shape is scaled to cover 320x240 and
+    /// centre-cropped, as wallpaper is: the screen is always filled and the edges are what is lost.
     /// </summary>
     public class BackgroundStore : PolycomImageStore
     {
@@ -21,7 +21,7 @@ namespace Techie.Pbx.Asterisk.Provisioning
         }
 
         public BackgroundStore(string dataDirectory)
-            : base(dataDirectory, "polycom-background", "background", (320, 240), (800, 480))
+            : base(dataDirectory, "polycom-background", "background", (320, 240), PolycomImageFit.Cover)
         {
         }
     }
