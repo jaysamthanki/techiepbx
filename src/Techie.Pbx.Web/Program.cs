@@ -215,7 +215,7 @@ namespace Techie.Pbx.Web
             // every start so a re-deploy cannot leave voicemail email broken in silence (D126).
             PbxMailConfig.Open(app.Environment.ContentRootPath, new SettingsRepository(PbxDatabase.Current));
 
-            Log.Info($"TNPBX web starting on {string.Join(", ", bindings)}");
+            Log.Info($"TNPBX web {typeof(Program).Assembly.GetName().Version} starting on {string.Join(", ", bindings)}");
             app.Run();
         }
 

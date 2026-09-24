@@ -146,7 +146,11 @@ namespace Techie.Pbx.Helper
                         return HelperReply.Succeeded(this.firewall.Current());
 
                     case HelperMessageTypes.Ping:
-                        return HelperReply.Succeeded(new PingResult { Version = HelperSocket.ProtocolVersion });
+                        return HelperReply.Succeeded(new PingResult
+                        {
+                            AppVersion = typeof(Program).Assembly.GetName().Version?.ToString(3),
+                            Version = HelperSocket.ProtocolVersion
+                        });
 
                     default:
                         return HelperReply.Failed($"'{request.Type}' is not a message this helper accepts.");

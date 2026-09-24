@@ -2,6 +2,11 @@
 
   <PropertyGroup>
     <UserSecretsId>aspnet-TNPBX-4052027d-dece-4783-9346-d2d8544da74d</UserSecretsId>
+    <!-- The official deploy shape: one self-contained single-file executable per release
+         (RID still passed at publish time: -r linux-x64 / linux-arm64). wwwroot, appsettings,
+         log4net.config and the staticwebassets manifest stay beside the exe by design. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

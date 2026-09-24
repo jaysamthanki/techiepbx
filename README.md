@@ -56,7 +56,11 @@ tar -C publish/web    -czf tnpbx-web.tgz .
 tar -C publish/helper -czf tnpbx-helper.tgz .
 ```
 
-(Use `-r linux-x64` on an x64 server.)
+(Use `-r linux-x64` on an x64 server.) Both executables build as **self-contained
+single files** — that is the release shape, set in the project files. A handful of
+files must stay beside the exe (`wwwroot/`, `appsettings.json`, `log4net.config`,
+the `.staticwebassets.endpoints.json` manifest), so ship the whole publish folder,
+which is what the tarball is for.
 
 ### 3. Configure Entra ID sign-in
 
@@ -101,6 +105,16 @@ web app.
 
 Later re-deploys use the same `app-deploy.sh`: it preserves the existing
 `appsettings.json`, database (`Data/`) and installed tooling across updates.
+
+## Versioning and releases
+
+The product version lives in one place: `<Version>` in `Directory.Build.props`.
+It shows in the web UI footer and the startup log line, and the Helper's `ping`
+reply carries it so a mismatched web/Helper pair is detectable.
+
+Releases are git tags (`vX.Y.Z`) with a GitHub Release carrying the prebuilt
+tarballs (`tnpbx-web` and `tnpbx-helper`, x64 and arm64) — deploying from a
+release needs no .NET SDK on site.
 
 ## Building and running for development
 

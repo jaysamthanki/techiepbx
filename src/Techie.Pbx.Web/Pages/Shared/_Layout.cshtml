@@ -160,10 +160,11 @@
     *@
     @{
         var signedInAs = Techie.Pbx.Web.Security.SignedInUser.DisplayName(User);
+        var version = typeof(Techie.Pbx.Web.Program).Assembly.GetName().Version?.ToString(3);
     }
     <footer class="border-top footer text-body-secondary d-print-none">
         <div class="container">
-            @(DateTime.Today.Year) (C) Techie Networks Inc - Techie PBX
+            @(DateTime.Today.Year) (C) Techie Networks Inc - Techie PBX v@(version)
             @if (signedInAs.Length > 0)
             {
                 <text>- Logged in as @signedInAs on @Environment.MachineName</text>

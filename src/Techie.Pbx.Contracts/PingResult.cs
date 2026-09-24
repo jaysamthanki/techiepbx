@@ -7,6 +7,9 @@ namespace Techie.Pbx.Contracts
     /// </summary>
     public class PingResult
     {
+        /// <summary>The build of the Helper binary, from the product version (e.g. 0.1.1).</summary>
+        public string? AppVersion { get; set; }
+
         public int Version { get; set; }
     }
 }
