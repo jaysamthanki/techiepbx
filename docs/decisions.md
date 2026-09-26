@@ -3390,3 +3390,19 @@ user's.
   are a site's own branding, not secrets: a guessable name behind a brand-and-model UA gate is
   the same protection FreePBX's endpoint list gives its wallpapers.
 - **Yealink images, if ever added, follow the same split.**
+
+### D156. The AMI secret is generated, not operator-chosen (2026-09-25, settings)
+
+- **The AMI secret is a machine-to-machine handshake between two things the app owns both
+  ends of:** the Settings row it stores and the manager.conf it renders. AMI binds to
+  127.0.0.1 only (D32), so there is no human who needs to type this credential, and an
+  operator left to invent one will pick something weak or reuse something. A blank value
+  on a deployed box was also a window where the CDR collector and status pages could not
+  log in.
+- **So Program.cs seeds it at startup:** if the row is missing or empty, a 32-hex-character
+  value from `RandomNumberGenerator` is written once. An existing value is never
+  overwritten — restarts cannot churn a credential Asterisk is holding, and an operator
+  who deliberately set one keeps it.
+- **The value stays a secret in the UI's terms** (dots in the table, plaintext only in the
+  edit form, D112), so manual AMI debugging still has a way to read it. Rotation is the
+  existing edit path: change it in Settings and apply.

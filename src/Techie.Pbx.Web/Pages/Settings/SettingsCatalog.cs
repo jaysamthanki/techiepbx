@@ -68,7 +68,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The password for that AMI account. Stored here and written into manager.conf; the table shows dots, the edit form shows it.",
+                Description = "The password for that AMI account. Generated on first start (D156) and stored here and written into manager.conf; the table shows dots, the edit form shows it.",
                 Key = SettingsKeys.AmiSecret,
             },
             new SettingDescriptor

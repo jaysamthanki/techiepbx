@@ -169,7 +169,8 @@ systemctl start tnpbx-web
 ### 5. First run
 
 1. Browse to `http://<host>:8080` and sign in with Entra ID.
-2. Set the AMI secret and your timezone on the Settings page.
+2. Set your timezone on the Settings page (the AMI secret is generated automatically on
+   first start; it only needs a look if you want to change it).
 3. Add an extension, then hit **Apply** — the app writes every file in `/etc/asterisk`.
 4. Start Asterisk: `systemctl start asterisk` (root, or any admin via the polkit rule).
 5. Point a phone at the box and register it.

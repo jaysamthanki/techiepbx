@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Diagnostics;
 using Techie.Pbx.Core.Security;
@@ -51,9 +52,16 @@ namespace Techie.Pbx.Web
             // database can answer, because the certificate lives there (D97, D99).
             PbxDatabase.Open(DatabasePath(builder.Environment, builder.Configuration));
 
+            // A box that has never had an AMI secret gets a generated one now (D156): the
+            // app logs into AMI long before anyone has opened the Settings page, and the
+            // value is a machine-to-machine credential the app owns both halves of. An
+            // existing value is never overwritten.
+            var settings = new SettingsRepository(PbxDatabase.Current);
+            AmiSecret.Ensure(settings);
+
             // Whether there is a web request log, and where it goes, is the other question only the
             // database can answer before the pipeline is built (D116).
-            PbxRequestLog.Open(builder.Environment.ContentRootPath, new SettingsRepository(PbxDatabase.Current).GetAll());
+            PbxRequestLog.Open(builder.Environment.ContentRootPath, settings.GetAll());
 
             if (PbxRequestLog.Enabled)
                 builder.Services.AddW3CLogging(RequestLogOptions);

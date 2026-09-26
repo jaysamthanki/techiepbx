@@ -346,7 +346,8 @@ Next steps (first install):
   1. Edit /opt/tnpbx/appsettings.json: fill in the AzureAd section (Entra ID
      app registration), then:  systemctl start tnpbx-web
   2. Browse http://<this-host>:8080 and sign in with Entra ID
-  3. Settings: AMI secret, System.Timezone, Provisioning credentials
+  3. Settings: System.Timezone, Provisioning credentials (the AMI secret is
+     generated automatically on first start)
   4. Add an extension, then Apply config — that writes /etc/asterisk
   5. Start Asterisk:  sudo systemctl start asterisk
   6. Settings -> Firewall: the helper should say "Reachable". Press Apply to
