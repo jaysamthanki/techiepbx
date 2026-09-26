@@ -133,10 +133,25 @@ Fill in your own Entra ID app registration in `/opt/tnpbx/appsettings.json`:
 }
 ```
 
-The repo ships these blank — they are deployment values, not source. If your admins
-reach the box from trusted private subnets, you can also enable the local auth bypass
-in `appsettings.json` (`LocalAuthenticationBypass`) so those networks skip the Entra
-redirect. Then start the app:
+The repo ships these blank — they are deployment values, not source.
+
+**Also add your own network to the local auth bypass.** `appsettings.json` ships with
+`LocalAuthenticationBypass.AllowedNetworks` limited to `127.0.0.1/32` — meaning only
+loopback. That is a practical blocker: Entra ID's sign-in redirect requires an HTTPS
+URL, and out of the box the app serves plain HTTP on `:8080`. Add the network you will
+browse from (your LAN/VPN subnet, or the box's public IP if it will front it with TLS):
+
+```json
+"LocalAuthenticationBypass": {
+  "Enabled": true,
+  "AllowedNetworks": [ "127.0.0.1/32", "192.168.1.0/24" ]
+}
+```
+
+Requests from those networks skip the Entra redirect and can use the plain-HTTP URL
+`http://<host>:8080`. Until a certificate is installed (the app binds 443 once one
+exists — see Settings → Certificates), a browser coming from any other network will
+bounce into an Entra redirect that cannot complete over HTTP. Then start the app:
 
 ```bash
 systemctl start tnpbx-web
