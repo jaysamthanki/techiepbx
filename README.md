@@ -71,6 +71,7 @@ tarballs for your architecture from the
 release **v0.1.2** — onto the box:
 
 ```bash
+cd /root/techiepbx
 # arm64:
 wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-arm64.tgz
 wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-arm64.tgz
