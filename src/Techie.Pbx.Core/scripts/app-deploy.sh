@@ -35,7 +35,10 @@
 #   - writes the polkit rule that lets tnpbx restart exactly asterisk.service
 #     and nothing else (architecture.md; the app asks the operator, the Helper
 #     or the admin to do the restart, never sudo)
-#   - enables + starts tnpbx-web; does NOT start asterisk (part 1 left it
+#   - enables tnpbx-web and starts it on re-deploys. A FIRST install (no
+#     existing appsettings.json in /opt/tnpbx) leaves the app STOPPED: the
+#     operator fills in the Entra ID values in appsettings.json and runs
+#     `systemctl start tnpbx-web`. Does NOT start asterisk (part 1 left it
 #     stopped until the app's first apply writes /etc/asterisk, D93)
 #
 # First run after this script: browse http://<host>:8080, sign in, set the AMI
@@ -88,6 +91,16 @@ mkdir -p "${APP_HOME}/Data"
 #
 # Written as plain "if" blocks rather than "test && command": under "set -e" a test that
 # comes out false is a failed command at the top level, which would end the deploy.
+# A deploy onto a box that already has its own appsettings.json is an update: the file is
+# preserved below and the app is restarted with it. A deploy with no existing
+# appsettings.json is a FIRST install: the tarball carries repo defaults (blank Entra ID
+# values, etc.), so the app is left STOPPED for the operator to edit the file and start
+# it themselves — starting it now would just serve a sign-in that cannot work.
+FIRST_INSTALL=0
+if [[ ! -e "${APP_HOME}/appsettings.json" ]]; then
+    FIRST_INSTALL=1
+fi
+
 KEEP_DIR=$(mktemp -d)
 for kept in appsettings.json Data bin Config whisper; do
     if [[ -e "${APP_HOME}/${kept}" ]]; then
@@ -303,10 +316,14 @@ else
     warn "tnpbx-helper not started (no unit or no binary); the firewall page will say the helper is unreachable"
 fi
 
-log "starting tnpbx-web"
-systemctl restart tnpbx-web
-sleep 3
-systemctl is-active tnpbx-web || die "tnpbx-web failed to start: journalctl -u tnpbx-web -n 50"
+if [[ "$FIRST_INSTALL" -eq 1 ]]; then
+    log "first install: tnpbx-web left STOPPED — edit /opt/tnpbx/appsettings.json (Entra ID), then: systemctl start tnpbx-web"
+else
+    log "starting tnpbx-web"
+    systemctl restart tnpbx-web
+    sleep 3
+    systemctl is-active tnpbx-web || die "tnpbx-web failed to start: journalctl -u tnpbx-web -n 50"
+fi
 
 cat <<EOF
 
@@ -325,14 +342,16 @@ TNPBX web application deployed
   ${POLKIT}
                         tnpbx may start/stop/restart asterisk.service only
 
-Next steps (first run):
-  1. Browse http://<this-host>:8080 and sign in with Entra ID
-  2. Settings: AMI secret, System.Timezone, Provisioning credentials
-  3. Add an extension, then Apply config — that writes /etc/asterisk
-  4. Start Asterisk:  sudo systemctl start asterisk
-  5. Settings -> Firewall: the helper should say "Reachable". Press Apply to
+Next steps (first install):
+  1. Edit /opt/tnpbx/appsettings.json: fill in the AzureAd section (Entra ID
+     app registration), then:  systemctl start tnpbx-web
+  2. Browse http://<this-host>:8080 and sign in with Entra ID
+  3. Settings: AMI secret, System.Timezone, Provisioning credentials
+  4. Add an extension, then Apply config — that writes /etc/asterisk
+  5. Start Asterisk:  sudo systemctl start asterisk
+  6. Settings -> Firewall: the helper should say "Reachable". Press Apply to
      load the ruleset. Loopback, established connections, ICMP and SSH stay
      open whatever happens — the helper writes those itself (D142, D143).
-  6. Point phones at http://<host>:8080/polycom (option 160) or /yealink (66)
+  7. Point phones at http://<host>:8080/polycom (option 160) or /yealink (66)
 
 EOF

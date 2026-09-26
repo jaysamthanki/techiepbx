@@ -80,9 +80,7 @@ wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-we
 wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-x64.tgz
 ```
 
-Then continue at step 4. Easiest is to leave the tarballs as they are and edit
-`/opt/tnpbx/appsettings.json` after step 5 unpacks them (then
-`systemctl restart tnpbx-web`).
+Then continue at step 4.
 
 **3b. From source (on the build machine).** Publish the app yourself:
 
@@ -90,24 +88,39 @@ Then continue at step 4. Easiest is to leave the tarballs as they are and edit
 dotnet build Techie.Pbx.slnx          # verify everything compiles, Web project included
 dotnet test  Techie.Pbx.slnx          # optional but recommended
 
+cd /root/techiepbx                    # so the tarballs land beside the deploy scripts
 dotnet publish src/Techie.Pbx.Web    -c Release -r linux-arm64 --self-contained true -o publish/web
 dotnet publish src/Techie.Pbx.Helper -c Release -r linux-arm64 --self-contained true -o publish/helper
 tar -C publish/web    -czf tnpbx-web.tgz .
 tar -C publish/helper -czf tnpbx-helper.tgz .
 ```
 
-(Use `-r linux-x64` on an x64 server.) Both executables build as **self-contained
+(Use `-r linux-x64` on an x64 server. If you build on a different machine, copy
+the two tarballs onto the PBX box — `scp tnpbx-web.tgz tnpbx-helper.tgz root@<pbx-host>:/root/techiepbx/`
+— so step 4 finds them in the same place either way.) Both executables build as **self-contained
 single files** — that is the release shape, set in the project files. A handful of
 files must stay beside the exe (`wwwroot/`, `appsettings.json`, `log4net.config`,
 the `.staticwebassets.endpoints.json` manifest), so ship the whole publish folder,
 which is what the tarball is for.
 
-### 4. Configure Entra ID sign-in
+### 4. Deploy the app and configure sign-in (as root on the prepared server)
 
-**From source (3b):** edit `appsettings.json` in the repo (or inside the web
-tarball) before step 5. **From a release (3a):** edit `/opt/tnpbx/appsettings.json`
-after step 5 and `systemctl restart tnpbx-web`. Either way, fill in your own
-Entra ID app registration:
+```bash
+cd /root/techiepbx/src/Techie.Pbx.Core/scripts
+./app-deploy.sh /root/techiepbx/tnpbx-web.tgz /root/techiepbx/tnpbx-helper.tgz
+```
+
+(For a release download the names carry the architecture — `tnpbx-web-arm64.tgz`
+etc. — same directory.)
+
+This unpacks the self-contained publish into `/opt/tnpbx`, installs the hardened
+`tnpbx-web.service` (runs as `tnpbx`, binds 8080 always, 80 always, 443 once a
+certificate exists), installs the privileged helper into `/opt/tnpbx-helper`, and
+writes the polkit rule that lets `tnpbx` restart exactly `asterisk.service`.
+
+On a **first install** (no existing config) the script deliberately leaves the
+web app **stopped** — the shipped `appsettings.json` has blank sign-in values.
+Fill in your own Entra ID app registration in `/opt/tnpbx/appsettings.json`:
 
 ```json
 "AzureAd": {
@@ -122,22 +135,13 @@ Entra ID app registration:
 The repo ships these blank — they are deployment values, not source. If your admins
 reach the box from trusted private subnets, you can also enable the local auth bypass
 in `appsettings.json` (`LocalAuthenticationBypass`) so those networks skip the Entra
-redirect.
-
-### 5. Deploy the app (as root on the prepared server)
+redirect. Then start the app:
 
 ```bash
-cd /root/techiepbx/src/Techie.Pbx.Core/scripts
-./app-deploy.sh /path/to/tnpbx-web.tgz /path/to/tnpbx-helper.tgz
+systemctl start tnpbx-web
 ```
 
-This unpacks the self-contained publish into `/opt/tnpbx`, installs the hardened
-`tnpbx-web.service` (runs as `tnpbx`, binds 8080 always, 80 always, 443 once a
-certificate exists), installs the privileged helper into `/opt/tnpbx-helper`, writes
-the polkit rule that lets `tnpbx` restart exactly `asterisk.service`, and starts the
-web app.
-
-### 6. First run
+### 5. First run
 
 1. Browse to `http://<host>:8080` and sign in with Entra ID.
 2. Set the AMI secret and your timezone on the Settings page.
