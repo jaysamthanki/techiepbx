@@ -19,7 +19,8 @@ Both installer scripts print every step with `--dry-run` first — use it to rev
 ### What you need
 
 - A fresh **Debian 12 or 13** server (x64 or arm64), root access.
-- A build machine with the **.NET 10 SDK** (<https://dotnet.microsoft.com/download/dotnet/10.0>).
+- A build machine with the **.NET 10 SDK** (<https://dotnet.microsoft.com/download/dotnet/10.0>)
+  — only if you deploy from source (step 3b) instead of a release (step 3a).
 - A Microsoft Entra ID (Azure AD) app registration for admin sign-in — TNPBX's web UI
   authenticates against Entra ID with a cookie session.
 
@@ -27,7 +28,9 @@ Both installer scripts print every step with `--dry-run` first — use it to rev
 
 The installer scripts resolve their assets (music-on-hold tracks, filter files)
 relative to their own location in the repo, so clone the whole repo onto the
-box — this is the entire step, copy and paste:
+box — this is the entire step, copy and paste. The clone is needed whichever
+way you deploy the app in step 3 (release or source); `install.sh`,
+`app-deploy.sh` and the fail2ban files live only here:
 
 ```bash
 apt-get update && apt-get install -y git
@@ -37,12 +40,15 @@ cd /root/techiepbx/src/Techie.Pbx.Core/scripts
 
 (Any clone path works; the commands below assume this one.)
 
-### 2. Prepare the server
+### 2. Prepare the server (the server prep is the same either way)
 
 ```bash
 ./install.sh --dry-run    # review first
 ./install.sh
 ```
+
+The script builds Asterisk from source, so it can take a while — depending on
+the machine's size and performance, up to about 20 minutes.
 
 This builds Asterisk 22 from source (with bundled pjproject), creates the `asterisk`
 and `tnpbx` system users, prepares `/etc/asterisk` (setgid `root:asterisk`) so the
@@ -57,7 +63,27 @@ cd /root/techiepbx/scripts/fail2ban
 ./install.sh              # installs fail2ban + the TNPBX jail; edit ignoreip first
 ```
 
-### 3. Publish the app (on the build machine)
+### 3. Get the app — pick ONE
+
+**3a. From a release (no build machine, no .NET SDK).** Download the prebuilt
+tarballs for your architecture from the
+[Releases page](https://github.com/jaysamthanki/techiepbx/releases) — current
+release **v0.1.2** — onto the box:
+
+```bash
+# arm64:
+wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-arm64.tgz
+wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-arm64.tgz
+# x64:
+wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-x64.tgz
+wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-x64.tgz
+```
+
+Then continue at step 4. Easiest is to leave the tarballs as they are and edit
+`/opt/tnpbx/appsettings.json` after step 5 unpacks them (then
+`systemctl restart tnpbx-web`).
+
+**3b. From source (on the build machine).** Publish the app yourself:
 
 ```bash
 dotnet build Techie.Pbx.slnx          # verify everything compiles, Web project included
@@ -77,8 +103,10 @@ which is what the tarball is for.
 
 ### 4. Configure Entra ID sign-in
 
-Edit `appsettings.json` inside the web tarball (or in the repo before publishing) and
-fill in your own Entra ID app registration:
+**From source (3b):** edit `appsettings.json` in the repo (or inside the web
+tarball) before step 5. **From a release (3a):** edit `/opt/tnpbx/appsettings.json`
+after step 5 and `systemctl restart tnpbx-web`. Either way, fill in your own
+Entra ID app registration:
 
 ```json
 "AzureAd": {
