@@ -23,10 +23,23 @@ Both installer scripts print every step with `--dry-run` first — use it to rev
 - A Microsoft Entra ID (Azure AD) app registration for admin sign-in — TNPBX's web UI
   authenticates against Entra ID with a cookie session.
 
-### 1. Prepare the server (as root on the PBX box)
+### 1. Get the installer onto the server (as root on the PBX box)
+
+The installer scripts resolve their assets (music-on-hold tracks, filter files)
+relative to their own location in the repo, so clone the whole repo onto the
+box — this is the entire step, copy and paste:
 
 ```bash
-cd src/Techie.Pbx.Core/scripts
+apt-get update && apt-get install -y git
+git clone https://github.com/jaysamthanki/techiepbx.git /root/techiepbx
+cd /root/techiepbx/src/Techie.Pbx.Core/scripts
+```
+
+(Any clone path works; the commands below assume this one.)
+
+### 2. Prepare the server
+
+```bash
 ./install.sh --dry-run    # review first
 ./install.sh
 ```
@@ -40,11 +53,11 @@ tooling and the music-on-hold tracks, and leaves `asterisk.service` enabled but
 Optional but recommended, for brute-force protection:
 
 ```bash
-cd scripts/fail2ban
+cd /root/techiepbx/scripts/fail2ban
 ./install.sh              # installs fail2ban + the TNPBX jail; edit ignoreip first
 ```
 
-### 2. Publish the app (on the build machine)
+### 3. Publish the app (on the build machine)
 
 ```bash
 dotnet build Techie.Pbx.slnx          # verify everything compiles, Web project included
@@ -62,7 +75,7 @@ files must stay beside the exe (`wwwroot/`, `appsettings.json`, `log4net.config`
 the `.staticwebassets.endpoints.json` manifest), so ship the whole publish folder,
 which is what the tarball is for.
 
-### 3. Configure Entra ID sign-in
+### 4. Configure Entra ID sign-in
 
 Edit `appsettings.json` inside the web tarball (or in the repo before publishing) and
 fill in your own Entra ID app registration:
@@ -82,10 +95,10 @@ reach the box from trusted private subnets, you can also enable the local auth b
 in `appsettings.json` (`LocalAuthenticationBypass`) so those networks skip the Entra
 redirect.
 
-### 4. Deploy the app (as root on the prepared server)
+### 5. Deploy the app (as root on the prepared server)
 
 ```bash
-cd src/Techie.Pbx.Core/scripts
+cd /root/techiepbx/src/Techie.Pbx.Core/scripts
 ./app-deploy.sh /path/to/tnpbx-web.tgz /path/to/tnpbx-helper.tgz
 ```
 
@@ -95,7 +108,7 @@ certificate exists), installs the privileged helper into `/opt/tnpbx-helper`, wr
 the polkit rule that lets `tnpbx` restart exactly `asterisk.service`, and starts the
 web app.
 
-### 5. First run
+### 6. First run
 
 1. Browse to `http://<host>:8080` and sign in with Entra ID.
 2. Set the AMI secret and your timezone on the Settings page.
