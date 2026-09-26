@@ -151,7 +151,16 @@ browse from (your LAN/VPN subnet, or the box's public IP if it will front it wit
 Requests from those networks skip the Entra redirect and can use the plain-HTTP URL
 `http://<host>:8080`. Until a certificate is installed (the app binds 443 once one
 exists — see Settings → Certificates), a browser coming from any other network will
-bounce into an Entra redirect that cannot complete over HTTP. Then start the app:
+bounce into an Entra redirect that cannot complete over HTTP.
+
+> **Warning: choosing to skip Entra ID (leaving it blank and relying on the bypass).**
+> If you do not fill in the Entra ID values, the network bypass is the ONLY way into
+> the PBX — and every device on an allowed network gets **full admin access** to it:
+> extensions, trunks, call recordings, everything. Only take this route on a network
+> you fully control (a dedicated management VLAN or VPN), never a general office or
+> guest LAN.
+
+Then start the app:
 
 ```bash
 systemctl start tnpbx-web
