@@ -10,7 +10,7 @@ Debian server and manages Asterisk. The database is the source of truth; every f
 - **Architecture and security model:** [docs/architecture.md](docs/architecture.md), [docs/security.md](docs/security.md)
 - **Status:** [docs/roadmap.md](docs/roadmap.md)
 
-## Deploying from source
+## Deploying
 
 Deploying a TNPBX box is two parts, by design (D92): first prepare the server
 (Asterisk built from source, users, directories, fail2ban), then deploy the web app.
