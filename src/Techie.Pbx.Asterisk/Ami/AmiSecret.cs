@@ -20,7 +20,7 @@ namespace Techie.Pbx.Asterisk.Ami
         public static string Ensure(SettingsRepository settings)
         {
             var current = settings.Get(SettingsKeys.AmiSecret);
-            if (!string.IsNullOrEmpty(current))
+            if (!string.IsNullOrWhiteSpace(current))
                 return current;
 
             var generated = Generate();

@@ -68,7 +68,17 @@ namespace Techie.Pbx.Web.Pages.Certificates
         public IActionResult OnGetForm(long? certificateID)
         {
             if (certificateID is null or 0)
-                return this.Partial("_Form", new CertificateForm());
+            {
+                // A brand-new order most often names the box, so the form opens pre-filled
+                // with System.Hostname when one is set — one less place to retype it, and
+                // one less way for a typo to break the ACME challenge.
+                var hostname = this.settings.Get(SettingsKeys.SystemHostname);
+                return this.Partial("_Form", new CertificateForm
+                {
+                    Hostnames = string.IsNullOrWhiteSpace(hostname) ? "" : hostname,
+                    Name = string.IsNullOrWhiteSpace(hostname) ? "" : hostname,
+                });
+            }
 
             var certificate = this.certificates.GetByID(certificateID.Value);
             if (certificate == null)

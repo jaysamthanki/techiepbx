@@ -169,11 +169,29 @@ systemctl start tnpbx-web
 ### 5. First run
 
 1. Browse to `http://<host>:8080` and sign in with Entra ID.
-2. Set your timezone on the Settings page (the AMI secret is generated automatically on
+2. Settings → System: set **Hostname** to the public DNS name the box will be known
+   by (e.g. `pbx.example.com`) — the SIP config and phone provisioning URLs derive from
+   it. Also set your timezone there (the AMI secret is generated automatically on
    first start; it only needs a look if you want to change it).
 3. Add an extension, then hit **Apply** — the app writes every file in `/etc/asterisk`.
 4. Start Asterisk: `systemctl start asterisk` (root, or any admin via the polkit rule).
 5. Point a phone at the box and register it.
+
+### 6. TLS and HTTPS (optional but recommended)
+
+With a Let's Encrypt certificate the app serves HTTPS on 443 and can put SIP on TLS.
+The order is a manual step — setting the hostname does **not** start it:
+
+1. Make sure the hostname's **DNS record points at this box** and **port 80 is reachable
+   from the internet** — Let's Encrypt fetches the challenge on port 80, which the app
+   always listens on. This is the part that fails silently if skipped.
+2. Settings → Certificates: set the **contact email**, then **Order** a certificate.
+   The form opens pre-filled with the hostname from step 5.2. Ordering talks to Let's
+   Encrypt and can take up to a minute.
+3. `systemctl restart tnpbx-web` — the web server only picks up 443 at startup. Apply
+   config afterwards to put SIP TLS on Asterisk.
+
+Renewals happen automatically in the background before expiry.
 
 Later re-deploys use the same `app-deploy.sh`: it preserves the existing
 `appsettings.json`, database (`Data/`) and installed tooling across updates.
