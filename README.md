@@ -73,12 +73,16 @@ release **v0.1.2** — onto the box:
 ```bash
 cd /root/techiepbx
 # arm64:
-wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-arm64.tgz
-wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-arm64.tgz
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-arm64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-arm64.tgz
 # x64:
-wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-x64.tgz
-wget https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-x64.tgz
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-web-x64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.2/tnpbx-helper-x64.tgz
 ```
+
+(`wget -O` saves the arch-suffixed download under the plain name, so step 4's
+command works as written for either architecture. Keep the pair for YOUR arch —
+arm64 or x64, not all four.)
 
 Then continue at step 4.
 
@@ -109,9 +113,6 @@ which is what the tarball is for.
 cd /root/techiepbx/src/Techie.Pbx.Core/scripts
 ./app-deploy.sh /root/techiepbx/tnpbx-web.tgz /root/techiepbx/tnpbx-helper.tgz
 ```
-
-(For a release download the names carry the architecture — `tnpbx-web-arm64.tgz`
-etc. — same directory.)
 
 This unpacks the self-contained publish into `/opt/tnpbx`, installs the hardened
 `tnpbx-web.service` (runs as `tnpbx`, binds 8080 always, 80 always, 443 once a
