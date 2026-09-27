@@ -15,5 +15,12 @@ namespace Techie.Pbx.Web.Pages
 
         /// <summary>A file Asterisk only reads at startup was written, and it has not restarted since.</summary>
         public bool RestartRequired { get; set; }
+
+        /// <summary>
+        /// Asterisk is not running at all — the first-install state (D93), and the reason the
+        /// restart banner above is worded "start" here. One read-only systemctl per poll answers
+        /// it, the same check the restart itself uses to pick its verb.
+        /// </summary>
+        public bool AsteriskStopped { get; set; }
     }
 }

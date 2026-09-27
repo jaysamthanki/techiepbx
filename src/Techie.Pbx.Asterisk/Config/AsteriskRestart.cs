@@ -32,12 +32,54 @@ namespace Techie.Pbx.Asterisk.Config
         private static readonly ILog Log = LogManager.GetLogger(typeof(AsteriskRestart));
 
         /// <summary>
-        /// Runs <c>systemctl restart asterisk.service</c> and waits for it. Returns what happened
-        /// rather than throwing: every way this can fail — polkit refusing, systemd refusing,
-        /// Asterisk failing to come back — is something the admin is shown, not an error page.
+        /// Whether the unit is running. A single read-only <c>systemctl is-active</c> — the same
+        /// binary the start/restart below uses, with none of its privileges — so the navbar can
+        /// offer "Start Asterisk" on a fresh install, where Asterisk has never been started at
+        /// all (D93) and "restart" would be a strange word for it.
+        /// </summary>
+        public static bool IsRunning()
+        {
+            try
+            {
+                var start = new ProcessStartInfo
+                {
+                    FileName = Program,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false,
+                };
+
+                start.ArgumentList.Add("is-active");
+                start.ArgumentList.Add("--quiet");
+                start.ArgumentList.Add(Unit);
+
+                using var process = Process.Start(start);
+                if (process == null)
+                    return false;
+
+                process.WaitForExit(5000);
+                return process.ExitCode == 0;
+            }
+            catch (Exception ex) when (ex is Win32Exception or FileNotFoundException or InvalidOperationException)
+            {
+                Log.Warn($"Could not ask systemd whether {Unit} is running: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Runs <c>systemctl restart asterisk.service</c> — or <c>start</c>, when the unit is not
+        /// running, so a fresh install gets an honest "Asterisk started." — and waits for it.
+        /// Returns what happened rather than throwing: every way this can fail — polkit refusing,
+        /// systemd refusing, Asterisk failing to come back — is something the admin is shown, not
+        /// an error page.
         /// </summary>
         public static RestartResult Run()
         {
+            var verb = IsRunning() ? "restart" : "start";
+            var done = verb == "restart" ? "restarted" : "started";
+
             var start = new ProcessStartInfo
             {
                 FileName = Program,
@@ -47,7 +89,7 @@ namespace Techie.Pbx.Asterisk.Config
                 UseShellExecute = false,
             };
 
-            start.ArgumentList.Add("restart");
+            start.ArgumentList.Add(verb);
             start.ArgumentList.Add(Unit);
 
             Process process;
@@ -58,8 +100,8 @@ namespace Techie.Pbx.Asterisk.Config
             }
             catch (Exception ex) when (ex is Win32Exception or FileNotFoundException)
             {
-                Log.Error($"Could not run '{Program} restart {Unit}': {ex.Message}", ex);
-                return new RestartResult(false, $"{Program} could not be run on this server, so Asterisk was not restarted.");
+                Log.Error($"Could not run '{Program} {verb} {Unit}': {ex.Message}", ex);
+                return new RestartResult(false, $"{Program} could not be run on this server, so Asterisk was not {done}.");
             }
 
             using (process)
@@ -73,7 +115,7 @@ namespace Techie.Pbx.Asterisk.Config
                     Kill(process);
                     Log.Error($"Restarting {Unit} took longer than {TimeoutSeconds} seconds and was given up on");
                     return new RestartResult(false,
-                        $"Asterisk did not restart within {TimeoutSeconds} seconds. Check the service on the server before trying again.");
+                        $"Asterisk did not {done} within {TimeoutSeconds} seconds. Check the service on the server before trying again.");
                 }
 
                 // The overload without a timeout is what flushes the redirected pipes.
@@ -83,12 +125,12 @@ namespace Techie.Pbx.Asterisk.Config
                 if (process.ExitCode == 0)
                 {
                     Log.Info($"Restarted {Unit}");
-                    return new RestartResult(true, "Asterisk restarted.");
+                    return new RestartResult(true, $"Asterisk {done}.");
                 }
 
-                Log.Error($"{Program} restart {Unit} exited {process.ExitCode}: {Trimmed(error.Result)}");
+                Log.Error($"{Program} {verb} {Unit} exited {process.ExitCode}: {Trimmed(error.Result)}");
                 return new RestartResult(false,
-                    $"Asterisk could not be restarted ({Program} exited {process.ExitCode}). The server's log has what it said.");
+                    $"Asterisk could not be {done} ({Program} exited {process.ExitCode}). The server's log has what it said.");
             }
         }
 

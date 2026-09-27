@@ -196,8 +196,27 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (modules.Count > 0)
             {
+                AmiSession session;
                 using var client = new AmiClient(this.ami);
-                var session = client.Connect();
+
+                // First run, by design: Asterisk has not been started yet, because there was no
+                // config for it to read until this apply wrote one (D93). The files are written and
+                // current, so the apply is not a failure — what is missing is a start, and the
+                // toolbar offers one. Distinguishing "not running" from "broken" is the banner's
+                // job (systemctl), not this class's; from here an unreachable AMI on a box with
+                // freshly written config is the normal bring-up state, so it is reported, not thrown.
+                try
+                {
+                    session = client.Connect();
+                }
+                catch (Exception ex) when (ex is AmiException or IOException)
+                {
+                    Log.Warn($"Apply config: wrote {string.Join(", ", files)} but Asterisk is not reachable " +
+                             $"({ex.Message}); the config will be read when Asterisk starts");
+                    this.pending.Clear();
+
+                    return new ApplyResult(files, new List<string>(), restartFiles, asteriskDown: true);
+                }
 
                 // modules.conf is in the change: the restart it asks for is what loads any module
                 // new to this apply, so a reload that answers "No such module" is the restart

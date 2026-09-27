@@ -64,6 +64,7 @@ namespace Techie.Pbx.Web.Controllers
                 Log.Info($"Apply config requested by {this.User.Identity?.Name}");
                 return this.Ok(new ApplyConfigResponse
                 {
+                    AsteriskDown = result.AsteriskDown,
                     RestartFiles = result.RestartRequiredFiles.ToList(),
                     RestartRequired = result.RestartRequired,
                     Summary = Summarise(result),
@@ -122,6 +123,12 @@ namespace Techie.Pbx.Web.Controllers
         {
             if (result.ChangedFiles.Count == 0)
                 return "Nothing to do: the config files already match the database.";
+
+            // The first run lands here: the files were written, but Asterisk has never been
+            // started (D93), so nothing was reloaded and nothing can be until it is.
+            if (result.AsteriskDown)
+                return $"Wrote {string.Join(", ", result.ChangedFiles)}. Asterisk is not running on this server — " +
+                       "start it from the toolbar when ready.";
 
             var summary = $"Wrote {string.Join(", ", result.ChangedFiles)}";
 

@@ -15,13 +15,14 @@ window.pbx = (function () {
 
     // Restarting Asterisk drops calls in progress, so it is always asked before it happens, and
     // asked with sweetalert2 because confirms are what sweetalert2 is still for (D42, D104).
-    async function confirmRestart(text) {
+    // Starting it on a fresh install asks the same way, gentler wording (D93).
+    async function confirmRestart(text, title, confirmText) {
         const answer = await Swal.fire({
             icon: 'warning',
-            title: 'Restart Asterisk?',
+            title: title || 'Restart Asterisk?',
             text: text,
             showCancelButton: true,
-            confirmButtonText: 'Restart now',
+            confirmButtonText: confirmText || 'Restart now',
             confirmButtonColor: '#dc3545',
             heightAuto: false
         });
@@ -55,10 +56,24 @@ window.pbx = (function () {
                 // The banner asks the server again rather than being hidden from here.
                 htmx.trigger(document.body, 'configApplied');
 
+                // A fresh install's first apply lands here: the files are written but Asterisk has
+                // never been started (D93). The offer is a start, not a restart, and there is no
+                // call-drop warning because there cannot be any calls.
+                if (result.asteriskDown) {
+                    const confirmed = await confirmRestart(
+                        'Asterisk is not running on this server. Start it now? It will read the config this apply just wrote.',
+                        'Start Asterisk?', 'Start now');
+
+                    if (confirmed) {
+                        await sendRestart();
+                    } else {
+                        pbx.toast('info', 'Asterisk is still not running. Start it from the toolbar whenever you are ready.');
+                    }
+                }
                 // Some files Asterisk only reads when it starts (D33), so the apply is not the
                 // whole job. The offer replaces the summary toast rather than following it: one
                 // sweetalert2 dialog closes another, and what matters now is the question.
-                if (result.restartRequired) {
+                else if (result.restartRequired) {
                     const confirmed = await confirmRestart(
                         'Asterisk needs a restart to load: ' + result.restartFiles.join(', ') +
                         '. Calls in progress will be dropped.');

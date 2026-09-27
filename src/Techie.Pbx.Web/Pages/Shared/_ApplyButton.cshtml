@@ -9,6 +9,16 @@
     offers the restart straight away, and this is where an admin who said "not now" comes back to
     it (D33, D104).
 *@
+@if (Model.AsteriskStopped)
+{
+    <span class="badge text-bg-warning me-2" title="Asterisk is not running — the normal state on a fresh install until its first config has been written and it has been started once.">
+        Asterisk is not running
+    </span>
+    <button type="button" class="btn btn-warning me-2" onclick="pbx.restartAsterisk(this)"
+            title="Starts Asterisk through the same polkit rule as the restart. The first start reads every file the last apply wrote.">
+        Start Asterisk
+    </button>
+}
 @if (Model.RestartRequired)
 {
     <span class="badge text-bg-warning me-2" title="An apply wrote a file Asterisk only reads when it starts, so it is still running the config it started with.">

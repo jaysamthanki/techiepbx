@@ -383,21 +383,32 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.False(this.pending.IsPending);
         }
 
+        /// <summary>
+        /// The first install lands here (D93): Asterisk has not been started, so there is no AMI
+        /// to reload through — but the files are written and current on disk, which makes the
+        /// apply a success whose answer is "start Asterisk", not a failure. The old contract
+        /// (throw, leave the pending marker up) called a successful write a failed one.
+        /// </summary>
         [Fact]
-        public void Apply_reports_that_asterisk_is_unreachable_rather_than_failing_silently()
+        public void An_apply_on_a_box_where_asterisk_is_down_writes_the_files_and_reports_it()
         {
             AddExtension("1001", "Front Desk", "AAAAbbbbCCCCdddd1111");
 
-            var ex = Assert.Throws<AmiException>(() => this.applier.Apply());
+            var result = this.applier.Apply();
 
-            Assert.Contains("Could not connect to AMI", ex.Message);
+            Assert.True(result.AsteriskDown);
+            Assert.Contains("pjsip.conf", result.ChangedFiles);
+            Assert.Empty(result.ReloadedModules);
 
-            // The files were still written: the database stays the source of truth and a later
-            // apply only has to reload.
+            // The files were written and nothing has changed the database since, so nothing
+            // is due: what is missing is a start, and the navbar offers one.
             Assert.True(File.Exists(Path.Combine(this.confDirectory, "pjsip.conf")));
+            Assert.False(this.pending.IsPending);
 
-            // But the reload did not happen, so an apply is still due.
-            Assert.True(this.pending.IsPending);
+            // A second apply finds nothing to write and no longer cares about AMI either way.
+            var again = this.applier.Apply();
+            Assert.False(again.AsteriskDown);
+            Assert.Empty(again.ChangedFiles);
         }
 
         [Fact]

@@ -14,6 +14,13 @@ namespace Techie.Pbx.Web.Controllers
 
         public bool RestartRequired { get; set; }
 
+        /// <summary>
+        /// Asterisk was not reachable when the apply ran — on a fresh install it has not been
+        /// started yet (D93). The offer that follows says "start", not "restart", and does not
+        /// warn about dropped calls, because there are none.
+        /// </summary>
+        public bool AsteriskDown { get; set; }
+
         public string Summary { get; set; } = "";
     }
 }

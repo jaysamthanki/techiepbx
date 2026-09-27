@@ -3408,3 +3408,16 @@ user's.
 - **The value stays a secret in the UI's terms** (dots in the table, plaintext only in the
   edit form, D112), so manual AMI debugging still has a way to read it. Rotation is the
   existing edit path: change it in Settings and apply.
+
+### D157. First run: the app offers to start Asterisk, and an apply with Asterisk down is a success (2026-09-25, first-run UX)
+
+- **An apply on a box where AMI refuses the connection is not a failure.** The files are
+  written and current on disk — that is the whole contract of apply — so the reload step
+  being impossible (Asterisk not started yet, D93) is reported (`AsteriskDown`) instead of
+  thrown, and the pending marker clears. The old contract threw AmiException and left the
+  marker up, calling a successful write a failed one.
+- **The toolbar offers "Start Asterisk".** The navbar poll runs one read-only
+  `systemctl is-active` and shows the button whenever the unit is stopped; the press goes
+  through the same polkit rule and endpoint as the restart (the verb is picked from the
+  unit state, so the toast says "Asterisk started."). No new privilege: the installer's
+  polkit rule already allowed start/stop/restart on exactly asterisk.service.

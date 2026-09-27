@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
 
 namespace Techie.Pbx.Web.Pages
@@ -32,6 +33,7 @@ namespace Techie.Pbx.Web.Pages
         {
             this.Status = new ApplyStatus
             {
+                AsteriskStopped = !AsteriskRestart.IsRunning(),
                 ConfigPending = this.pending.IsPending,
                 RestartRequired = this.restart.IsPending,
             };
