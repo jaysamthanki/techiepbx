@@ -19,6 +19,15 @@ namespace Techie.Pbx.Web.Pages.Settings
 
         public string? Key { get; set; } = "";
 
+        /// <summary>
+        /// What the mail setup the admin came from normally has here (<see cref="MailSetup"/>), or
+        /// blank. Only ever a starting value for the box: nothing is stored until the form is saved.
+        /// </summary>
+        public string Suggested { get; set; } = "";
+
+        /// <summary>The name of the setup <see cref="Suggested"/> came from, for the form to say so.</summary>
+        public string SuggestedBy { get; set; } = "";
+
         public string? Value { get; set; } = "";
     }
 }

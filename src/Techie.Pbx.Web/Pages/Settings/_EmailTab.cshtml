@@ -1,14 +1,121 @@
 @model EmailTab
+@{
+    var emailUrl = Url.Page("SystemSettings", "Email");
+    var setupKey = Model.Setup?.Key ?? "";
+}
 @*
     How this box sends mail (D115). It leads with what the settings currently resolve to, because
     the transport setting may be blank and blank means "decide for me" — an admin should not have
     to send a message to find out which way it went.
+
+    Then one mail setup at a time (MailSetup): the dropdown fetches this tab again for the setup it
+    names, and the pane's own refresh after a save sends the same dropdown along (hx-include on the
+    pane), so saving a row does not jump the admin to a different setup. Choosing a setup stores
+    nothing; its usual values are offered in the edit form, and saved from there like any setting.
 
     The test button is the only thing on this page that does anything rather than storing
     something, so it is the only thing here that is a button.
 *@
 <div class="alert @(Model.Transport.Length > 0 ? "alert-info" : "alert-warning")" role="alert">
     @Model.TransportSummary
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <label class="form-label h5 card-title" for="email-setup">How should this system send mail?</label>
+        <select class="form-select" id="email-setup" name="setup" autocomplete="off"
+                hx-get="@emailUrl" hx-target="#email-pane" hx-trigger="change">
+            @if (Model.Setup == null)
+            {
+                <option value="" selected disabled>Choose a setup…</option>
+            }
+            @foreach (var setup in MailSetup.All)
+            {
+                <option value="@setup.Key" selected="@(setup.Key == setupKey ? "selected" : null)">@setup.Name</option>
+            }
+        </select>
+
+        @if (Model.Setup != null)
+        {
+            <p class="card-text text-secondary mt-2 mb-0">@Model.Setup.Summary</p>
+        }
+
+        @if (Model.SetupTransportDiffers)
+        {
+            <p class="card-text text-warning-emphasis mt-2 mb-0">
+                Mail.Transport does not resolve to <span class="font-monospace">@Model.Setup!.Transport</span> yet,
+                so a send would not use this setup: click the Mail.Transport row below and save it.
+            </p>
+        }
+
+        @* The per-setup help. The rows' own descriptions say what each key is; this says what the
+           service wants from you before any of them will work. *@
+        @switch (setupKey)
+        {
+            case MailSetup.GraphKey:
+                <div class="text-secondary mt-3">
+                    It uses the same Entra app registration this system signs you in with, so there is
+                    no second credential to create — but that registration needs the
+                    <span class="font-monospace">Mail.Send</span> <strong>application</strong> permission
+                    (not delegated) with admin consent granted, and this server needs the app's client
+                    secret in its <span class="font-monospace">AzureAd</span> configuration. Set the from
+                    address to a real mailbox in the tenant; a shared mailbox such as
+                    <span class="font-monospace">pbx@@example.com</span> is the usual choice, and it
+                    costs no licence.
+
+                    @* The half of it this page can actually check. The permission and the consent are
+                       in Entra and only a send finds out about those. *@
+                    <div class="mt-2">
+                        @if (Model.GraphAvailable)
+                        {
+                            <span class="badge text-bg-success">This server has the client secret</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary">This server has no client secret, so Graph cannot send</span>
+                        }
+                    </div>
+                </div>
+                break;
+
+            case MailSetup.SendGridKey:
+                <div class="text-secondary mt-3">
+                    Host <span class="font-monospace">smtp.sendgrid.net</span>, port
+                    <span class="font-monospace">587</span>. The username is literally the word
+                    <span class="font-monospace">apikey</span> — not your account name — and the password
+                    is the API key itself. Verify the from address as a sender in SendGrid first, or it
+                    will refuse the message.
+                </div>
+                break;
+
+            case MailSetup.GoogleKey:
+                <div class="text-secondary mt-3">
+                    Either <span class="font-monospace">smtp.gmail.com</span> on port
+                    <span class="font-monospace">587</span> with the full address as the username and an
+                    <strong>app password</strong> (a normal account password will not work once two-step
+                    verification is on), or <span class="font-monospace">smtp-relay.gmail.com</span> with
+                    this server's public IP allowed in the Workspace admin console's SMTP relay service,
+                    which needs no password at all — leave the username blank for that one.
+                </div>
+                break;
+
+            case MailSetup.SmtpKey:
+                <div class="text-secondary mt-3">
+                    A hostname and port your relay accepts submission on, and the account it gave this
+                    server. Leave the username blank only for an internal relay that trusts this server
+                    by address.
+                </div>
+                break;
+        }
+
+        @if (Model.Setup != null && Model.Setup.Key != MailSetup.AdvancedKey)
+        {
+            <p class="form-text mb-0 mt-3">
+                Click a row to edit it. A row this setup has a usual value for opens with that value
+                filled in; nothing is stored until you save it.
+            </p>
+        }
+    </div>
 </div>
 
 <partial name="_Sections" model="Model.Sections" />
@@ -18,65 +125,9 @@
         <h2 class="h5 card-title">Send a test message</h2>
         <p class="card-text text-secondary">
             Sends one message, over whatever the settings above resolve to, to an address you type.
-            Nothing else in this system sends mail yet, so this is how you find out whether these
-            settings are right before anything depends on them.
+            Voicemail to email uses these same settings, so this is how you find out whether they
+            are right before anything depends on them.
         </p>
         <button type="button" class="btn btn-primary" onclick="pbx.sendTestMail(this)">Send test mail</button>
-    </div>
-</div>
-
-<div class="card mb-3">
-    <div class="card-body">
-        <h2 class="h5 card-title">Setting one of these up</h2>
-
-        <dl class="row mb-0">
-            <dt class="col-sm-3">SendGrid</dt>
-            <dd class="col-sm-9 text-secondary">
-                Transport <span class="font-monospace">smtp</span>, host
-                <span class="font-monospace">smtp.sendgrid.net</span>, port
-                <span class="font-monospace">587</span>. The username is literally the word
-                <span class="font-monospace">apikey</span> — not your account name — and the password
-                is the API key itself. Verify the from address as a sender in SendGrid first, or it
-                will refuse the message.
-            </dd>
-
-            <dt class="col-sm-3">Microsoft 365 (Graph)</dt>
-            <dd class="col-sm-9 text-secondary">
-                Transport <span class="font-monospace">graph</span>. It uses the same Entra app
-                registration this system signs you in with, so there is no second credential to
-                create — but that registration needs the <span class="font-monospace">Mail.Send</span>
-                <strong>application</strong> permission (not delegated) with admin consent granted,
-                and this server needs the app's client secret in its
-                <span class="font-monospace">AzureAd</span> configuration. Set the from address to a
-                real mailbox in the tenant; a shared mailbox such as
-                <span class="font-monospace">pbx@@example.com</span> is the usual choice, and it costs
-                no licence.
-
-                @* The half of it this page can actually check. The permission and the consent are
-                   in Entra and only a send finds out about those. *@
-                <div class="mt-2">
-                    @if (Model.GraphAvailable)
-                    {
-                        <span class="badge text-bg-success">This server has the client secret</span>
-                    }
-                    else
-                    {
-                        <span class="badge text-bg-secondary">This server has no client secret, so Graph cannot send</span>
-                    }
-                </div>
-            </dd>
-
-            <dt class="col-sm-3">Google Workspace</dt>
-            <dd class="col-sm-9 text-secondary">
-                Transport <span class="font-monospace">smtp</span>. Either
-                <span class="font-monospace">smtp.gmail.com</span> on port
-                <span class="font-monospace">587</span> with the full address as the username and an
-                <strong>app password</strong> (a normal account password will not work once two-step
-                verification is on), or
-                <span class="font-monospace">smtp-relay.gmail.com</span> with this server's public IP
-                allowed in the Workspace admin console's SMTP relay service, which needs no password
-                at all — leave the username blank for that one.
-            </dd>
-        </dl>
     </div>
 </div>

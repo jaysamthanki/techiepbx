@@ -96,6 +96,21 @@
         }
     </div>
 
+    @* The Email tab's mail setups (MailSetup): say where a pre-filled value came from, and that it
+       is not stored yet — or, when something else is stored, what that setup would have put here. *@
+    @if (Model.Suggested.Length > 0 && !Model.IsSet)
+    {
+        <p class="form-text">
+            Filled in with what @Model.SuggestedBy uses. Nothing is stored until you save.
+        </p>
+    }
+    else if (Model.Suggested.Length > 0 && Model.Value != Model.Suggested)
+    {
+        <p class="form-text">
+            @Model.SuggestedBy normally uses <span class="font-monospace">@Model.Suggested</span> here.
+        </p>
+    }
+
     @* What saving this one actually does, which is not the same for every key (D103). *@
     <p class="form-text mb-0">@Model.Descriptor.ScopeNote</p>
 

@@ -36,7 +36,7 @@
                 <tbody>
                     @foreach (var row in group.Rows)
                     {
-                        var editUrl = Url.Page("/Settings/Index", "Form", new { key = row.Key });
+                        var editUrl = Url.Page("/Settings/Index", "Form", new { key = row.Key, setup = group.Setup.Length > 0 ? group.Setup : null });
 
                         <tr data-edit-url="@editUrl">
                             <td class="font-monospace">@row.Key</td>

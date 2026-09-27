@@ -28,34 +28,25 @@ namespace Techie.Pbx.Web.Pages.Settings
         {
         }
 
-        /// <summary>The Email tab: the Mail.* keys, the transport in force, and the setup help.</summary>
-        public PartialViewResult OnGetEmail()
+        /// <summary>
+        /// The Email tab: the transport in force, the mail setup the admin is looking at, and just
+        /// that setup's Mail.* keys. The dropdown asks for this again with the setup it picked, and
+        /// so does the refresh after a save, so saving a row keeps the admin on the setup they chose
+        /// rather than whichever one the settings now look most like. With no setup asked for, the
+        /// tab opens on the one the settings already describe.
+        /// </summary>
+        public PartialViewResult OnGetEmail(string? setup)
         {
             var stored = this.settings.GetAll();
-            var sender = new MailSender(new MailSettings(stored), PbxEntra.Credential);
-
-            var sections = new List<SettingSection>
-            {
-                new()
-                {
-                    Help = "Who mail comes from. Both transports need an address; the name is used by SMTP only.",
-                    Rows = Rows(stored, SettingsKeys.MailTransport, SettingsKeys.MailFromAddress, SettingsKeys.MailFromName),
-                    Title = "Sending",
-                },
-                new()
-                {
-                    Help = "The relay, when the transport is SMTP. Submission is always over STARTTLS, so a relay " +
-                        "that only offers plain text will not work. Voicemail to email uses this relay whatever the " +
-                        "transport above says, so fill it in even on Graph if mailboxes should email their messages (D126).",
-                    Rows = Rows(stored, SettingsKeys.MailSmtpHost, SettingsKeys.MailSmtpPort, SettingsKeys.MailSmtpUsername, SettingsKeys.MailSmtpPassword),
-                    Title = "SMTP relay",
-                },
-            };
+            var mail = new MailSettings(stored);
+            var sender = new MailSender(mail, PbxEntra.Credential);
+            var chosen = MailSetup.For(setup) ?? MailSetup.For(MailSetup.Guess(mail, sender.Transport));
 
             return this.Partial("_EmailTab", new EmailTab
             {
                 GraphAvailable = sender.GraphAvailable,
-                Sections = sections,
+                Sections = chosen?.Sections(stored) ?? new List<SettingSection>(),
+                Setup = chosen,
                 Transport = sender.Transport,
             });
         }

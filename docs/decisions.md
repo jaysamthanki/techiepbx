@@ -3421,3 +3421,28 @@ user's.
   through the same polkit rule and endpoint as the restart (the verb is picked from the
   unit state, so the toast says "Asterisk started."). No new privilege: the installer's
   polkit rule already allowed start/stop/restart on exactly asterisk.service.
+
+### D158. The Email tab is one mail setup at a time, and a setup only ever suggests (2026-09-27, settings)
+
+User request: the Email tab was the seven `Mail.*` rows and a block of per-provider help at the
+bottom; make it a control panel — pick a setup, see only its settings, test at the bottom.
+
+- **A setup is a view, not a setting.** `MailSetup` lists Microsoft 365 (Graph), SendGrid, Google
+  Workspace, Other SMTP relay and "Show all mail settings". Nothing stores which one was chosen:
+  the tab opens on the one the stored settings describe (`MailSetup.Guess` — whatever a send would
+  go over wins, so Graph with a voicemail relay is still Graph; otherwise the SMTP host names the
+  service; nothing configured selects nothing). No new settings key.
+- **Suggestions reach the edit form and nowhere else.** Each setup has the usual values for a few
+  keys (the transport; SendGrid's host and `apikey` username; Google's `smtp.gmail.com`). A row
+  opened from a setup carries `setup=<key>` to the general settings page's form handler, which
+  starts an **unset** key's box on that value and says it is not stored until saved; a key with
+  something else stored keeps it and the form says what the setup would use. There is no "fill it
+  all in" button, because that would be a second way to write settings; the only query input is a
+  setup key looked up in a fixed list, never a value.
+- **Server-rendered, not client-side hiding.** The dropdown `hx-get`s the tab again with the setup
+  it picked, and the pane's refresh after a save `hx-include`s the dropdown, so a save leaves the
+  admin on their chosen setup instead of re-guessing. No new JavaScript.
+- **Graph shows the SMTP relay as an optional section**, labelled as the voicemail relay — D126's
+  "the Email tab does not yet say so" limitation is now said on the tab.
+- `MailController`, the test endpoint and `pbx.sendTestMail` are unchanged.
+

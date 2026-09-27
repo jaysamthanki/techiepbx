@@ -12,6 +12,12 @@ namespace Techie.Pbx.Web.Pages.Settings
 
         public List<SettingRow> Rows { get; set; } = new();
 
+        /// <summary>
+        /// The Email tab's mail setup these rows are shown under (<see cref="MailSetup"/>), passed to
+        /// the edit form so it can offer that setup's usual value. Blank everywhere else.
+        /// </summary>
+        public string Setup { get; set; } = "";
+
         public string Title { get; set; } = "";
     }
 }

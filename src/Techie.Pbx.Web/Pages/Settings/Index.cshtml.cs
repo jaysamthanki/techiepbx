@@ -33,14 +33,20 @@ namespace Techie.Pbx.Web.Pages.Settings
         {
         }
 
-        /// <summary>The edit form for one setting, which the page shows in the Bootstrap modal.</summary>
-        public IActionResult OnGetForm(string? key)
+        /// <summary>
+        /// The edit form for one setting, which the page shows in the Bootstrap modal. Opened from
+        /// the Email tab, it also names the mail setup the admin chose there, and an unset key's box
+        /// starts with that setup's usual value — a suggestion, stored only if they save it.
+        /// </summary>
+        public IActionResult OnGetForm(string? key, string? setup)
         {
             key = Text(key);
             if (!SettingsKeys.IsKnown(key))
                 return this.NotFound();
 
             var stored = this.settings.Get(key);
+            var mailSetup = MailSetup.For(setup);
+            var suggested = mailSetup?.Suggestion(key) ?? "";
 
             return this.Partial("_Form", new SettingForm
             {
@@ -50,7 +56,9 @@ namespace Techie.Pbx.Web.Pages.Settings
 
                 // The stored value is in the form, secret or not (D112): the table keeps its
                 // dots, the edit screen shows what is actually there.
-                Value = stored ?? "",
+                Suggested = suggested,
+                SuggestedBy = mailSetup?.Name ?? "",
+                Value = stored ?? suggested,
             });
         }
 
