@@ -32,6 +32,46 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         [Fact]
+        public void EnsureAccount_SeedsUsernameAndSecretOnEmptyBox()
+        {
+            AmiSecret.EnsureAccount(this.repository);
+
+            Assert.Equal(AmiSecret.DefaultUsername, this.repository.Get(SettingsKeys.AmiUsername));
+            Assert.NotEmpty(this.repository.Get(SettingsKeys.AmiSecret));
+        }
+
+        [Fact]
+        public void EnsureAccount_NeverTouchesAnExistingUsername()
+        {
+            this.repository.Set(SettingsKeys.AmiUsername, "operator-name");
+
+            AmiSecret.EnsureAccount(this.repository);
+
+            Assert.Equal("operator-name", this.repository.Get(SettingsKeys.AmiUsername));
+        }
+
+        [Fact]
+        public void EnsureAccount_SeedsUsernameEvenWhenSecretExists()
+        {
+            this.repository.Set(SettingsKeys.AmiSecret, "already-set");
+
+            AmiSecret.EnsureAccount(this.repository);
+
+            Assert.Equal(AmiSecret.DefaultUsername, this.repository.Get(SettingsKeys.AmiUsername));
+            Assert.Equal("already-set", this.repository.Get(SettingsKeys.AmiSecret));
+        }
+
+        [Fact]
+        public void EnsureAccount_ReplacesWhitespaceUsername()
+        {
+            this.repository.Set(SettingsKeys.AmiUsername, "  ");
+
+            AmiSecret.EnsureAccount(this.repository);
+
+            Assert.Equal(AmiSecret.DefaultUsername, this.repository.Get(SettingsKeys.AmiUsername));
+        }
+
+        [Fact]
         public void Ensure_GeneratesOnFirstCall_ThenKeepsTheSameValue()
         {
             var first = AmiSecret.Ensure(this.repository);

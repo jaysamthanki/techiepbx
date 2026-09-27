@@ -62,7 +62,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
-                Description = "The account this app logs into AMI with. Written into manager.conf; without it, apply and live status cannot work.",
+                Description = "The account this app logs into AMI with. Written into manager.conf; without it, apply and live status cannot work. Seeded to 'tnpbx' on first start (D156).",
                 Key = SettingsKeys.AmiUsername,
                 Sample = "tnpbx",
             },

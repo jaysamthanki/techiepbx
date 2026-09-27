@@ -3402,7 +3402,9 @@ user's.
 - **So Program.cs seeds it at startup:** if the row is missing or empty, a 32-hex-character
   value from `RandomNumberGenerator` is written once. An existing value is never
   overwritten — restarts cannot churn a credential Asterisk is holding, and an operator
-  who deliberately set one keeps it.
+  who deliberately set one keeps it. The **username is seeded the same way** (to `tnpbx`):
+  a fresh box's first Apply otherwise dies with "AMI username is required", which is how
+  this was found in the wild on TNDC8PS003.
 - **The value stays a secret in the UI's terms** (dots in the table, plaintext only in the
   edit form, D112), so manual AMI debugging still has a way to read it. Rotation is the
   existing edit path: change it in Settings and apply.

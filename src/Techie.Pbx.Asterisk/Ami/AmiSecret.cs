@@ -13,6 +13,26 @@ namespace Techie.Pbx.Asterisk.Ami
     public static class AmiSecret
     {
         /// <summary>
+        /// The account name seeded for a box that has never chosen one. The app is AMI's only
+        /// client and renders both halves of the credential, so there is nothing to gain from
+        /// asking an operator to type it (D156).
+        /// </summary>
+        public const string DefaultUsername = "tnpbx";
+
+        /// <summary>
+        /// Bootstraps both halves of the AMI login on a fresh box: seeds the username when it is
+        /// missing or blank, then the secret as below. An existing value is never touched.
+        /// </summary>
+        public static void EnsureAccount(SettingsRepository settings)
+        {
+            var username = settings.Get(SettingsKeys.AmiUsername);
+            if (string.IsNullOrWhiteSpace(username))
+                settings.Set(SettingsKeys.AmiUsername, DefaultUsername);
+
+            Ensure(settings);
+        }
+
+        /// <summary>
         /// Writes a generated secret into the store if — and only if — the row is missing or
         /// empty. An existing value is never touched, so a restart cannot churn the credential
         /// Asterisk is holding. Returns the value now in the store.
