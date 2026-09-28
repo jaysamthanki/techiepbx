@@ -248,3 +248,8 @@ The app runs unprivileged and expects an Asterisk with AMI on `127.0.0.1`; see
 ## License
 
 See [LICENSE](LICENSE).
+
+The music-on-hold tracks in `media/musiconhold/` (by Audiodollar) are from
+[Pixabay](https://pixabay.com/) under the
+[Pixabay Content License](https://pixabay.com/service/license-summary/) — free
+for commercial use, no attribution required.
