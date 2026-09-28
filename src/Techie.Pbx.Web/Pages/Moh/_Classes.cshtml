@@ -6,8 +6,19 @@
     The order is the one the generated musiconhold.conf writes them in: the class that ships first,
     then by name.
 *@
+@{
+    var classFormUrl = Url.Page("Index", "ClassForm");
+}
+<div id="moh-classes-toolbar">
+    <button type="button" class="btn btn-outline-primary"
+            hx-get="@classFormUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Add class</button>
+</div>
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#moh-classes-toolbar"
        data-classes="table table-sm table-hover">
     <thead>
         <tr>

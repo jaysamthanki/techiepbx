@@ -1,11 +1,23 @@
 @using Techie.Pbx.Web.Pages.Shared
 @model List<ExtensionRow>
 @*
-    Clicking anywhere on a row opens its edit form (D48); the actions that used to sit in a
-    column of buttons are in that form's footer instead.
+    The Add button rides in bootstrap-table's toolbar, beside the search box, so the page's one
+    action lives with the list it acts on. Clicking anywhere on a row opens its edit form (D48);
+    the actions that used to sit in a column of buttons are in that form's footer instead.
 *@
+@{
+    var formUrl = Url.Page("Index", "Form");
+}
+<div id="extensions-toolbar">
+    <button type="button" class="btn btn-primary"
+            hx-get="@formUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Add extension</button>
+</div>
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#extensions-toolbar"
        data-search="true"
        data-sort-name="number"
        data-sort-order="asc"

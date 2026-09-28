@@ -7,6 +7,16 @@
     Asterisk plays them in: a class sorts its directory alphabetically (D119). The table is
     therefore not sortable by the user: a sort that disagreed with what you hear would be a lie.
 *@
+@{
+    var trackFormUrl = Url.Page("Index", "TrackForm");
+}
+<div id="moh-tracks-toolbar">
+    <button type="button" class="btn btn-primary"
+            hx-get="@trackFormUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Add track</button>
+</div>
 @if (Model.Count == 0)
 {
     <p class="text-secondary">
@@ -17,6 +27,7 @@
 
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#moh-tracks-toolbar"
        data-classes="table table-sm table-hover">
     <thead>
         <tr>

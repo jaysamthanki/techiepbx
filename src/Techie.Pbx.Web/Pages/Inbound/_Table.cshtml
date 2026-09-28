@@ -1,10 +1,23 @@
 @model List<InboundRouteRow>
 @*
-    Clicking anywhere on a row opens its edit form (D48). Already grouped by trunk with each
-    catch-all last, which is the order the dialplan reads in, so it is not sortable.
+    The Add button rides in bootstrap-table's toolbar, beside the search box, so the page's one
+    action lives with the list it acts on. Clicking anywhere on a row opens its edit form (D48).
+    Already grouped by trunk with each catch-all last, which is the order the dialplan reads in,
+    so it is not sortable.
 *@
+@{
+    var formUrl = Url.Page("Index", "Form");
+}
+<div id="inbound-toolbar">
+    <button type="button" class="btn btn-primary"
+            hx-get="@formUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Add route</button>
+</div>
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#inbound-toolbar"
        data-classes="table table-sm table-hover">
     <thead>
         <tr>

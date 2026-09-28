@@ -3,27 +3,12 @@
 @{
     ViewData["Title"] = "Music on hold";
 
-    var classFormUrl = Url.Page("Index", "ClassForm");
     var classesUrl = Url.Page("Index", "Classes");
-    var trackFormUrl = Url.Page("Index", "TrackForm");
     var tracksUrl = Url.Page("Index", "Tracks");
 }
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="mb-3">
     <h1 class="h3 mb-0">Music on hold</h1>
-    <div class="d-flex gap-2">
-        @* htmx fetches the form, Bootstrap opens the modal: no JavaScript of ours in between. *@
-        <button type="button" class="btn btn-outline-primary"
-                hx-get="@classFormUrl"
-                hx-target="#form-modal-content"
-                data-bs-toggle="modal"
-                data-bs-target="#form-modal">Add class</button>
-        <button type="button" class="btn btn-primary"
-                hx-get="@trackFormUrl"
-                hx-target="#form-modal-content"
-                data-bs-toggle="modal"
-                data-bs-target="#form-modal">Add track</button>
-    </div>
 </div>
 
 <p class="text-secondary">
