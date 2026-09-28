@@ -196,6 +196,34 @@ Renewals happen automatically in the background before expiry.
 Later re-deploys use the same `app-deploy.sh`: it preserves the existing
 `appsettings.json`, database (`Data/`) and installed tooling across updates.
 
+## Updating
+
+To move an existing install to the latest release, download the two tarballs and
+re-run the same installer — it keeps your config, database and sounds in place:
+
+```bash
+cd /root/techiepbx
+# arm64:
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/latest/download/tnpbx-web-arm64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/latest/download/tnpbx-helper-arm64.tgz
+# x64:
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/latest/download/tnpbx-web-x64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/latest/download/tnpbx-helper-x64.tgz
+
+cd src/Techie.Pbx.Core/scripts
+./app-deploy.sh /root/techiepbx/tnpbx-web.tgz /root/techiepbx/tnpbx-helper.tgz
+```
+
+`releases/latest/download/` always follows the current release — no version to
+edit. On a re-deploy `app-deploy.sh` preserves `/opt/tnpbx/appsettings.json`
+(including your Entra ID values and bypass networks) and the app's `Data/`
+directory, unpacks the new binaries over the old ones, and restarts
+`tnpbx-web` — you do not fill in sign-in values again. The server prep
+(step 2) is already done and does not need redoing.
+
+After the update, sign in and check the footer shows the new version, then hit
+**Apply** if the release notes ask for it.
+
 ## Versioning and releases
 
 The product version lives in one place: `<Version>` in `Directory.Build.props`.
