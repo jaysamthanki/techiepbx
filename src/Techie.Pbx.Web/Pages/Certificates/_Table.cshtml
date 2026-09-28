@@ -1,9 +1,22 @@
 @model List<CertificateRow>
 @*
-    Clicking anywhere on a row opens its form (D48); Renew and Delete live in that form's footer.
+    The Order button rides in bootstrap-table's toolbar, beside the search box, so the page's one
+    action lives with the list it acts on. Clicking anywhere on a row opens its form (D48); Renew
+    and Delete live in that form's footer.
 *@
+@{
+    var formUrl = Url.Page("Index", "Form");
+}
+<div id="certificates-toolbar">
+    <button type="button" class="btn btn-primary"
+            hx-get="@formUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Order certificate</button>
+</div>
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#certificates-toolbar"
        data-search="true"
        data-sort-name="name"
        data-sort-order="asc"
