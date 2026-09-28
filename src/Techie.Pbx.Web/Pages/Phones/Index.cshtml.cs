@@ -151,18 +151,26 @@ namespace Techie.Pbx.Web.Pages.Phones
         }
 
         /// <summary>
-        /// The Polycom device passwords, shown here too so they are discoverable from the page
-        /// that actually uses them, on top of the general Settings page they already live on.
+        /// The settings both brands share, shown here so they are discoverable from the page that
+        /// actually uses them, on top of the general Settings page they already live on. The
+        /// provisioning credentials gate every phone's config fetch; the device passwords are the
+        /// admin and user accounts written into both Polycom and Yealink configs (D133).
         /// </summary>
-        public IActionResult OnGetPolycomSettings()
+        public IActionResult OnGetGeneralSettings()
         {
             var stored = this.settings.GetAll();
 
-            var rows = new[] { SettingsKeys.ProvisioningAdminPassword, SettingsKeys.ProvisioningUserPassword }
+            var rows = new[]
+                {
+                    SettingsKeys.ProvisioningUsername,
+                    SettingsKeys.ProvisioningPassword,
+                    SettingsKeys.ProvisioningAdminPassword,
+                    SettingsKeys.ProvisioningUserPassword,
+                }
                 .Select(key => SettingRow.For(SettingsCatalog.For(key), stored))
                 .ToList();
 
-            return this.Partial("_PolycomSettingsTab", rows);
+            return this.Partial("_GeneralSettingsTab", rows);
         }
 
         /// <summary>The whole table, by MAC address.</summary>

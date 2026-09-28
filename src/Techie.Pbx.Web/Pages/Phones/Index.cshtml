@@ -4,7 +4,7 @@
     ViewData["Title"] = "Phones";
 
     var tableUrl = Url.Page("Index", "Table");
-    var polycomSettingsUrl = Url.Page("Index", "PolycomSettings");
+    var generalSettingsUrl = Url.Page("Index", "GeneralSettings");
     var backgroundUrl = Url.Page("Index", "Background");
     var backgroundFormUrl = Url.Page("Index", "BackgroundForm");
     var logoUrl = Url.Page("Index", "Logo");
@@ -20,9 +20,9 @@
     <div class="alert alert-warning">
         <strong>Provisioning is off.</strong>
         No phone can fetch its configuration until <code>Provisioning.Username</code> and
-        <code>Provisioning.Password</code> are set on the
-        <a asp-page="/Settings/Index">Settings</a> page. Those two are the credentials both brands
-        below use.
+        <code>Provisioning.Password</code> are set — open the
+        <a href="#phones-pane-settings">Settings tab above, General</a> to set them.
+        Those two are the credentials both brands use.
     </div>
 }
 
@@ -30,7 +30,9 @@
     The site-wide Polycom images (D145, D151, D153) live in the Settings tab's Polycom pane,
     beside the device passwords they sit beside on the phone: the background and the logo, each
     with its current state, a preview, and a button that opens its upload/remove form in the
-    shared modal. Not per-phone, on purpose.
+    shared modal. Not per-phone, on purpose. The settings both brands share — the provisioning
+    credentials and the device admin/user passwords — live on the Settings tab's General pane,
+    because both brands use them.
 *@
 <ul class="nav nav-tabs mb-3" role="tablist">
     <li class="nav-item" role="presentation">
@@ -66,8 +68,12 @@
     <div class="tab-pane fade" id="phones-pane-settings" role="tabpanel" aria-labelledby="phones-tab-settings">
         <ul class="nav nav-tabs mb-3" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="phones-tab-polycom" data-bs-toggle="tab" data-bs-target="#phones-pane-polycom"
-                        type="button" role="tab" aria-controls="phones-pane-polycom" aria-selected="true">Polycom</button>
+                <button class="nav-link active" id="phones-tab-general" data-bs-toggle="tab" data-bs-target="#phones-pane-general"
+                        type="button" role="tab" aria-controls="phones-pane-general" aria-selected="true">General</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="phones-tab-polycom" data-bs-toggle="tab" data-bs-target="#phones-pane-polycom"
+                        type="button" role="tab" aria-controls="phones-pane-polycom" aria-selected="false">Polycom</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" id="phones-tab-yealink" data-bs-toggle="tab" data-bs-target="#phones-pane-yealink"
@@ -76,19 +82,26 @@
         </ul>
 
         <div class="tab-content">
-            <div class="tab-pane fade show active" id="phones-pane-polycom" role="tabpanel" aria-labelledby="phones-tab-polycom">
+            <div class="tab-pane fade show active" id="phones-pane-general" role="tabpanel" aria-labelledby="phones-tab-general">
+                <p class="text-secondary">
+                    The settings both brands share. The provisioning credentials gate every
+                    phone's config fetch; the two device passwords are the admin and user
+                    accounts written into both Polycom and Yealink configs. Edit either one the
+                    same way as any other setting.
+                </p>
+
+                <div id="phones-general-settings" hx-get="@generalSettingsUrl" hx-trigger="load, settingsChanged from:body">
+                    <p class="text-secondary">Loading…</p>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="phones-pane-polycom" role="tabpanel" aria-labelledby="phones-tab-polycom">
                 <p class="text-secondary">
                     Point Polycom phones here with <strong>DHCP option 160</strong> —
                     <code>http://user:pass@@this-server/polycom</code> — using the
                     <code>Provisioning.Username</code>/<code>Provisioning.Password</code>
-                    credentials on the <a asp-page="/Settings/Index">Settings</a> page. The two
-                    device passwords below are Polycom-specific; edit either one the same way as
-                    any other setting.
+                    credentials on the General tab. Everything else here is Polycom-specific.
                 </p>
-
-                <div id="phones-polycom-settings" hx-get="@polycomSettingsUrl" hx-trigger="load, settingsChanged from:body">
-                    <p class="text-secondary">Loading…</p>
-                </div>
 
                 <div class="card mt-3">
                     <div class="card-body d-flex flex-column gap-3">
@@ -122,11 +135,11 @@
                     with <strong>DHCP option 66</strong>, not option 160 (that is Polycom) —
                     <code>http://user:pass@@this-server:8080/yealink</code> — using the same
                     <code>Provisioning.Username</code>/<code>Provisioning.Password</code>
-                    credentials as Polycom, on the <a asp-page="/Settings/Index">Settings</a> page.
-                    A phone we have never seen adds itself the first time it asks, exactly like a
-                    Polycom phone does. The two web UI passwords on the Polycom tab are written into
-                    Yealink configs too, for Yealink's own <code>admin</code> and <code>user</code>
-                    accounts; a phone applies them at boot.
+                    credentials as Polycom, on the General tab. A phone we have never seen adds
+                    itself the first time it asks, exactly like a Polycom phone does. The two
+                    device passwords on the General tab are written into Yealink configs too,
+                    for Yealink's own <code>admin</code> and <code>user</code> accounts; a
+                    phone applies them at boot.
                 </p>
             </div>
         </div>
@@ -137,5 +150,14 @@
 
 @section Scripts {
     @* The settings edit form reused inside this page's modal carries everything it needs
-       inline now that secrets show in the clear (D112); no page-specific glue left. *@
+       inline now that secrets show in the clear (D112); no page-specific glue left. The
+       hash link in the provisioning warning is the one exception: Bootstrap tabs do not
+       answer a URL fragment on their own, so show the pane the fragment names (and its
+       inner General tab, which is what the warning sends an admin to). *@
+    <script>
+        if (location.hash === "#phones-pane-settings") {
+            new bootstrap.Tab(document.getElementById("phones-tab-settings")).show();
+            new bootstrap.Tab(document.getElementById("phones-tab-general")).show();
+        }
+    </script>
 }
