@@ -36,6 +36,24 @@ namespace Techie.Pbx.Web.Pages.Announcements
         {
         }
 
+        /// <summary>
+        /// The announcement's stored audio, as a download rather than a play. The response carries
+        /// Content-Disposition: attachment (set by the file name argument below), so the browser
+        /// saves the WAV instead of opening a player for it.
+        /// </summary>
+        public IActionResult OnGetAudio(long announcementID)
+        {
+            var announcement = this.announcements.GetByID(announcementID);
+            var audio = announcement == null ? null : this.store.Describe(announcement);
+            if (audio == null)
+                return this.NotFound();
+
+            return this.File(
+                System.IO.File.OpenRead(this.store.PathFor(announcement!.AnnouncementID, audio.FileName)),
+                "audio/wav",
+                audio.FileName);
+        }
+
         /// <summary>The create or edit form, which the page shows in the Bootstrap modal.</summary>
         public IActionResult OnGetForm(long? announcementID)
         {

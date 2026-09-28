@@ -1,6 +1,7 @@
 @using Techie.Pbx.Asterisk.Audio
 @model AnnouncementForm
 @{
+    var audioUrl = Url.Page("Index", "Audio", new { announcementID = Model.AnnouncementID });
     var deleteUrl = Url.Page("Index", "Delete");
     var saveUrl = Url.Page("Index", "Save");
     var maxMegabytes = AnnouncementStore.MaxUploadBytes / (1024 * 1024);
@@ -116,7 +117,12 @@
         <div>
             @if (!Model.IsNew)
             {
-                <button type="button" class="btn btn-outline-danger"
+                @* A plain link, not htmx: the browser saves the file instead of swapping HTML. *@
+                if (Model.HasAudio)
+                {
+                    <a class="btn btn-outline-primary" href="@audioUrl">Download</a>
+                }
+                <button type="button" class="btn btn-outline-danger ms-1"
                         hx-post="@deleteUrl"
                         hx-vals='{"announcementID": @Model.AnnouncementID}'
                         hx-swap="none"

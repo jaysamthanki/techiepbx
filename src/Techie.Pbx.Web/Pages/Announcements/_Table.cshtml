@@ -1,7 +1,24 @@
 @model List<AnnouncementRow>
+@*
+    The Add button rides in bootstrap-table's toolbar, beside the search box, so the page's one
+    action lives with the list it acts on. bootstrap-table moves the toolbar element into its own
+    controls area when it initializes the table; htmx binds at the body, so the button's hx-get
+    still fires after the move.
+*@
+@{
+    var formUrl = Url.Page("Index", "Form");
+}
+<div id="announcements-toolbar">
+    <button type="button" class="btn btn-primary"
+            hx-get="@formUrl"
+            hx-target="#form-modal-content"
+            data-bs-toggle="modal"
+            data-bs-target="#form-modal">Add announcement</button>
+</div>
 @* Clicking anywhere on a row opens its edit form (D48). *@
 <table class="table table-sm table-hover"
        data-toggle="table"
+       data-toolbar="#announcements-toolbar"
        data-search="true"
        data-sort-name="name"
        data-sort-order="asc"
