@@ -14,6 +14,7 @@ using Techie.Pbx.Core.Security;
 using Techie.Pbx.Web.CallRecords;
 using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
+using Techie.Pbx.Web.Services;
 
 namespace Techie.Pbx.Web
 {
@@ -216,6 +217,7 @@ namespace Techie.Pbx.Web
                .WithStaticAssets();
             app.MapControllers();
             MapAcmeChallenge(app);
+            AsteriskWebSocketRelay.Map(app);
 
             PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
             PbxEntra.Open(app.Configuration);

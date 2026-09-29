@@ -4,24 +4,13 @@ using Techie.Pbx.Core.Models;
 namespace Techie.Pbx.Tests.Asterisk
 {
     /// <summary>
-    /// http.conf (D159): Asterisk's HTTP server exists for the web client's SIP WebSocket and
-    /// for nothing else, so it is enabled exactly while an enabled extension has the web client,
-    /// offers wss exactly while the pjsip TLS transport's certificate exists, and says
-    /// enabled = no otherwise.
+    /// http.conf (D159, amended by D160): Asterisk's HTTP server exists for the web client's
+    /// SIP WebSocket and for nothing else, so it is enabled exactly while an enabled extension
+    /// has the web client — and it binds loopback only, because the browser never reaches it:
+    /// the web app relays the WebSocket over its own HTTPS port.
     /// </summary>
     public class HttpConfRendererTests
     {
-        private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-09-28T12:00:00Z");
-
-        private static Certificate Usable() => new()
-        {
-            Name = "pbx",
-            Hostnames = "pbx.example.com",
-            CertificatePem = "-----BEGIN CERTIFICATE-----",
-            KeyPem = "-----BEGIN PRIVATE KEY-----",
-            ExpiresUtc = Now.AddDays(60).ToString("u"),
-        };
-
         private static List<Extension> WithWebClient() => new()
         {
             new Extension { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111" },
@@ -36,29 +25,21 @@ namespace Techie.Pbx.Tests.Asterisk
         private static string Expected(string fileName) =>
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Expected", fileName)).ReplaceLineEndings("\n");
 
-        private static string Render(List<Extension> extensions, Certificate? certificate) =>
-            HttpConfRenderer.Render(new PjsipTransport(), extensions, certificate, "/etc/asterisk");
+        private static string Render(List<Extension> extensions) => HttpConfRenderer.Render(extensions);
 
         [Fact]
-        public void Http_with_a_certificate_matches_expected_file()
+        public void Http_with_a_web_client_matches_expected_file()
         {
-            Assert.Equal(Expected("http-tls.conf"), Render(WithWebClient(), Usable()));
-        }
-
-        [Fact]
-        public void Http_without_a_certificate_matches_expected_file()
-        {
-            Assert.Equal(Expected("http.conf"), Render(WithWebClient(), null));
+            Assert.Equal(Expected("http.conf"), Render(WithWebClient()));
         }
 
         [Fact]
         public void Http_is_disabled_when_no_extension_has_the_web_client()
         {
-            var actual = Render(WithoutWebClient(), Usable());
+            var actual = Render(WithoutWebClient());
 
             Assert.Equal(Expected("http-disabled.conf"), actual);
             Assert.DoesNotContain("enabled = yes", actual);
-            Assert.DoesNotContain("tlsenable", actual);
         }
 
         /// <summary>A switched-off extension renders no endpoint, so it opens no listener either.</summary>
@@ -75,38 +56,52 @@ namespace Techie.Pbx.Tests.Asterisk
             };
 
             Assert.False(HttpConfRenderer.Enabled(extensions));
-            Assert.Contains("enabled = no\n", Render(extensions, null));
-        }
-
-        /// <summary>The HTTP server binds where the SIP transports bind: both describe this machine.</summary>
-        [Fact]
-        public void The_bind_address_is_the_sip_transports_bind_address()
-        {
-            var transport = new PjsipTransport { BindAddress = "10.8.20.8" };
-
-            var actual = HttpConfRenderer.Render(transport, WithWebClient(), Usable(), "/etc/asterisk");
-
-            Assert.Contains("bindaddr = 10.8.20.8\n", actual);
-            Assert.Contains($"tlsbindaddr = 10.8.20.8:{HttpConfRenderer.WssPort}\n", actual);
+            Assert.Contains("enabled = no\n", Render(extensions));
         }
 
         /// <summary>
-        /// The certificate the WebSocket presents is the one file the apply already writes for
-        /// the pjsip TLS transport (D101): nothing new for an operator to copy into place.
+        /// Loopback and nothing else (D160): the server is bound behind the app's relay, so a
+        /// bind address that anything but this machine could reach is a mistake.
         /// </summary>
         [Fact]
-        public void The_certificate_is_the_pjsip_transports_combined_pem()
+        public void The_server_binds_loopback_only()
         {
-            var actual = Render(WithWebClient(), Usable());
+            var actual = Render(WithWebClient());
 
-            Assert.Contains($"tlscertfile = {PjsipConfRenderer.TlsCertificatePath("/etc/asterisk")}\n", actual);
-            Assert.Contains($"tlsprivatekey = {PjsipConfRenderer.TlsCertificatePath("/etc/asterisk")}\n", actual);
+            Assert.Contains($"bindaddr = {HttpConfRenderer.LoopbackAddress}\n", actual);
+            Assert.Contains($"bindport = {HttpConfRenderer.WsPort}\n", actual);
+        }
+
+        /// <summary>
+        /// No TLS half at all (D160): the certificate the browser sees is the web app's own, so
+        /// http.conf must not name a certificate or a second port even in passing.
+        /// </summary>
+        [Fact]
+        public void No_certificate_or_wss_port_is_rendered()
+        {
+            var actual = Render(WithWebClient());
+
+            Assert.DoesNotContain("tls", actual);
+            Assert.DoesNotContain("8089", actual);
+        }
+
+        /// <summary>
+        /// The relay's upstream address names the port the file binds (D160): the URI is a
+        /// literal, so nothing but this test holds it to the loopback address and port that
+        /// http.conf actually writes.
+        /// </summary>
+        [Fact]
+        public void The_relay_upstream_uri_names_the_bound_port_and_address()
+        {
+            Assert.Equal(
+                $"ws://{HttpConfRenderer.LoopbackAddress}:{HttpConfRenderer.WsPort}/ws",
+                HttpConfRenderer.UpstreamUri);
         }
 
         [Fact]
         public void Http_conf_is_a_restart_not_a_reload()
         {
-            var file = new GeneratedFile(HttpConfRenderer.FileName, null, Render(WithoutWebClient(), null));
+            var file = new GeneratedFile(HttpConfRenderer.FileName, null, Render(WithoutWebClient()));
 
             Assert.True(file.NeedsRestart);
             Assert.Empty(ConfigApplier.ReloadOrder(new List<GeneratedFile> { file }));

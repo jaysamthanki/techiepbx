@@ -1,7 +1,6 @@
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Contracts;
 using Techie.Pbx.Core.Data;
-using Techie.Pbx.Core.Models;
 using Techie.Pbx.Web.Services;
 
 namespace Techie.Pbx.Tests.Web
@@ -16,17 +15,11 @@ namespace Techie.Pbx.Tests.Web
         private static Dictionary<string, string> Settings(params (string Key, string Value)[] values) =>
             values.ToDictionary(pair => pair.Key, pair => pair.Value);
 
-        /// <summary>Most rules do not care about the extensions, so most tests pass none.</summary>
         private static List<FirewallRule> Build(Dictionary<string, string> settings) =>
-            FirewallRulesBuilder.Build(settings, new List<Extension>());
+            FirewallRulesBuilder.Build(settings);
 
         private static FirewallRule Rule(IEnumerable<FirewallRule> rules, string label) =>
             rules.Single(rule => rule.Label == label);
-
-        private static List<Extension> WebClientExtensions() => new()
-        {
-            new Extension { Number = "1001", Name = "Front Desk", Secret = "AAAAbbbbCCCCdddd1111", WebClient = true },
-        };
 
         [Fact]
         public void A_bare_system_opens_sip_udp_rtp_and_the_three_web_ports()
@@ -96,32 +89,14 @@ namespace Techie.Pbx.Tests.Web
         }
 
         /// <summary>
-        /// The web client's ws/wss ports open exactly while http.conf is enabled, which is while
-        /// an enabled extension has the web client (D159) — the same gate, one definition.
+        /// The web client's SIP WebSocket opens no firewall rule at all (D160): the browser
+        /// dials the app's own HTTPS port and the app relays to Asterisk's loopback server,
+        /// so it crosses no firewall anywhere whatever the extensions say.
         /// </summary>
         [Fact]
-        public void The_websocket_ports_open_only_while_an_extension_has_the_web_client()
+        public void The_web_client_never_opens_a_firewall_rule()
         {
             Assert.DoesNotContain(Build(Settings()), rule => rule.Label is "SIP WS" or "SIP WSS");
-
-            var rules = FirewallRulesBuilder.Build(Settings(), WebClientExtensions());
-
-            Assert.Equal(HttpConfRenderer.WsPort, Rule(rules, "SIP WS").StartPort);
-            Assert.Equal(FirewallProtocol.Tcp, Rule(rules, "SIP WS").Protocol);
-            Assert.Equal(HttpConfRenderer.WssPort, Rule(rules, "SIP WSS").StartPort);
-            Assert.Equal(FirewallProtocol.Tcp, Rule(rules, "SIP WSS").Protocol);
-        }
-
-        /// <summary>A switched-off extension renders no endpoint and opens no port either.</summary>
-        [Fact]
-        public void A_disabled_web_client_extension_opens_nothing()
-        {
-            var extensions = WebClientExtensions();
-            extensions[0].Enabled = false;
-
-            Assert.DoesNotContain(
-                FirewallRulesBuilder.Build(Settings(), extensions),
-                rule => rule.Label is "SIP WS" or "SIP WSS");
         }
 
         /// <summary>The media range is the renderer's constants, not numbers typed again here.</summary>
@@ -138,12 +113,11 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Every_rule_built_is_a_rule_the_helper_would_accept()
         {
-            var rules = FirewallRulesBuilder.Build(
+            var rules = Build(
                 Settings(
                     (SettingsKeys.SipPort, "5060"),
                     (SettingsKeys.SipTcpPort, "5060"),
-                    (SettingsKeys.SipTlsPort, "5061")),
-                WebClientExtensions());
+                    (SettingsKeys.SipTlsPort, "5061")));
 
             Assert.Empty(HelperRequest.FirewallApply(rules).Validate());
         }

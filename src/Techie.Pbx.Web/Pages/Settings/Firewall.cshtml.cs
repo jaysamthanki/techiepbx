@@ -25,13 +25,11 @@ namespace Techie.Pbx.Web.Pages.Settings
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(FirewallModel));
 
-        private readonly ExtensionRepository extensions;
         private readonly HelperClient helper;
         private readonly SettingsRepository settings;
 
         public FirewallModel()
         {
-            this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.helper = new HelperClient();
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
@@ -47,7 +45,7 @@ namespace Techie.Pbx.Web.Pages.Settings
         /// </summary>
         public async Task<IActionResult> OnPostApply()
         {
-            var expected = FirewallRulesBuilder.Build(this.settings.GetAll(), this.extensions.GetAll());
+            var expected = FirewallRulesBuilder.Build(this.settings.GetAll());
 
             Log.Info($"Firewall apply requested by {this.User.Identity?.Name}: {expected.Count} rule(s)");
 
@@ -86,7 +84,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             var view = new FirewallView
             {
                 Error = error,
-                Expected = FirewallRulesBuilder.Build(this.settings.GetAll(), this.extensions.GetAll()),
+                Expected = FirewallRulesBuilder.Build(this.settings.GetAll()),
             };
 
             try

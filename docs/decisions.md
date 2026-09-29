@@ -3484,3 +3484,29 @@ Asterisk over a SIP WebSocket (WebRTC). This piece is the Asterisk-side plumbing
   `HttpConfRenderer.Enabled`, so the firewall and what is listening cannot disagree (D142).
   Both ports whether or not a certificate exists yet, for the reason 443 opens before one
   does (D99). No Helper change: the rules are the same typed `FirewallRule` port messages.
+
+### D160. Web client PoC: the WebSocket rides the web app's own 443 (2026-09-29, web client)
+
+Amends D159's http.conf/firewall halves the day after they were lab-verified: the browser-facing
+wss port idea does not survive contact with the deployment. This lab's cloud firewall (the
+Azure NSG) allows only 80, 443, the media range and a few chosen ports — and that is typical of
+real deployments, not special. Opening a second HTTPS port everywhere, for a feature one
+checkbox controls, is exactly the surface this project does not keep.
+
+- **Asterisk's HTTP server binds loopback only** (`127.0.0.1:8088`, plain ws, no TLS half at
+  all). The browser never reaches it.
+- **The web app relays.** The browser dials `wss://<hostname>/asterisk-ws` on the web app's own
+  HTTPS port — a port that is already open and already firewalled — and `AsteriskWebSocketRelay`
+  forwards every frame byte-for-byte to the loopback WebSocket and back. TLS is the web app's
+  certificate (D99): one cert, one place, nothing for an operator to keep in step.
+- **A relay, not a parser**: the app never looks inside the SIP frames; registration, digest
+  auth and every call stay Asterisk's business. Authorized like any page (fallback policy):
+  the handshake is a same-origin request from the /phone page and carries the session cookie.
+  When no extension has the web client the relay answers 404 — the same gate http.conf is
+  written by, so the two cannot disagree.
+- **The firewall's ws/wss rules are gone.** `FirewallRulesBuilder` takes the settings alone
+  again; the WebSocket crosses no firewall anywhere. On the lab the previously applied 8088/8089
+  rules are simply superseded by the next apply.
+- **The path, the upstream URI and the gate live in `HttpConfRenderer`**, beside the file that
+  configures the server they point at — three constants, one class, so the relay, the file and
+  the (future) /phone page cannot drift apart on what the URL is.
