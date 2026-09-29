@@ -59,6 +59,16 @@ namespace Techie.Pbx.Asterisk.Config
                 "res_pjsip_refer.so",                  // answers a phone's REFER: the transfer every phone sends (D147)
             }),
 
+            ("The web client's SIP over WebSocket (D159)", new[]
+            {
+                // Loaded whether or not any extension has the web client: the allowlist is fixed
+                // text (D31), and both are inert while http.conf says enabled = no. Deliberately
+                // NOT here: chan_websocket.so (a media channel driver this PBX never dials) and
+                // res_websocket_client.so (outbound WebSocket connections nothing here makes).
+                "res_http_websocket.so",            // WebSocket support on the HTTP server http.conf enables
+                "res_pjsip_transport_websocket.so", // SIP over that WebSocket: what a browser registers through
+            }),
+
             ("Bridging two people together", new[]
             {
                 "bridge_simple.so",

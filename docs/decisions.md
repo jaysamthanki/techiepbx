@@ -3446,3 +3446,41 @@ bottom; make it a control panel — pick a setup, see only its settings, test at
   "the Email tab does not yet say so" limitation is now said on the tab.
 - `MailController`, the test endpoint and `pbx.sendTestMail` are unchanged.
 
+
+### D159. Web client PoC, piece 1: the Asterisk side (2026-09-28, web client)
+
+User approved a PoC: a browser-based softphone served by the app at /phone, registering to
+Asterisk over a SIP WebSocket (WebRTC). This piece is the Asterisk-side plumbing only; the
+/phone UI itself is piece 2 and does not exist yet.
+
+- **One checkbox per extension** (`Extensions.WebClient`, schema 029, off by default). On, the
+  extension gets a second PJSIP device `<Number>-web` — endpoint, auth and aor — beside its own.
+  Off everywhere renders every file byte for byte as before.
+- **The `-web` device shares the extension's secret** (PoC decision: one credential per person,
+  revisit before this leaves PoC), its context, caller ID, outbound caller ID claim (D125) and
+  mailbox (D108). `webrtc = yes` supplies the DTLS/ICE/AVPF defaults a browser requires.
+- **G.711 only (`allow = ulaw,alaw`)**: this Asterisk 22 source build ships no `codec_opus.so`
+  (verified on the lab VM), browsers speak G.711 natively, and Asterisk already transcodes
+  G.722 ↔ G.711 for the wideband desk phones. The `-web` aor reuses the global MaxContacts and
+  adds `remove_existing = yes`: one web client per extension, and a re-opened tab replaces the
+  contact a closed one left behind.
+- **Every Dial forks in one place.** The dialplan builds an extension's device string in a single
+  helper, so a direct dial, a ring group member, a forwarding target and the voicemail
+  fallthrough behind them all ring `PJSIP/101&PJSIP/101-web` in the one Dial they always were.
+  The hint keeps watching the handset alone, as it does for forwarding (D121).
+- **http.conf is generated and gated on the checkbox**: `enabled = no` until at least one enabled
+  extension has the web client — an idle HTTP server is attack surface. Enabled, it binds the
+  SIP transports' bind address, ws on 8088, and wss on 8089 exactly while the pjsip TLS
+  transport's certificate exists (D101), pointing at the same combined PEM. (Asterisk has no
+  `tlsport` option; the port rides on `tlsbindaddr`.) Startup-read, so a change is a restart
+  like rtp.conf (D33). Browsers refuse ws from an https page, so the /phone page will require
+  the wss side; the ws line is still written so the file says what is listening.
+- **Modules**: `res_http_websocket.so` and `res_pjsip_transport_websocket.so` join the allowlist
+  (both present on the lab VM). `chan_websocket.so` and `res_websocket_client.so` deliberately
+  do not — a media channel driver nothing dials and outbound WebSocket connections nothing
+  makes.
+- **Firewall**: TCP 8088 and 8089 ("SIP WS"/"SIP WSS") open on the same gate as http.conf —
+  `FirewallRulesBuilder` now takes the extension rows and asks the renderer's own
+  `HttpConfRenderer.Enabled`, so the firewall and what is listening cannot disagree (D142).
+  Both ports whether or not a certificate exists yet, for the reason 443 opens before one
+  does (D99). No Helper change: the rules are the same typed `FirewallRule` port messages.

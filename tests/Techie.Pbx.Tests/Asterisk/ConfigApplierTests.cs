@@ -81,8 +81,8 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new[]
                 {
-                    "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf", "logger.conf",
-                    "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
+                    "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf", HttpConfRenderer.FileName,
+                    "logger.conf", "manager.conf", PjsipConfRenderer.TlsCertificateFileName, "pjsip.conf",
                     "extensions.conf", "voicemail.conf", VoicemailOptionsRenderer.FileName,
                     "features.conf", "musiconhold.conf", "res_parking.conf", CdrManagerConfRenderer.FileName,
                     CdrConfRenderer.FileName, IndicationsConfRenderer.FileName,
@@ -95,7 +95,7 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(
                 new string?[]
                 {
-                    null, null, null, null, ConfigApplier.LoggerModule,
+                    null, null, null, null, null, ConfigApplier.LoggerModule,
                     ConfigApplier.ManagerModule, null, ConfigApplier.PjsipModule,
                     ConfigApplier.DialplanModule, ConfigApplier.VoicemailModule, ConfigApplier.VoicemailModule,
                     ConfigApplier.FeaturesModule, ConfigApplier.MohModule, ConfigApplier.ParkingModule,
@@ -148,12 +148,13 @@ namespace Techie.Pbx.Tests.Asterisk
             // tnpbx-cert.pem joins the restart set (D101): a transport reads its certificate
             // when it is built, so a renewed one reaches SIP only at the next Asterisk start.
             // pjsip_notify.conf joins it too (D123): res_pjsip_notify reads it when the module
-            // loads, and nothing re-reads it.
+            // loads, and nothing re-reads it. And http.conf (D159), read at startup like rtp.conf.
             Assert.Equal(
                 new[]
                 {
                     "asterisk.conf", "modules.conf", "rtp.conf", "pjsip_notify.conf",
-                    PjsipConfRenderer.TlsCertificateFileName, CdrConfRenderer.FileName,
+                    HttpConfRenderer.FileName, PjsipConfRenderer.TlsCertificateFileName,
+                    CdrConfRenderer.FileName,
                 },
                 restart);
         }
@@ -174,8 +175,10 @@ namespace Techie.Pbx.Tests.Asterisk
             // too (D128). Fifteen with cdr_manager.conf, which has nothing from the database in it
             // and so is the same on every system (F5), and cdr.conf, which only turns unanswered
             // calls on so a missed inbound call leaves a record. Seventeen with indications.conf,
-            // the fixed tone zone inband ringback is played from (D132).
-            Assert.Equal(17, written.Count);
+            // the fixed tone zone inband ringback is played from (D132). Eighteen with http.conf,
+            // written enabled = no until an extension has the web client, so switching the last
+            // one off is itself something an apply carries out (D159).
+            Assert.Equal(18, written.Count);
             foreach (var fileName in written)
                 Assert.True(File.Exists(Path.Combine(this.confDirectory, fileName)), fileName);
 

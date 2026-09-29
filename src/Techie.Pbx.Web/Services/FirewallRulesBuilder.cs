@@ -1,5 +1,6 @@
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Contracts;
+using Techie.Pbx.Core.Models;
 using Techie.Pbx.Web.Certificates;
 
 namespace Techie.Pbx.Web.Services
@@ -21,7 +22,13 @@ namespace Techie.Pbx.Web.Services
     /// </summary>
     public static class FirewallRulesBuilder
     {
-        public static List<FirewallRule> Build(IReadOnlyDictionary<string, string> settings)
+        /// <param name="extensions">
+        /// The extension rows, because one of them having the web client is what makes the
+        /// Asterisk HTTP server listen at all (D159): the gate on the ws/wss ports is the same
+        /// <see cref="HttpConfRenderer.Enabled"/> the config is gated by, so the firewall and
+        /// what is listening cannot disagree.
+        /// </param>
+        public static List<FirewallRule> Build(IReadOnlyDictionary<string, string> settings, IEnumerable<Extension> extensions)
         {
             var transport = AsteriskSettings.Transport(settings);
 
@@ -40,6 +47,15 @@ namespace Techie.Pbx.Web.Services
             // on a port nobody has named either way.
             if (transport.TlsPort != null)
                 rules.Add(FirewallRule.Port(FirewallProtocol.Tcp, transport.TlsPort.Value, "SIP TLS"));
+
+            // The web client's SIP WebSocket (D159): open exactly while http.conf is enabled,
+            // which is while any enabled extension has the web client. Both ports whether or not
+            // a certificate exists yet, for the reason 443 is opened before one does (D99).
+            if (HttpConfRenderer.Enabled(extensions))
+            {
+                rules.Add(FirewallRule.Port(FirewallProtocol.Tcp, HttpConfRenderer.WsPort, "SIP WS"));
+                rules.Add(FirewallRule.Port(FirewallProtocol.Tcp, HttpConfRenderer.WssPort, "SIP WSS"));
+            }
 
             // The media range, from the constants rtp.conf is rendered from.
             rules.Add(new FirewallRule(FirewallProtocol.Udp, RtpConfRenderer.PortStart, RtpConfRenderer.PortEnd, "RTP UDP"));

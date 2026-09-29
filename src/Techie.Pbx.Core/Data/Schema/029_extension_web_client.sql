@@ -1,0 +1,13 @@
+-- D159. Whether this extension also gets the browser-based web client (PoC).
+--
+-- On, pjsip.conf gains a second device beside the extension's own: <Number>-web, a webrtc=yes
+-- endpoint the /phone page (piece 2) will register over a SIP WebSocket, sharing the
+-- extension's context, caller ID, mailbox and secret. Every place the dialplan rings the
+-- extension then rings both devices in one Dial, so ring groups, forwarding and the voicemail
+-- fallthrough behave exactly as they do for the desk phone.
+--
+-- Off by default, and off renders every file exactly as it was rendered before this column
+-- existed. The column is also the gate for Asterisk's HTTP server: http.conf is enabled, and
+-- ports 8088/8089 opened, only while at least one enabled extension has this on — an idle
+-- HTTP server is surface area this project does not keep.
+ALTER TABLE Extensions ADD COLUMN WebClient INTEGER NOT NULL DEFAULT 0;

@@ -247,18 +247,34 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// The things a PBX gets attacked through that we do not use: other channel drivers,
-        /// anonymous SIP identification, and the HTTP server.
+        /// anonymous SIP identification, and the WebSocket pieces the web client does not need —
+        /// chan_websocket is a media channel driver nothing here dials, and res_websocket_client
+        /// makes outbound WebSocket connections nothing here makes (D159).
         /// </summary>
         [Theory]
         [InlineData("chan_sip")]
         [InlineData("chan_iax2")]
         [InlineData("chan_skinny")]
+        [InlineData("chan_websocket")]
+        [InlineData("res_websocket_client")]
         [InlineData("res_pjsip_endpoint_identifier_anonymous")]
-        [InlineData("res_http_websocket")]
         [InlineData("res_agi")]
         public void The_allowlist_leaves_out_what_we_do_not_use(string module)
         {
             Assert.DoesNotContain(module, ModulesConfRenderer.Render());
+        }
+
+        /// <summary>
+        /// The web client's SIP WebSocket needs both halves (D159): the WebSocket support on the
+        /// HTTP server, and the pjsip transport that speaks SIP over it. Both are inert while
+        /// http.conf says enabled = no, which is every system without a web-enabled extension.
+        /// </summary>
+        [Theory]
+        [InlineData("res_http_websocket.so")]
+        [InlineData("res_pjsip_transport_websocket.so")]
+        public void The_allowlist_carries_what_the_web_client_registers_through(string module)
+        {
+            Assert.Contains(module, ModulesConfRenderer.Modules);
         }
 
         [Fact]

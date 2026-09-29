@@ -948,7 +948,7 @@ namespace Techie.Pbx.Asterisk.Config
             var number = ConfText.Safe(group.Number, "ring group number");
             var name = ConfText.Safe(group.Name, "ring group name");
             var members = MembersOf(group, enabledExtensions)
-                .Select(m => $"PJSIP/{ConfText.Safe(m, "ring group member")}")
+                .Select(DeviceString)
                 .ToList();
 
             sb.Append('\n');
@@ -979,11 +979,13 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>
         /// The group's members that are still extensions somebody can ring, in the order the group
         /// lists them. A member that has been deleted or switched off is dropped rather than
-        /// written into a Dial that would fail.
+        /// written into a Dial that would fail. The rows rather than the numbers, so the Dial can
+        /// be built through <see cref="DeviceString"/> and a member's web client rings too (D159).
         /// </summary>
-        private static List<string> MembersOf(RingGroup group, List<Extension> enabledExtensions) =>
+        private static List<Extension> MembersOf(RingGroup group, List<Extension> enabledExtensions) =>
             group.MemberList()
-                .Where(m => enabledExtensions.Any(e => string.Equals(e.Number, m, StringComparison.Ordinal)))
+                .Select(m => enabledExtensions.FirstOrDefault(e => string.Equals(e.Number, m, StringComparison.Ordinal)))
+                .OfType<Extension>()
                 .ToList();
 
         /// <summary>
@@ -1241,6 +1243,23 @@ namespace Techie.Pbx.Asterisk.Config
             mohClasses.Where(c => c.IsDefault).OrderBy(c => c.MohClassID).FirstOrDefault();
 
         /// <summary>
+        /// The device string a Dial rings for one extension (D159): its own endpoint, plus the
+        /// <c>-web</c> endpoint beside it when the extension has the web client. This is the one
+        /// place that string is built, so a direct dial, a ring group member and a forwarding
+        /// target that is an extension all ring both devices — and everything after the Dial,
+        /// ring time and voicemail fallthrough included, is untouched, because it is still one
+        /// Dial. An extension without the web client is exactly the text it always was.
+        /// </summary>
+        private static string DeviceString(Extension extension)
+        {
+            var number = ConfText.Safe(extension.Number, "number");
+
+            return extension.WebClient
+                ? $"PJSIP/{number}&PJSIP/{number}{PjsipConfRenderer.WebClientSuffix}"
+                : $"PJSIP/{number}";
+        }
+
+        /// <summary>
         /// What a call to this extension rings, as the one string its <c>Dial</c> takes (D130).
         ///
         /// Normally the extension's own endpoint, and then this is exactly the text that was
@@ -1271,14 +1290,15 @@ namespace Techie.Pbx.Asterisk.Config
             var forwarding = extension.ForwardingList();
 
             if (forwarding.Count == 0)
-                return $"PJSIP/{ConfText.Safe(extension.Number, "number")}";
+                return DeviceString(extension);
 
             var targets = forwarding.Select(target =>
             {
                 var safe = ConfText.Safe(target, "forwarding target");
+                var other = extensions.FirstOrDefault(e => string.Equals(e.Number, target, StringComparison.Ordinal));
 
-                return extensions.Any(e => string.Equals(e.Number, target, StringComparison.Ordinal))
-                    ? $"PJSIP/{safe}"
+                return other != null
+                    ? DeviceString(other)
                     : $"Local/{safe}@{InternalContext}/n";
             });
 

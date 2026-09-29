@@ -92,11 +92,26 @@
         </div>
     </div>
 
-    <div class="form-check mb-4">
+    <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" id="extension-enabled" name="enabled" value="true"
                checked="@(Model.Enabled ? "checked" : null)" />
         <label class="form-check-label" for="extension-enabled">Enabled</label>
         <div class="form-text">A disabled extension is left out of the generated Asterisk config.</div>
+    </div>
+
+    @*
+        The web client (D159, PoC): a second device that rings alongside the phone, so switching
+        it on changes the generated config and needs an apply like everything else here.
+    *@
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="extension-web-client" name="webClient" value="true"
+               checked="@(Model.WebClient ? "checked" : null)" />
+        <label class="form-check-label" for="extension-web-client">Web client</label>
+        <div class="form-text">
+            Lets this extension also answer and place calls from a browser. Calls ring the phone
+            and the web client together. Switching it on anywhere enables Asterisk's WebSocket
+            ports (8088/8089); switching it off everywhere closes them again.
+        </div>
     </div>
 
     <hr />

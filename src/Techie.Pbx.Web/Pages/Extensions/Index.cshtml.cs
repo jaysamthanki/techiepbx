@@ -67,6 +67,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 VoicemailEnabled = extension.VoicemailEnabled,
                 VoicemailPin = extension.VoicemailPin,
                 VoicemailTranscribe = extension.VoicemailTranscribe,
+                WebClient = extension.WebClient,
             });
         }
 
@@ -140,6 +141,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             extension.VoicemailEnabled = form.VoicemailEnabled;
             extension.VoicemailPin = Text(form.VoicemailPin);
             extension.VoicemailTranscribe = form.VoicemailTranscribe;
+            extension.WebClient = form.WebClient;
 
             // The form carries the password for new and existing extensions alike (D112). Blank on
             // a new one generates it; blank on an existing one keeps what is already there.

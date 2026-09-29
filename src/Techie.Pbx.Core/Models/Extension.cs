@@ -85,6 +85,15 @@ namespace Techie.Pbx.Core.Models
         public bool VoicemailTranscribe { get; set; }
 
         /// <summary>
+        /// Whether this extension also gets the browser-based web client (D159, PoC). On, a
+        /// second device <c>&lt;Number&gt;-web</c> is rendered beside the extension's own —
+        /// same context, caller ID, mailbox and secret — and every Dial that rings the
+        /// extension rings both. It is also what gates Asterisk's HTTP server: no extension
+        /// with this on, no http.conf listener at all.
+        /// </summary>
+        public bool WebClient { get; set; }
+
+        /// <summary>
         /// What is wrong with the forwarding field, if anything (D130). Its own method because it
         /// is four rules rather than one, and because every one of them is about a value that ends
         /// up inside a <c>Dial</c>.

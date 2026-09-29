@@ -51,5 +51,11 @@ namespace Techie.Pbx.Web.Pages.Extensions
         /// address to email and the box has whisper.cpp installed, which is optional.
         /// </summary>
         public bool VoicemailTranscribe { get; set; }
+
+        /// <summary>
+        /// The browser-based web client (D159, PoC): a second SIP device that rings alongside
+        /// this extension's own phone.
+        /// </summary>
+        public bool WebClient { get; set; }
     }
 }

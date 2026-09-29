@@ -34,6 +34,20 @@ namespace Techie.Pbx.Asterisk.Config
         public const string TransportName = "transport-udp";
 
         /// <summary>
+        /// What a web-enabled extension's second device is called: the number plus this, e.g.
+        /// <c>101-web</c> (D159). The dialplan builds the same name into its Dials, so both
+        /// ends use this constant.
+        /// </summary>
+        public const string WebClientSuffix = "-web";
+
+        /// <summary>
+        /// What the web client is offered (D159): G.711 only, because this Asterisk 22 source
+        /// build ships no codec_opus.so (verified on the lab VM), browsers speak G.711
+        /// natively, and Asterisk transcodes G.722 to G.711 for the wideband desk phones.
+        /// </summary>
+        private const string WebClientCodecs = "ulaw,alaw";
+
+        /// <summary>
         /// The TCP transport, which only exists in the file when a TCP port is set (D70). Nothing
         /// is bound to it by name: a phone that connects over TCP is matched by the endpoint it
         /// authenticates as, and trunks stay on UDP.
@@ -174,6 +188,8 @@ namespace Techie.Pbx.Asterisk.Config
                 // dead contact looks the same as a live one (D111).
                 sb.Append("qualify_frequency = 60\n");
 
+                if (extension.WebClient)
+                    AppendWebClientDevice(sb, transport, extension);
             }
 
             foreach (var trunk in TrunkRenderOrder(trunks))
@@ -330,6 +346,71 @@ namespace Techie.Pbx.Asterisk.Config
                 foreach (var match in matches)
                     sb.Append($"match = {ConfText.Safe(match, "match address")}\n");
             }
+        }
+
+        /// <summary>
+        /// The second device a web-enabled extension gets (D159): <c>&lt;number&gt;-web</c>, the
+        /// endpoint the browser softphone registers as over the SIP WebSocket. It is the base
+        /// endpoint with three differences: <c>webrtc = yes</c>, which switches on the DTLS,
+        /// ICE and AVPF defaults a browser requires; G.711 only, because this Asterisk build
+        /// ships no codec_opus; and an aor of its own with <c>remove_existing = yes</c>, so
+        /// there is one web client per extension and a re-opened tab replaces the stale one.
+        /// Context, caller ID, mailbox and secret are the extension's own — the web client is
+        /// the same person on the same number, not a second identity (PoC decision, D159).
+        /// </summary>
+        private static void AppendWebClientDevice(StringBuilder sb, PjsipTransport transport, Extension extension)
+        {
+            var device = ConfText.Safe(extension.Number + WebClientSuffix, "web client device");
+            var name = ConfText.Safe(extension.Name, "name");
+            var number = ConfText.Safe(extension.Number, "number");
+            var secret = ConfText.Safe(extension.Secret, "secret");
+
+            sb.Append('\n');
+            sb.Append($"[{device}]\n");
+            sb.Append("type = endpoint\n");
+            sb.Append("webrtc = yes\n");
+            sb.Append($"context = {ExtensionsConfRenderer.InternalContext}\n");
+            sb.Append("disallow = all\n");
+            sb.Append($"allow = {WebClientCodecs}\n");
+            sb.Append($"auth = {device}-auth\n");
+            sb.Append($"aors = {device}\n");
+            sb.Append($"callerid = \"{name}\" <{number}>\n");
+
+            // The same claim the base endpoint makes (D125): whichever device the user dials
+            // out from, their outside calls present as the same number.
+            if (extension.OutboundCallerID.Length > 0)
+            {
+                var claim = ConfText.CallerID(extension.OutboundCallerID, "outbound caller ID");
+                sb.Append($"set_var = {OutboundCallerIDVariable}={claim}\n");
+            }
+
+            sb.Append("direct_media = no\n");
+            sb.Append("rtp_symmetric = yes\n");
+            sb.Append("force_rport = yes\n");
+            sb.Append("rewrite_contact = yes\n");
+
+            // The same mailbox as the base endpoint (D108): the MWI count in the browser is
+            // the count on the desk phone, because it is the same mailbox.
+            if (extension.VoicemailEnabled)
+                sb.Append($"mailboxes = {number}@{VoicemailConfRenderer.MailboxContext}\n");
+
+            sb.Append('\n');
+            sb.Append($"[{device}-auth]\n");
+            sb.Append("type = auth\n");
+            sb.Append("auth_type = digest\n");
+            sb.Append($"username = {device}\n");
+            sb.Append($"password = {secret}\n");
+
+            sb.Append('\n');
+            sb.Append($"[{device}]\n");
+            sb.Append("type = aor\n");
+            sb.Append($"max_contacts = {transport.MaxContacts}\n");
+
+            // Unlike the base aor (D110), always remove_existing = yes: one web client per
+            // extension, and a browser that was closed without unregistering must not leave a
+            // contact the next tab has to wait out.
+            sb.Append("remove_existing = yes\n");
+            sb.Append("qualify_frequency = 60\n");
         }
     }
 }
