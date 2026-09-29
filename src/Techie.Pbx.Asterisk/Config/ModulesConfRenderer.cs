@@ -67,6 +67,7 @@ namespace Techie.Pbx.Asterisk.Config
                 // res_websocket_client.so (outbound WebSocket connections nothing here makes).
                 "res_http_websocket.so",            // WebSocket support on the HTTP server http.conf enables
                 "res_pjsip_transport_websocket.so", // SIP over that WebSocket: what a browser registers through
+                "res_srtp.so",                       // DTLS-SRTP: a webrtc=yes call's media. Without it, every call to a -web endpoint dies at SDP creation ("Couldn't add sdp streams"), even though webrtc=yes set DTLS up (verified live, D161)
             }),
 
             ("Bridging two people together", new[]

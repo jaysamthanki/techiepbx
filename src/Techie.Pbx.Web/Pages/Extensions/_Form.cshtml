@@ -189,6 +189,13 @@
                         hx-vals='{"extensionID": @Model.ExtensionID}'
                         hx-swap="none"
                         hx-confirm="Delete extension @Model.Number (@Model.Name)? Apply config afterwards to take it out of Asterisk.">Delete</button>
+
+                        @* The one way into the browser softphone (D161): it is not in the nav. *@
+                        @if (Model.WebClient)
+                        {
+                            <a class="link-secondary align-self-center" href="@Url.Page("/PhoneClient/Index")"
+                               target="_blank" rel="noopener">Open web client</a>
+                        }
             }
         </div>
         <div class="d-flex gap-2">

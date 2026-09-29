@@ -4,7 +4,8 @@ UI conventions (see also the root CLAUDE.md).
 
 **UI**
 - **Allowed client libraries (and nothing else without asking):** Bootstrap, **bootstrap-table**,
-  **sweetalert2**, and **htmx**. All vendored locally under wwwroot/lib — no CDN, no npm build step.
+  **sweetalert2**, **htmx**, and **JsSIP** (vendored under lib/jssip, used by /phone only). All
+  vendored locally under wwwroot/lib — no CDN, no npm build step.
 - **Modals:** create/edit/delete **forms live in Bootstrap modals** — a server-rendered partial
   (htmx `hx-get` loads it into the modal body, the form posts via htmx and swaps back validation
   errors or a 204 + `HX-Trigger`). **sweetalert2 is only for alerts, confirms and toasts** —

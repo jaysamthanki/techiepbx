@@ -3510,3 +3510,45 @@ checkbox controls, is exactly the surface this project does not keep.
 - **The path, the upstream URI and the gate live in `HttpConfRenderer`**, beside the file that
   configures the server they point at — three constants, one class, so the relay, the file and
   the (future) /phone page cannot drift apart on what the URL is.
+
+### D161. Web client PoC, piece 2: the /phone page (2026-09-28, web client)
+
+Piece 2 of D159/D160: the browser softphone itself, at /phone — a dial pad, Call/Answer,
+Hang up, Hold and blind Xfer, registering with JsSIP (vendored, MIT) over the D160 relay.
+No history, no presence, no multiple calls: the PoC's scope, on purpose.
+
+- **An admin-only PoC page, reached from the extension edit modal, not the nav.** /phone sits
+  behind the same sign-in as every page but stays out of the admin nav — it is the end-user
+  softphone, not management surface. Its one entry point is an "Open web client" link in the
+  extension edit modal's footer, shown while the extension has the web client on. That also
+  means only an admin can reach it at all for now, which is what makes the next point tolerable.
+- **The page's script fetches the extension's SIP secret from a page handler**
+  (`/phone?handler=Client&ext=…`), which answers `{ number, name, uri, secret, wsUrl }` for an
+  enabled, web-enabled extension and 404s anything else. The secret in the clear to an admin is
+  the stance the edit form already takes (D112), not a new one. The handler is a GET (it reads),
+  but it carries a credential, so it demands the same antiforgery token every POST carries —
+  validated by hand, because Razor Pages only checks the token on unsafe verbs by itself.
+  **Revisit before any non-admin user is ever given /phone**: that needs a per-user identity
+  story, not a handler that hands any signed-in admin any extension's secret.
+- **Every URL the script uses is built server-side from the request host and
+  `HttpConfRenderer`'s constants** (`ProxyPath` for `wsUrl`, ws:// when the page itself came
+  over plain HTTP), so the page cannot drift from the relay. `pcConfig` has **empty
+  `iceServers`**: no STUN/TURN, because the PoC runs on a LAN/VPN where host candidates reach
+  the server directly. Revisit before this crosses a NAT.
+- **One dial pad, three jobs.** Before a call the digits are the number to call; in a call each
+  press sends DTMF and stays in the display, whose current digits are also the blind transfer
+  target (`session.refer`; attended transfer deliberately not built). The display clears when a
+  call is answered, so the DTMF/transfer digits start blank.
+- **The folder is `Pages/PhoneClient` with `@page "/phone"`**, not `Pages/Phone`: a
+  `Techie.Pbx.Web.*.Phone` namespace shadows the Core `Phone` model type and breaks Pages/Phones
+  with CS0118 (hit once already).
+
+**Piece 2 bring-up amendment (same day, lab-verified):** a call to a `-web` endpoint died at
+SDP creation — `Couldn't add sdp streams for stream 0:audio-0:audio:sendrecv (ulaw|alaw)` —
+even though `webrtc = yes` configures DTLS (the Asterisk 22 source above shows it even
+auto-generates an ephemeral certificate when none is named). The missing piece was
+**`res_srtp.so`**, which was built but not in the allowlist: DTLS-SRTP media needs the SRTP
+module at call time. It joins the web client's module group (D31's rule: a feature's modules
+arrive in the same change). After a restart, the same INVITE forked to `PJSIP/103&PJSIP/103-web`
+and `PJSIP/103-web-00000001 is ringing` reached the browser through the relay — the incoming
+path is verified end to end to the ring; answered-call audio (mic) is a desk test.
