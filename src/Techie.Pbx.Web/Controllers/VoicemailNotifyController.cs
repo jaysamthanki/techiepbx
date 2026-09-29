@@ -27,9 +27,11 @@ namespace Techie.Pbx.Web.Controllers
     ///
     /// <para><b>Nothing here is trusted.</b> The mailbox has to be an extension with voicemail and
     /// an address; the path has to be exactly the shape app_voicemail writes, for that same mailbox
-    /// (<see cref="VoicemailSpool"/>); and the caller's name and number are text a stranger chose,
-    /// so they are flattened before they reach a subject line and HTML-encoded before they reach a
-    /// body.</para>
+    /// (<see cref="VoicemailSpool"/>); the recording posted in the body (D162) has to decode
+    /// within <see cref="VoicemailRecording.MaxInlineBytes"/> and name a format that is letters
+    /// and digits before either goes near a file; and the caller's name and number are text a
+    /// stranger chose, so they are flattened before they reach a subject line and HTML-encoded
+    /// before they reach a body.</para>
     ///
     /// <para><b>Every failure is a status code the script can act on.</b> Anything but 200 means
     /// "the app could not do it", and the script then relays what app_voicemail composed exactly as
@@ -95,7 +97,31 @@ namespace Techie.Pbx.Web.Controllers
                 return this.BadRequest(new MessageResponse("That is not a mailbox number."));
             }
 
-            if (VoicemailSpool.Problem(mailbox, request?.MessagePath) is { } problem)
+            // The recording may travel in the body (D162): a mailbox with delete=yes has no spool
+            // files left by the time this request is answered, so the posted bytes are the copy
+            // that cannot be raced. A field that is present but not a recording is a bad request,
+            // not a fallback — a script that filled it in meant to send one.
+            byte[]? inlineAudio = null;
+            string? inlineFormat = null;
+
+            if ((request?.RecordingBase64 ?? "").Length > 0)
+            {
+                inlineAudio = VoicemailRecording.InlineBytes(request!.RecordingBase64);
+                inlineFormat = VoicemailRecording.SafeFormat(request.RecordingFormat);
+
+                if (inlineAudio == null || inlineFormat == null)
+                {
+                    Log.Warn($"Voicemail notify for mailbox {mailbox} refused: the posted recording is not base64 within the cap, or names an odd format");
+                    return this.BadRequest(new MessageResponse("That is not a recording."));
+                }
+            }
+
+            // A path is still held to the only shape app_voicemail writes whenever one is sent;
+            // it is only allowed to be absent when the recording came inline instead (D162).
+            var messagePath = request?.MessagePath ?? "";
+
+            if ((messagePath.Length > 0 || inlineAudio == null)
+                && VoicemailSpool.Problem(mailbox, messagePath) is { } problem)
             {
                 Log.Warn($"Voicemail notify for mailbox {mailbox} refused: {problem}");
                 return this.BadRequest(new MessageResponse("That is not a voicemail message path."));
@@ -109,8 +135,10 @@ namespace Techie.Pbx.Web.Controllers
                 return this.NotFound(new MessageResponse("No mailbox here emails anybody."));
             }
 
-            var voicemail = Compose(extension, request!);
-            var attachment = Attachment(extension, request!.MessagePath, voicemail.ReceivedAt);
+            var recording = new VoicemailRecording();
+            var voicemail = Compose(extension, request!, messagePath,
+                Transcript(extension, recording, inlineAudio, inlineFormat, messagePath));
+            var attachment = Attachment(extension, recording, inlineAudio, inlineFormat, messagePath, voicemail.ReceivedAt);
 
             voicemail.RecordingAttached = attachment != null;
 
@@ -133,18 +161,23 @@ namespace Techie.Pbx.Web.Controllers
         private string Address() => this.HttpContext.Connection.RemoteIpAddress?.ToString() ?? "";
 
         /// <summary>
-        /// The recording to hang on the message: an MP3 where ffmpeg could make one, the file as
-        /// Asterisk wrote it where it could not, and nothing at all for a mailbox that asked to be
-        /// emailed without the audio. A conversion that fails never fails the email (D129).
+        /// The recording to hang on the message: the posted bytes when the script sent them,
+        /// because they cannot be raced by delete=yes (D162), and the spool otherwise. Either way
+        /// it is an MP3 where ffmpeg could make one, the recording as it came where it could not,
+        /// and nothing at all for a mailbox that asked to be emailed without the audio. A
+        /// conversion that fails never fails the email (D129). Public and handed its pieces so
+        /// the order of preference is a tested decision rather than glue.
         /// </summary>
-        private static MailAttachment? Attachment(Extension extension, string messagePath, DateTimeOffset receivedAt)
+        public static MailAttachment? Attachment(Extension extension, VoicemailRecording recording,
+            byte[]? inlineAudio, string? inlineFormat, string messagePath, DateTimeOffset receivedAt)
         {
             if (!extension.VoicemailAttachRecording)
                 return null;
 
-            var recording = new VoicemailRecording();
-            var mp3 = recording.Mp3(messagePath);
-            var audio = mp3 ?? recording.Original(messagePath);
+            var mp3 = inlineAudio != null
+                ? recording.Mp3(inlineAudio, inlineFormat ?? "")
+                : recording.Mp3(messagePath);
+            var audio = mp3 ?? inlineAudio ?? (messagePath.Length > 0 ? recording.Original(messagePath) : null);
 
             if (audio == null)
                 return null;
@@ -156,19 +189,33 @@ namespace Techie.Pbx.Web.Controllers
         }
 
         /// <summary>
-        /// What the email will say. The transcript is fetched here because it is part of the
-        /// message rather than part of the delivery, and because a mailbox that did not ask for one
-        /// must not pay for the attempt.
+        /// What the caller said, for a mailbox that asked — one that did not must not pay for the
+        /// attempt. The posted bytes are preferred over the spool for the same reason the
+        /// attachment prefers them: with delete=yes there is no spool to read (D162). Public and
+        /// handed its pieces so the order of preference is a tested decision rather than glue.
         /// </summary>
-        private static VoicemailEmail Compose(Extension extension, VoicemailNotifyRequest request)
+        public static string? Transcript(Extension extension, VoicemailRecording recording,
+            byte[]? inlineAudio, string? inlineFormat, string messagePath)
         {
-            var transcript = extension.VoicemailTranscribe
-                ? new VoicemailRecording().Transcript(request.MessagePath)
-                : null;
+            if (!extension.VoicemailTranscribe)
+                return null;
 
+            return inlineAudio != null
+                ? recording.Transcript(inlineAudio, inlineFormat ?? "")
+                : recording.Transcript(messagePath);
+        }
+
+        /// <summary>
+        /// What the email will say. The transcript arrives ready-made because it is part of the
+        /// message rather than part of the delivery.
+        /// </summary>
+        private static VoicemailEmail Compose(Extension extension, VoicemailNotifyRequest request,
+            string messagePath, string? transcript)
+        {
             // The sidecar is what app_voicemail actually wrote; the request's header-derived
-            // values only fill the gaps when it is missing (D129).
-            var facts = VoicemailRecording.Facts(request.MessagePath);
+            // values only fill the gaps when it is missing (D129) — and with no path at all
+            // (delete=yes, D162) they are all there is.
+            var facts = messagePath.Length > 0 ? VoicemailRecording.Facts(messagePath) : null;
 
             return new VoicemailEmail
             {
