@@ -9,7 +9,10 @@ namespace Techie.Pbx.Asterisk.Audio
     /// <summary>
     /// What this application does with a voicemail recording on its way into an email (D129): turn
     /// it into an MP3 anybody's phone will play, and — when the mailbox asked for one — read the
-    /// words out of it with whisper.cpp on this same box (D128).
+    /// words out of it with whisper.cpp on this same box (D128). The recording is either a message
+    /// in the spool, named by path, or the bytes the script posted in the callback body — sent
+    /// because a mailbox with delete=yes has no spool files left to read by the time this
+    /// application looks (D162).
     ///
     /// Everything here fails open and returns null. A recording that cannot be converted is still
     /// a voicemail somebody has to hear, so the caller attaches the original instead; a transcript
@@ -30,6 +33,14 @@ namespace Techie.Pbx.Asterisk.Audio
 
         /// <summary>whisper.cpp, built by install.sh. Optional: a box without it simply does not transcribe.</summary>
         public const string DefaultWhisperProgram = "/opt/tnpbx/bin/whisper-cli";
+
+        /// <summary>
+        /// The most a recording posted in the callback body may decode to (D162). voicemail.conf
+        /// caps a message at 300 seconds and a 300 second wav49 is about five megabytes, so this
+        /// is generous rather than tight — and still small enough that nobody fills a temporary
+        /// directory through the endpoint.
+        /// </summary>
+        public const int MaxInlineBytes = 16 * 1024 * 1024;
 
         /// <summary>
         /// The MP3 bitrate. 48 kbit/s mono is generous for 8 kHz telephone speech and keeps a
@@ -104,12 +115,32 @@ namespace Techie.Pbx.Asterisk.Audio
 
             try
             {
-                var target = Path.Combine(workspace, "message.mp3");
+                return this.Mp3From(source, workspace);
+            }
+            finally
+            {
+                Remove(workspace);
+            }
+        }
 
-                if (!this.Run(this.FfmpegProgram, Mp3Arguments(source, target), ConvertTimeoutSeconds, out _))
-                    return null;
+        /// <summary>
+        /// The same conversion for a recording that arrived in the request body rather than on
+        /// disk (D162): the bytes the script pulled out of app_voicemail's email, written to a
+        /// temporary file of our own and converted from there. Null for a format that may not
+        /// become a file name, and for every way the conversion itself can fail.
+        /// </summary>
+        public byte[]? Mp3(byte[] audio, string format)
+        {
+            var workspace = Workspace();
 
-                return Read(target);
+            if (workspace == null)
+                return null;
+
+            try
+            {
+                var source = WriteAudio(workspace, audio, format);
+
+                return source == null ? null : this.Mp3From(source, workspace);
             }
             finally
             {
@@ -184,6 +215,51 @@ namespace Techie.Pbx.Asterisk.Audio
         private static partial Regex CallerPattern();
 
         /// <summary>
+        /// The recording posted in the callback body, decoded, or null for anything that is not
+        /// one: empty, not base64 at all, or bigger than <see cref="MaxInlineBytes"/>. Null is the
+        /// caller's cue to refuse the request rather than to fall back — a script that put
+        /// something in this field meant to send a recording (D162).
+        /// </summary>
+        public static byte[]? InlineBytes(string? recordingBase64)
+        {
+            var encoded = (recordingBase64 ?? "").Trim();
+
+            // Four characters carry three bytes, so an over-long string is refused before
+            // anything is allocated for it.
+            if (encoded.Length == 0 || encoded.Length > (MaxInlineBytes / 3 + 1) * 4)
+                return null;
+
+            try
+            {
+                var bytes = Convert.FromBase64String(encoded);
+
+                return bytes.Length == 0 || bytes.Length > MaxInlineBytes ? null : bytes;
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The posted recording's format as an extension this class is willing to put in a file
+        /// name, or null for anything else. Letters and digits only, because it names a file in
+        /// the workspace: <c>wav</c>, <c>WAV</c> and <c>gsm</c> pass, anything with a dot, a
+        /// slash or a space in it does not (D162). Lower-cased because ffmpeg reads the content
+        /// and, for headerless formats, the extension — never its case.
+        /// </summary>
+        public static string? SafeFormat(string? format)
+        {
+            var value = (format ?? "").Trim();
+
+            return FormatPattern().IsMatch(value) ? value.ToLowerInvariant() : null;
+        }
+
+        /// <summary>The only shape a posted format may have before it becomes a file name.</summary>
+        [GeneratedRegex(@"\A[A-Za-z0-9]{1,8}\z")]
+        private static partial Regex FormatPattern();
+
+        /// <summary>
         /// Which file on disk holds this message's audio, or null when none of them does — a
         /// mailbox set to record no audio, or a message that has already been moved on.
         /// </summary>
@@ -210,56 +286,60 @@ namespace Techie.Pbx.Asterisk.Audio
         {
             var source = this.SourcePath(messagePath);
 
-            if (source == null)
+            if (source == null || !this.EngineInstalled())
                 return null;
-
-            if (!Exists(this.WhisperProgram) || !Exists(this.WhisperModelPath))
-            {
-                Log.Info($"No speech recognition on this box ({this.WhisperProgram}, {this.WhisperModelPath}), so the email carries no transcript");
-                return null;
-            }
 
             var workspace = Workspace();
 
             if (workspace == null)
                 return null;
 
-            var started = Stopwatch.StartNew();
-
             try
             {
-                // whisper takes 16 kHz mono PCM and nothing else, and what is on disk is 8 kHz
-                // GSM-in-WAV, so ffmpeg converts it first — the same step the script used to do.
-                var wideband = Path.Combine(workspace, "message-16k.wav");
-
-                if (!this.Run(this.FfmpegProgram, ResampleArguments(source, wideband), ConvertTimeoutSeconds, out _))
-                    return null;
-
-                if (!this.Run(this.WhisperProgram, this.WhisperArguments(wideband), TranscribeTimeoutSeconds, out var spoken))
-                    return null;
-
-                var transcript = string.Join(" ", spoken
-                    .ReplaceLineEndings("\n")
-                    .Split('\n')
-                    .Select(line => line.Trim())
-                    .Where(line => line.Length > 0));
-
-                if (transcript.Length == 0)
-                {
-                    Log.Info($"whisper found no speech in {messagePath} ({started.Elapsed.TotalSeconds:0.0}s)");
-                    return null;
-                }
-
-                // The length, never the words: a transcript is the message itself, and the message
-                // does not belong in a log file.
-                Log.Info($"Transcribed {messagePath} in {started.Elapsed.TotalSeconds:0.0}s ({transcript.Length} characters)");
-
-                return transcript;
+                return this.TranscriptFrom(source, workspace, messagePath);
             }
             finally
             {
                 Remove(workspace);
             }
+        }
+
+        /// <summary>
+        /// The same words out of a recording that arrived in the request body rather than on disk
+        /// (D162): with delete=yes the spool files are gone before this application looks, so the
+        /// posted bytes are what there is to transcribe. Null for every way it can not happen,
+        /// exactly as for the path overload.
+        /// </summary>
+        public string? Transcript(byte[] audio, string format)
+        {
+            if (!this.EngineInstalled())
+                return null;
+
+            var workspace = Workspace();
+
+            if (workspace == null)
+                return null;
+
+            try
+            {
+                var source = WriteAudio(workspace, audio, format);
+
+                return source == null ? null : this.TranscriptFrom(source, workspace, "the posted recording");
+            }
+            finally
+            {
+                Remove(workspace);
+            }
+        }
+
+        /// <summary>Whether this box can transcribe at all; says so in the log when it cannot.</summary>
+        private bool EngineInstalled()
+        {
+            if (Exists(this.WhisperProgram) && Exists(this.WhisperModelPath))
+                return true;
+
+            Log.Info($"No speech recognition on this box ({this.WhisperProgram}, {this.WhisperModelPath}), so the email carries no transcript");
+            return false;
         }
 
         private static bool Exists(string path)
@@ -305,6 +385,17 @@ namespace Techie.Pbx.Asterisk.Audio
             "-b:a", Mp3BitrateKbps.ToString(CultureInfo.InvariantCulture) + "k",
             targetPath,
         };
+
+        /// <summary>One conversion, out of the given source into an MP3 beside it.</summary>
+        private byte[]? Mp3From(string source, string workspace)
+        {
+            var target = Path.Combine(workspace, "message.mp3");
+
+            if (!this.Run(this.FfmpegProgram, Mp3Arguments(source, target), ConvertTimeoutSeconds, out _))
+                return null;
+
+            return Read(target);
+        }
 
         /// <summary>The file, or null when it is missing, unreadable or absurdly large.</summary>
         private static byte[]? Read(string path)
@@ -425,6 +516,40 @@ namespace Techie.Pbx.Asterisk.Audio
             }
         }
 
+        /// <summary>
+        /// One transcription, out of the given source: resampled to the 16 kHz mono PCM whisper
+        /// takes — the same step the script used to do — then read by the engine. The label is
+        /// what the log calls the recording; the words themselves never go there, because a
+        /// transcript is the message itself and the message does not belong in a log file.
+        /// </summary>
+        private string? TranscriptFrom(string source, string workspace, string label)
+        {
+            var started = Stopwatch.StartNew();
+            var wideband = Path.Combine(workspace, "message-16k.wav");
+
+            if (!this.Run(this.FfmpegProgram, ResampleArguments(source, wideband), ConvertTimeoutSeconds, out _))
+                return null;
+
+            if (!this.Run(this.WhisperProgram, this.WhisperArguments(wideband), TranscribeTimeoutSeconds, out var spoken))
+                return null;
+
+            var transcript = string.Join(" ", spoken
+                .ReplaceLineEndings("\n")
+                .Split('\n')
+                .Select(line => line.Trim())
+                .Where(line => line.Length > 0));
+
+            if (transcript.Length == 0)
+            {
+                Log.Info($"whisper found no speech in {label} ({started.Elapsed.TotalSeconds:0.0}s)");
+                return null;
+            }
+
+            Log.Info($"Transcribed {label} in {started.Elapsed.TotalSeconds:0.0}s ({transcript.Length} characters)");
+
+            return transcript;
+        }
+
         /// <summary>These two can be wordy; the log wants the gist, not a screen of it.</summary>
         private static string Trimmed(string error)
         {
@@ -458,6 +583,36 @@ namespace Techie.Pbx.Asterisk.Audio
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 Log.Warn($"Could not make a temporary directory to convert a voicemail in: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The posted bytes as a file in the workspace for ffmpeg to open, named with the checked
+        /// format — the extension is how ffmpeg recognises a headerless format like raw GSM. Null
+        /// for a format <see cref="SafeFormat"/> refuses, which is the one way a posted string
+        /// could otherwise reach a path (D162).
+        /// </summary>
+        private static string? WriteAudio(string workspace, byte[] audio, string format)
+        {
+            var extension = SafeFormat(format);
+
+            if (extension == null)
+            {
+                Log.Warn("The posted recording names a format that may not become a file name, so it is not converted");
+                return null;
+            }
+
+            try
+            {
+                var path = Path.Combine(workspace, "message." + extension);
+                File.WriteAllBytes(path, audio);
+
+                return path;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Log.Warn($"Could not write the posted recording to the workspace: {ex.Message}");
                 return null;
             }
         }

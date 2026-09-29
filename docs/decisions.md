@@ -3446,3 +3446,43 @@ bottom; make it a control panel — pick a setup, see only its settings, test at
   "the Email tab does not yet say so" limitation is now said on the tab.
 - `MailController`, the test endpoint and `pbx.sendTestMail` are unchanged.
 
+
+### D162. The recording rides the callback body, so delete=yes cannot race it (2026-09-29, voicemail, amends D129)
+Verified on the live lab and a fresh deployment: `app_voicemail` forks `mailcmd` into the
+background and, for a mailbox with `delete=yes`, deletes the INBOX files immediately after —
+so by the time the D129 callback (or the app behind it) went looking for `MessagePath`, the
+message was gone. Syslog said `message N is not on disk where it should be`, the callback was
+skipped, and the user got the relay's generic email instead of the branded one. The lab's e2e
+mailboxes all have `delete=no`, which is why this was never seen there.
+
+- **The recording travels in the request body.** The script already pulls the attachment out of
+  the MIME to transcribe it; now it also base64s those same bytes into the callback payload as
+  `RecordingBase64`, with `RecordingFormat` carrying the attachment's filename extension
+  (`WAV`/`wav`/`gsm`…) so ffmpeg knows what it was handed. Nothing new is read from anywhere:
+  the bytes come out of the email app_voicemail composed, exactly as transcription's do.
+- **`MessagePath` becomes optional, and is sent only when the message really is on disk.** Both
+  travel when both exist (delete=no): the app **prefers the inline recording** — it is the copy
+  that cannot be raced — and still reads the `.txt` sidecar beside a real path for the
+  caller/duration/time facts (D129). With neither a path nor an attachment (attach=no plus
+  delete=yes) the script relays, exactly as it does today for a message it cannot locate.
+- **The same distrust on both ends.** The script caps what it will post at 16 MB — a 300 second
+  wav49 is about five megabytes, so the cap only refuses what is not a voicemail — and skips
+  inline (falling back to path or relay) rather than posting something absurd. The app refuses,
+  with a 400, anything in `RecordingBase64` that is not base64 decoding to at most
+  `VoicemailRecording.MaxInlineBytes` (16 MB), and any `RecordingFormat` that is not 1–8
+  letters/digits — the format becomes part of a temp file name, so it is pattern-checked on
+  both sides. `VoicemailSpool`'s path gate still applies to every path that is sent; it is only
+  allowed to be absent when the recording came inline.
+- **Conversion and transcription accept posted bytes.** `VoicemailRecording` gained
+  `Mp3(byte[], format)` and `Transcript(byte[], format)`: the bytes are written into the same
+  mode-0700 workspace the path overloads use and go through the identical fixed-argv
+  ffmpeg/whisper runs — no shell, no caller-chosen path, workspace deleted before returning.
+- **Nothing else moves.** voicemail.conf rendering, `delete=` semantics and the relay fallback
+  are untouched; an old script posting only a path behaves exactly as before, and every failure
+  of the inline half — cap, odd format, undecodable — degrades to the path or to the relay,
+  never to a lost voicemail.
+- **Tested** in `VoicemailRecordingTests` (decode, cap, format gate, byte-overload convert and
+  transcribe) and `VoicemailNotifyControllerTests` (inline preferred over spool, spool still
+  used without inline, attach=no and transcribe=no still honoured) — the fallback-order
+  decisions were made `public static` on the controller so they are tested decisions rather
+  than glue, now that the test project references the web project (which D129 predates).

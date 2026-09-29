@@ -191,6 +191,135 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal("Hello, it is Jo. Call me back.", transcript);
         }
 
+        /// <summary>
+        /// The posted bytes work exactly like a file on disk (D162): what the converter wrote is
+        /// what comes back, and the spool is never involved.
+        /// </summary>
+        [Fact]
+        public void Posted_bytes_are_converted_like_a_file_on_disk()
+        {
+            if (OperatingSystem.IsWindows())
+                return;
+
+            var converter = this.Program("convert", "for last in \"$@\"; do :; done\nprintf 'ID3converted' > \"$last\"");
+            var recording = new VoicemailRecording(converter, Missing(), Missing());
+
+            Assert.Equal(
+                Encoding.UTF8.GetBytes("ID3converted"),
+                recording.Mp3(Encoding.UTF8.GetBytes("RIFFnarrowband"), "WAV"));
+        }
+
+        [Fact]
+        public void No_ffmpeg_means_no_mp3_for_posted_bytes_and_no_exception()
+        {
+            var recording = new VoicemailRecording(Missing(), Missing(), Missing());
+
+            Assert.Null(recording.Mp3(Encoding.UTF8.GetBytes("RIFFnarrowband"), "wav"));
+        }
+
+        /// <summary>
+        /// The posted format becomes part of a file name, so a format that is not letters and
+        /// digits goes nowhere — not to ffmpeg, not to a path, not to an exception (D162).
+        /// </summary>
+        [Fact]
+        public void A_format_that_is_not_letters_and_digits_converts_nothing()
+        {
+            if (OperatingSystem.IsWindows())
+                return;
+
+            var converter = this.Program("convert", "for last in \"$@\"; do :; done\nprintf 'ID3converted' > \"$last\"");
+            var recording = new VoicemailRecording(converter, Missing(), Missing());
+            var audio = Encoding.UTF8.GetBytes("RIFFnarrowband");
+
+            Assert.Null(recording.Mp3(audio, "../../etc/passwd"));
+            Assert.Null(recording.Mp3(audio, "wav; rm -rf /"));
+            Assert.Null(recording.Mp3(audio, ""));
+        }
+
+        [Fact]
+        public void The_transcript_of_posted_bytes_is_what_the_engine_said()
+        {
+            if (OperatingSystem.IsWindows())
+                return;
+
+            var converter = this.Program("convert", "for last in \"$@\"; do :; done\nprintf 'wav' > \"$last\"");
+            var engine = this.Program("whisper", "printf ' Hello, it is Jo. \\n\\n Call me back. \\n'");
+            var model = this.Write("ggml-small.en.bin", "not really a model");
+
+            var transcript = new VoicemailRecording(converter, engine, model)
+                .Transcript(Encoding.UTF8.GetBytes("RIFFnarrowband"), "WAV");
+
+            Assert.Equal("Hello, it is Jo. Call me back.", transcript);
+        }
+
+        [Fact]
+        public void No_speech_engine_means_no_transcript_for_posted_bytes()
+        {
+            var recording = new VoicemailRecording(Missing(), Missing(), Missing());
+
+            Assert.Null(recording.Transcript(Encoding.UTF8.GetBytes("RIFFnarrowband"), "wav"));
+        }
+
+        /// <summary>The formats app_voicemail's filenames really carry all pass, lower-cased.</summary>
+        [Theory]
+        [InlineData("WAV", "wav")]
+        [InlineData("wav", "wav")]
+        [InlineData("gsm", "gsm")]
+        [InlineData("g722", "g722")]
+        [InlineData(" wav ", "wav")]
+        public void A_plain_format_is_accepted_and_lower_cased(string format, string expected)
+        {
+            Assert.Equal(expected, VoicemailRecording.SafeFormat(format));
+        }
+
+        /// <summary>Anything that could steer a path or a shell is not a format (D162).</summary>
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("../wav")]
+        [InlineData("wav.gsm")]
+        [InlineData("wav/../..")]
+        [InlineData("w av")]
+        [InlineData("toolongext")]
+        public void An_odd_format_is_refused(string? format)
+        {
+            Assert.Null(VoicemailRecording.SafeFormat(format));
+        }
+
+        [Fact]
+        public void Posted_base64_decodes_to_the_bytes_the_script_sent()
+        {
+            var audio = Encoding.UTF8.GetBytes("RIFFnarrowband");
+
+            Assert.Equal(audio, VoicemailRecording.InlineBytes(Convert.ToBase64String(audio)));
+        }
+
+        /// <summary>Absent, empty and unreadable are all null; the caller decides what that means.</summary>
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData("not base64 at all!")]
+        [InlineData("AAA")] // valid characters, broken padding
+        public void Base64_that_is_not_a_recording_is_null(string? encoded)
+        {
+            Assert.Null(VoicemailRecording.InlineBytes(encoded));
+        }
+
+        /// <summary>
+        /// The cap (D162): nothing bigger than <see cref="VoicemailRecording.MaxInlineBytes"/> is
+        /// decoded — a 300 second wav49 is about five megabytes, so the cap only ever refuses
+        /// something that is not a voicemail.
+        /// </summary>
+        [Fact]
+        public void Base64_bigger_than_the_cap_is_refused()
+        {
+            var encoded = Convert.ToBase64String(new byte[VoicemailRecording.MaxInlineBytes + 1]);
+
+            Assert.Null(VoicemailRecording.InlineBytes(encoded));
+            Assert.NotNull(VoicemailRecording.InlineBytes(Convert.ToBase64String(new byte[16])));
+        }
+
         [Fact]
         public void An_engine_that_hears_nothing_is_no_transcript()
         {
