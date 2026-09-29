@@ -189,6 +189,11 @@ namespace Techie.Pbx.Web
 
             app.UseRouting();
 
+            // Makes the WebSocket feature exist for the relay's endpoint (D160): without this,
+            // AcceptWebSocketAsync and IsWebSocketRequest are unavailable app-wide, and the
+            // relay answers 400 to a perfectly valid handshake.
+            app.UseWebSockets();
+
             app.UseAuthentication();
 
             // The failsafe sign-in, and only when it has been asked for (D24).

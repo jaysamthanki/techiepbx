@@ -47,6 +47,13 @@ namespace Techie.Pbx.Asterisk.Config
         public const string UpstreamUri = "ws://127.0.0.1:8088/ws";
 
         /// <summary>
+        /// The subprotocol Asterisk's WebSocket transport insists on: a handshake without
+        /// <c>Sec-WebSocket-Protocol: sip</c> is refused with 400 (verified live on the lab),
+        /// and it is the only protocol this system speaks over the socket.
+        /// </summary>
+        public const string SipSubProtocol = "sip";
+
+        /// <summary>
         /// Whether the HTTP server should exist at all: only while a switched-on extension has
         /// the web client (D159). One definition, shared by this renderer, the web app's relay
         /// and the apply that writes the file, so the config and what is listening cannot

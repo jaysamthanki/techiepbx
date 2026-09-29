@@ -43,6 +43,8 @@ namespace Techie.Pbx.Web.Services
         {
             if (!context.WebSockets.IsWebSocketRequest)
             {
+                // Not the handshake the /phone page makes — a plain GET of the relay path, e.g.
+                // a browser bar or a probe. Nothing to say, so: a bare 400.
                 context.Response.StatusCode = StatusCodes.Status400BadRequest;
                 return;
             }
@@ -60,8 +62,18 @@ namespace Techie.Pbx.Web.Services
             // this, the surviving pump holds the sockets open after one side is gone.
             using var ending = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
 
-            using var browser = await context.WebSockets.AcceptWebSocketAsync();
+            // Echo the browser's own subprotocol choice, which the /phone client makes as
+            // "sip": a browser that offered it should see it confirmed, and one that did not
+            // should not be handed one.
+            var subProtocol = context.WebSockets.WebSocketRequestedProtocols
+                .Contains(HttpConfRenderer.SipSubProtocol) ? HttpConfRenderer.SipSubProtocol : null;
+
+            using var browser = await context.WebSockets.AcceptWebSocketAsync(subProtocol);
             using var upstream = new ClientWebSocket();
+
+            // Asterisk refuses a handshake without the sip subprotocol (400, verified live),
+            // so the relay asks for it whatever the browser offered.
+            upstream.Options.AddSubProtocol(HttpConfRenderer.SipSubProtocol);
 
             try
             {
