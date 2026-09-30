@@ -25,6 +25,7 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly ExtensionRepository extensions;
+        private readonly SettingsRepository settings;
 
         /// <summary>Enabled extensions with the web client on: the page's dropdown.</summary>
         public List<Extension> WebExtensions { get; private set; } = new();
@@ -32,6 +33,7 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         public IndexModel()
         {
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.settings = new SettingsRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
@@ -75,6 +77,11 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
             // yet): a browser refuses a mixed-scheme WebSocket either way round.
             var scheme = this.Request.IsHttps ? "wss" : "ws";
 
+            // The same STUN the transport uses (D163): the browser's candidates need it before
+            // this crosses a NAT, and one setting serves both. Unset stays off — no STUN for
+            // Asterisk means none for the browser either, which is right on a LAN or VPN.
+            var stun = this.settings.Get(SettingsKeys.SipStunServer);
+
             return new JsonResult(new
             {
                 number = extension.Number,
@@ -82,6 +89,7 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
                 uri = $"sip:{extension.Number}{PjsipConfRenderer.WebClientSuffix}@{this.Request.Host.Host}",
                 secret = extension.Secret,
                 wsUrl = $"{scheme}://{this.Request.Host}{HttpConfRenderer.ProxyPath}",
+                stun = string.IsNullOrEmpty(stun) ? null : $"stun:{stun}",
             });
         }
 

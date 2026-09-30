@@ -21,8 +21,9 @@
     const statusLine = document.getElementById('phone-status');
     const xferButton = document.getElementById('phone-xfer');
 
-    // Empty iceServers: no STUN or TURN, because the PoC runs on a LAN or VPN where host
-    // candidates reach the server directly (D161). Revisit before this crosses a NAT.
+    // iceServers starts empty — a LAN or VPN needs no STUN, and the handler only sends one
+    // when the Sip.StunServer setting is set (D163) — and gains it per connection, because
+    // the server hands it to the page with the rest of the registration details.
     const callOptions = {
         mediaConstraints: { audio: true, video: false },
         pcConfig: { iceServers: [] }
@@ -121,6 +122,9 @@
             pbx.toast('error', 'The web client details could not be fetched: ' + error.message);
             return;
         }
+
+        // What the handler sent: STUN when the setting is set (D163), nothing when it is not.
+        callOptions.pcConfig.iceServers = config.stun ? [{ urls: config.stun }] : [];
 
         const socket = new JsSIP.WebSocketInterface(config.wsUrl);
         ua = new JsSIP.UA({

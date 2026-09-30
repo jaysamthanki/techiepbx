@@ -3597,9 +3597,12 @@ mailboxes all have `delete=no`, which is why this was never seen there.
 
 The /phone PoC shipped with empty `iceServers` (D161) because the lab is reached over
 LAN/VPN. The user decided 2026-09-29: no TURN, no coturn — the browser gets STUN from the
-same `Sip.StunServer` setting the transport already uses (default stun.l.google.com:19302),
-rendered into the page's `pcConfig.iceServers` as `{ urls: "stun:<value>" }`. One setting
-serves both the Asterisk transport and the browser, so there is nothing new to configure.
+same `Sip.StunServer` setting the transport already uses, handed to the page by the
+registration handler and rendered into the page's `pcConfig.iceServers` as
+`{ urls: "stun:<value>" }`. One setting serves both the Asterisk transport and the browser,
+so there is nothing new to configure; and the setting keeps its own semantics — **unset means
+off for both** (a LAN or VPN box needs no STUN), which is D163's case for not giving it a
+default.
 Known limit, accepted: users behind symmetric NAT will not connect until TURN exists; the
 D161 note "revisit before this crosses a NAT" stays open for TURN only.
 
