@@ -5,7 +5,7 @@ using Techie.Pbx.Web.Security;
 namespace Techie.Pbx.Tests.Web
 {
     /// <summary>
-    /// Which extensions a sign-in may open in the web client (D164, D165). This is the rule that
+    /// Which extensions a sign-in may open in the web client (D164, D165, D166). This is the rule that
     /// decides who is handed a SIP secret, so every way of not owning an extension is pinned.
     /// </summary>
     public class PhoneUserTests
@@ -18,6 +18,8 @@ namespace Techie.Pbx.Tests.Web
             Web("103", ""),
             new Extension { Number = "104", Name = "Desk only", Enabled = true, WebClient = false, VoicemailEmail = "sam@example.com" },
             new Extension { Number = "105", Name = "Disabled", Enabled = false, WebClient = true, VoicemailEmail = "sam@example.com" },
+            Web("106", "reception@example.com", "Sam@Example.com"),
+            Web("107", "sam@example.com", "alex@example.com"),
         };
 
         private static string[] Numbers(ClaimsPrincipal? user) =>
@@ -26,27 +28,35 @@ namespace Techie.Pbx.Tests.Web
         private static ClaimsPrincipal User(params (string Type, string Value)[] claims) =>
             new(new ClaimsIdentity(claims.Select(claim => new Claim(claim.Type, claim.Value)), "Test"));
 
-        private static Extension Web(string number, string email) =>
-            new() { Number = number, Name = "Extension " + number, Enabled = true, WebClient = true, VoicemailEmail = email };
+        private static Extension Web(string number, string voicemailEmail, string userEmail = "") =>
+            new() { Number = number, Name = "Extension " + number, Enabled = true, WebClient = true, UserEmail = userEmail, VoicemailEmail = voicemailEmail };
 
         [Fact]
         public void An_admin_gets_every_web_enabled_extension()
         {
             var admin = User((AdminRole.ClaimType, AdminRole.Value), (PhoneUser.EmailClaim, "nobody@example.com"));
 
-            Assert.Equal(new[] { "100", "101", "102", "103" }, Numbers(admin));
+            Assert.Equal(new[] { "100", "101", "102", "103", "106", "107" }, Numbers(admin));
         }
 
         [Fact]
         public void A_phone_user_gets_only_their_own_whatever_the_case()
         {
-            Assert.Equal(new[] { "100", "101" }, Numbers(User((PhoneUser.EmailClaim, " SAM@example.com "))));
+            // 100 and 101 by the voicemail email fallback, 106 by its user email — and not 107,
+            // whose voicemail goes to sam but which belongs to alex.
+            Assert.Equal(new[] { "100", "101", "106" }, Numbers(User((PhoneUser.EmailClaim, " SAM@example.com "))));
         }
 
         [Fact]
-        public void One_match_is_one_extension()
+        public void The_user_email_and_the_fallback_both_count_for_the_same_user()
         {
-            Assert.Equal(new[] { "102" }, Numbers(User((PhoneUser.UpnClaim, "alex@example.com"))));
+            Assert.Equal(new[] { "102", "107" }, Numbers(User((PhoneUser.UpnClaim, "alex@example.com"))));
+        }
+
+        [Fact]
+        public void A_voicemail_email_behind_a_user_email_owns_nothing()
+        {
+            Assert.Empty(Numbers(User((PhoneUser.EmailClaim, "reception@example.com"))));
         }
 
         [Fact]
@@ -111,6 +121,26 @@ namespace Techie.Pbx.Tests.Web
         public void Owning_is_the_same_address_and_never_an_empty_one(string? email, string voicemailEmail, bool owns)
         {
             Assert.Equal(owns, PhoneUser.Owns(email, Web("100", voicemailEmail)));
+        }
+
+        [Theory]
+        // The user email matches, whatever the voicemail email is.
+        [InlineData("sam@example.com", "sam@example.com", "", true)]
+        [InlineData("SAM@EXAMPLE.COM", " sam@example.com ", "reception@example.com", true)]
+        // No user email: the voicemail email is the fallback.
+        [InlineData("sam@example.com", "", "sam@example.com", true)]
+        [InlineData("sam@example.com", "  ", "Sam@Example.com", true)]
+        // A user email that is somebody else's is the owner, and there is no fallback past it.
+        [InlineData("sam@example.com", "alex@example.com", "sam@example.com", false)]
+        [InlineData("sam@example.com", "alex@example.com", "", false)]
+        // Neither: nobody.
+        [InlineData("sam@example.com", "", "", false)]
+        [InlineData("", "", "", false)]
+        [InlineData(null, "", "", false)]
+        public void The_user_email_owns_and_the_voicemail_email_is_only_the_fallback(
+            string? email, string userEmail, string voicemailEmail, bool owns)
+        {
+            Assert.Equal(owns, PhoneUser.Owns(email, Web("100", voicemailEmail, userEmail)));
         }
     }
 }

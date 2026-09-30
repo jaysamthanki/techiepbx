@@ -61,6 +61,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
                 Number = extension.Number,
                 OutboundCallerID = extension.OutboundCallerID,
                 Secret = extension.Secret,
+                UserEmail = extension.UserEmail,
                 VoicemailAttachRecording = extension.VoicemailAttachRecording,
                 VoicemailDeleteAfterEmail = extension.VoicemailDeleteAfterEmail,
                 VoicemailEmail = extension.VoicemailEmail,
@@ -135,6 +136,7 @@ namespace Techie.Pbx.Web.Pages.Extensions
             extension.Name = Text(form.Name);
             extension.Number = Text(form.Number);
             extension.OutboundCallerID = Text(form.OutboundCallerID);
+            extension.UserEmail = Text(form.UserEmail);
             extension.VoicemailAttachRecording = form.VoicemailAttachRecording;
             extension.VoicemailDeleteAfterEmail = form.VoicemailDeleteAfterEmail;
             extension.VoicemailEmail = Text(form.VoicemailEmail);

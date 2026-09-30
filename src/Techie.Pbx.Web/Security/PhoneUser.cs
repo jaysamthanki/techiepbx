@@ -4,10 +4,11 @@ using Techie.Pbx.Core.Models;
 namespace Techie.Pbx.Web.Security
 {
     /// <summary>
-    /// Which extensions a signed-in user may open in the web client (D164, D165). An admin may
-    /// open any enabled, web-enabled extension. Anyone else may open only the ones whose
-    /// voicemail email is the address they signed in with — and an extension with no voicemail
-    /// email belongs to nobody that way (no fallback, D165).
+    /// Which extensions a signed-in user may open in the web client (D164, D165, D166). An admin
+    /// may open any enabled, web-enabled extension. Anyone else may open only the ones they own:
+    /// the extension's user email is the address they signed in with, or — while the user email
+    /// is empty — its voicemail email is (the fallback that keeps deployments from before D166
+    /// working). An extension with neither belongs to nobody.
     ///
     /// Pure functions of the principal and the extensions handed in, so the page's dropdown and
     /// the handler that gives out the SIP secret cannot disagree about who owns what.
@@ -68,16 +69,21 @@ namespace Techie.Pbx.Web.Security
         }
 
         /// <summary>
-        /// Whether this sign-in address is the extension's voicemail email, ignoring case and
-        /// surrounding space. An empty address owns nothing, so a user with no email claim never
-        /// matches an extension with no voicemail email.
+        /// Whether this sign-in address owns the extension, ignoring case and surrounding space
+        /// (D166). The user email decides where there is one: it matches or it does not, and a
+        /// voicemail email that happens to be the sign-in address changes nothing. Only an
+        /// extension with no user email is matched on its voicemail email instead. An empty
+        /// address owns nothing, so a user with no email claim never matches an extension with
+        /// neither.
         /// </summary>
         public static bool Owns(string? email, Extension extension)
         {
             var address = Text(email);
+            var userEmail = Text(extension.UserEmail);
+            var owner = userEmail.Length > 0 ? userEmail : Text(extension.VoicemailEmail);
 
             return address.Length > 0 &&
-                   string.Equals(address, Text(extension.VoicemailEmail), StringComparison.OrdinalIgnoreCase);
+                   string.Equals(address, owner, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string Text(string? value) => (value ?? "").Trim();

@@ -8,8 +8,14 @@
     so that one htmx swap replaces the lot (D42). It posts itself and replaces itself with
     whatever comes back, which is this form again when validation failed. A successful save
     answers 204 with events, and site.js closes the modal and the table refreshes itself.
+
+    The body is two Bootstrap tab panes (D166), and they are presentation only: both sit inside
+    this one form, so Save posts every field whichever tab is showing. novalidate because the
+    browser's own validation cannot show its bubble on a field in the hidden pane and would
+    just refuse to submit; the server checks everything and its messages come back above the
+    tabs, where they are visible from either one.
 *@
-<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML" novalidate>
     <div class="modal-header">
         <h5 class="modal-title">@(Model.IsNew ? "Add extension" : $"Edit extension {Model.Number}")</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -30,6 +36,20 @@
 
     <input type="hidden" name="extensionID" value="@Model.ExtensionID" />
 
+    <ul class="nav nav-tabs" id="extension-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="extension-main-tab" data-bs-toggle="tab" data-bs-target="#extension-main-pane"
+                    type="button" role="tab" aria-controls="extension-main-pane" aria-selected="true">Main</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="extension-voicemail-tab" data-bs-toggle="tab" data-bs-target="#extension-voicemail-pane"
+                    type="button" role="tab" aria-controls="extension-voicemail-pane" aria-selected="false">Voicemail</button>
+        </li>
+    </ul>
+
+    <div class="tab-content pt-3">
+    <div class="tab-pane fade show active" id="extension-main-pane" role="tabpanel" aria-labelledby="extension-main-tab">
+
     <div class="mb-3">
         <label class="form-label" for="extension-number">Number</label>
         <input class="form-control font-monospace" id="extension-number" name="number" value="@Model.Number"
@@ -42,6 +62,22 @@
         <input class="form-control" id="extension-name" name="name" value="@Model.Name"
                maxlength="64" autocomplete="off" required />
         <div class="form-text">Shown as the caller ID name on internal calls.</div>
+    </div>
+
+    @*
+        Who owns this extension (D166): the sign-in that may open it on /phone. Its own field
+        rather than the voicemail email, which is only where the mail goes and may be a shared
+        mailbox or somebody else entirely.
+    *@
+    <div class="mb-3">
+        <label class="form-label" for="extension-user-email">User email</label>
+        <input class="form-control" id="extension-user-email" name="userEmail" value="@Model.UserEmail"
+               type="email" maxlength="128" autocomplete="off" spellcheck="false"
+               placeholder="name@company.com — the Microsoft sign-in that owns this extension" />
+        <div class="form-text">
+            The person who signs in with this address gets this extension in the web client.
+            Blank falls back to the voicemail email, and with neither nobody but an admin can open it.
+        </div>
     </div>
 
     @*
@@ -78,7 +114,7 @@
             outbound routes. <strong>This replaces this extension's own phone</strong>: to keep your
             own handset ringing as well, put its number in the list too. <strong>Leave it blank for
             normal ringing.</strong> The ring time and what happens when nobody answers — voicemail,
-            if it is on below — are unchanged.
+            if it is on, on the Voicemail tab — are unchanged.
         </div>
     </div>
 
@@ -103,7 +139,7 @@
         The web client (D159, PoC): a second device that rings alongside the phone, so switching
         it on changes the generated config and needs an apply like everything else here.
     *@
-    <div class="form-check mb-4">
+    <div class="form-check mb-3">
         <input class="form-check-input" type="checkbox" id="extension-web-client" name="webClient" value="true"
                checked="@(Model.WebClient ? "checked" : null)" />
         <label class="form-check-label" for="extension-web-client">Web client</label>
@@ -114,14 +150,16 @@
         </div>
     </div>
 
-    <hr />
+    </div>
+
+    <div class="tab-pane fade" id="extension-voicemail-pane" role="tabpanel" aria-labelledby="extension-voicemail-tab">
 
     <div class="form-check mb-3">
         @* The fields stay in the form when hidden, so switching voicemail off and on again keeps them. *@
         <input class="form-check-input" type="checkbox" id="voicemail-enabled" name="voicemailEnabled" value="true"
                checked="@(Model.VoicemailEnabled ? "checked" : null)"
                onclick="document.getElementById('voicemail-fields').hidden = !this.checked" />
-        <label class="form-check-label" for="voicemail-enabled">Voicemail</label>
+        <label class="form-check-label" for="voicemail-enabled">Enabled</label>
         <div class="form-text">Unanswered and busy calls to this extension go to its mailbox. Dial *97 to listen.</div>
     </div>
 
@@ -134,11 +172,12 @@
         </div>
 
         <div class="mb-3">
-            <label class="form-label" for="voicemail-email">Email address</label>
+            <label class="form-label" for="voicemail-email">Voicemail email</label>
             <input class="form-control" id="voicemail-email" name="voicemailEmail" value="@Model.VoicemailEmail"
                    type="email" maxlength="128" autocomplete="off" />
             <div class="form-text">
-                Each new message is emailed here, through the relay on the Email tab.
+                Each new message is emailed here, through the relay on the system settings'
+                Email tab. It need not be the user email: a shared mailbox works.
             </div>
         </div>
 
@@ -164,12 +203,15 @@
             </div>
         </div>
 
-        <div class="form-check mb-4">
+        <div class="form-check mb-3">
             <input class="form-check-input" type="checkbox" id="voicemail-delete" name="voicemailDeleteAfterEmail" value="true"
                    checked="@(Model.VoicemailDeleteAfterEmail ? "checked" : null)" />
             <label class="form-check-label" for="voicemail-delete">Delete the message once it has been emailed</label>
             <div class="form-text">Leave off unless the mailbox is only ever read by email: a mail problem loses the message.</div>
         </div>
+    </div>
+
+    </div>
     </div>
 
     </div>

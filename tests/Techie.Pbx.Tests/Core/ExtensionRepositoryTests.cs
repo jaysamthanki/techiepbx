@@ -215,6 +215,47 @@ namespace Techie.Pbx.Tests.Core
         }
 
         [Fact]
+        public void The_user_email_survives_a_round_trip()
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                UserEmail = "sam@example.com",
+                VoicemailEmail = "desk@example.com",
+            };
+            this.repository.Insert(extension);
+
+            var loaded = this.repository.GetByNumber("1001")!;
+            Assert.Equal("sam@example.com", loaded.UserEmail);
+            Assert.Equal("desk@example.com", loaded.VoicemailEmail);
+
+            loaded.UserEmail = "alex@example.com";
+            this.repository.Update(loaded);
+
+            Assert.Equal("alex@example.com", this.repository.GetByNumber("1001")!.UserEmail);
+        }
+
+        [Theory]
+        [InlineData("not-an-address")]
+        [InlineData("sam@example.com\nx")]
+        public void A_user_email_that_is_not_an_address_is_rejected(string userEmail)
+        {
+            var extension = new Extension
+            {
+                Number = "1001",
+                Name = "Front Desk",
+                Secret = SecretGenerator.Create(),
+                UserEmail = userEmail,
+            };
+
+            var ex = Assert.Throws<ValidationFailedException>(() => this.repository.Insert(extension));
+
+            Assert.Contains("User email", ex.Message);
+        }
+
+        [Fact]
         public void A_voicemail_email_that_is_not_an_address_is_rejected()
         {
             var extension = new Extension

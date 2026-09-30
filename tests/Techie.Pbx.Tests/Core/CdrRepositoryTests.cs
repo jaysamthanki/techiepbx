@@ -118,6 +118,7 @@ namespace Techie.Pbx.Tests.Core
                 // Every later script runs again too, so what they added goes as well.
                 connection.Execute("ALTER TABLE Ivrs DROP COLUMN ReturnAfterAnnouncement");
                 connection.Execute("ALTER TABLE Extensions DROP COLUMN WebClient");
+                connection.Execute("ALTER TABLE Extensions DROP COLUMN UserEmail");
                 connection.Execute(
                     "INSERT INTO Cdrs (UniqueID, Sequence, Src, Dst, Channel, Disposition, StartUtc) " +
                     "VALUES ('1.1', 1, '15551234567', '17771234567', 'PJSIP/voipms-00000001', 'ANSWERED', '2026-09-20T10:00:00Z')");
@@ -131,7 +132,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Null(stored.Did);
 
             using var check = this.database.Open();
-            Assert.Equal(29, check.ExecuteScalar<long>("PRAGMA user_version"));
+            Assert.Equal(30, check.ExecuteScalar<long>("PRAGMA user_version"));
         }
 
         [Fact]

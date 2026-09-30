@@ -57,6 +57,14 @@ namespace Techie.Pbx.Core.Models
 
         public string Secret { get; set; } = "";
 
+        /// <summary>
+        /// The Entra sign-in address that owns this extension, or empty for none (D166): the
+        /// account that may open it on /phone. Separate from <see cref="VoicemailEmail"/>, which
+        /// is only where voicemail mail goes and may be a different address. App-side only — it
+        /// is written into no Asterisk config.
+        /// </summary>
+        public string UserEmail { get; set; } = "";
+
         /// <summary>Attach the recording to the email. Only means anything once F4 sends them.</summary>
         public bool VoicemailAttachRecording { get; set; } = true;
 
@@ -66,7 +74,10 @@ namespace Techie.Pbx.Core.Models
         /// </summary>
         public bool VoicemailDeleteAfterEmail { get; set; }
 
-        /// <summary>Where voicemail notifications will go. Nothing sends them yet (F4).</summary>
+        /// <summary>
+        /// Where this mailbox's voicemail email is sent. Also the /phone owner while
+        /// <see cref="UserEmail"/> is empty (D166), which is what it was before that column existed.
+        /// </summary>
         public string VoicemailEmail { get; set; } = "";
 
         public bool VoicemailEnabled { get; set; }
@@ -194,6 +205,14 @@ namespace Techie.Pbx.Core.Models
             // switched back on is the one it was.
             if (VoicemailEnabled && !VoicemailPinPattern().IsMatch(VoicemailPin))
                 errors.Add("Voicemail PIN must be 4 to 8 digits.");
+
+            if (UserEmail.Length > 0)
+            {
+                if (UserEmail.Length > 128)
+                    errors.Add("User email must be 128 characters or fewer.");
+                else if (!EmailPattern().IsMatch(UserEmail))
+                    errors.Add("User email must be an email address, e.g. name@example.com.");
+            }
 
             if (VoicemailEmail.Length > 0)
             {

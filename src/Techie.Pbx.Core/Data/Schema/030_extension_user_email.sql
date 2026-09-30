@@ -1,0 +1,11 @@
+-- D166. The Entra sign-in address that owns this extension.
+--
+-- VoicemailEmail had been doing two jobs: where voicemail mail goes, and (since D164) which
+-- sign-in may open the extension on /phone. This column takes the second job, so the voicemail
+-- destination can be a different address from the user's own. /phone matches this first and
+-- falls back to VoicemailEmail only while this is empty, so an existing deployment whose
+-- extensions carry just a voicemail email keeps working.
+--
+-- Empty by default, and it is app-side only: nothing in any generated Asterisk file reads it.
+-- The address is validated by the model, not here.
+ALTER TABLE Extensions ADD COLUMN UserEmail TEXT NOT NULL DEFAULT '';
