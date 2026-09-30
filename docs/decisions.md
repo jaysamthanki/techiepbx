@@ -3632,3 +3632,22 @@ in, and **admin authority is an Entra app-role claim the app checks**. Consequen
   admins instead of everyone.
 - The lab's `LocalAuthenticationBypass` keeps its meaning: bypass users are admins (break-glass
   has to be), so bypass stays restricted to trusted networks only.
+
+### D166. A separate UserEmail ties the extension to the Entra sign-in; the modal splits into tabs (2026-09-30, extensions)
+
+`VoicemailEmail` has been doing two jobs — where voicemail mail goes, and (since D164) which
+sign-in owns the extension for /phone. The user split them 2026-09-30: a new **UserEmail**
+column (schema 030) ties the extension to the Entra account, and VoicemailEmail stays what
+it always was, the destination the voicemail email is sent to — which may now be a different
+address than the user's own.
+
+- /phone matching (PhoneUser) matches **UserEmail first, VoicemailEmail as the fallback**:
+  existing deployments whose extensions only carry a voicemail email keep working, and an
+  extension with neither still belongs to nobody. Both are case-insensitive as before.
+- The extension edit modal becomes tabs: **Main** (Number, Name, UserEmail, Caller ID,
+  Forwarding, Password, Enabled, Web client) and **Voicemail** (Enabled, PIN, Email, the
+  checkboxes). One form, two Bootstrap tab panes — the page posts exactly as it does today;
+  tabs are presentation, not separate saves.
+
+Decided while building: none pending; the fallback order above was chosen as the
+backward-compatible reading of "ties to the entra email".
