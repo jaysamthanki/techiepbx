@@ -86,6 +86,13 @@ namespace Techie.Pbx.Web
 
             builder.WebHost.ConfigureKestrel(options =>
             {
+                // The OIDC sign-in reply carries every cookie the browser still holds for this
+                // site, and Entra's own correlation cookies from failed attempts stack up: the
+                // default 32 KB request-header limit then refuses the POST with a bare 431 before
+                // sign-in can finish (seen live 2026-09-30). 64 KB leaves a browser that must
+                // re-sign-in several times over still comfortably inside.
+                options.Limits.MaxRequestHeadersTotalSize = 64 * 1024;
+
                 foreach (var binding in bindings)
                 {
                     if (binding.UsesCertificate && certificate != null)
