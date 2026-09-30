@@ -243,6 +243,21 @@ namespace Techie.Pbx.Web
             if (PbxRequestLog.Enabled)
                 app.UseMiddleware<RequestLogUserMiddleware>();
 
+            // A phone user who lands on the root would otherwise be refused before any handler of
+            // theirs could run — the root is an admin page — and "Access denied" is the wrong first
+            // screen for a sign-in whose whole purpose is /phone (D165). Redirected here, before
+            // authorization, they never see the refusal; every other admin path still answers
+            // access denied, and the signed-out root still goes to Entra's sign-in.
+            app.UseWhen(
+                context => context.User.Identity?.IsAuthenticated == true &&
+                            !Techie.Pbx.Web.Security.AdminRole.IsAdmin(context.User) &&
+                            (context.Request.Path == "/" || context.Request.Path == ""),
+                branch => branch.Run(context =>
+                {
+                    context.Response.Redirect("/phone");
+                    return Task.CompletedTask;
+                }));
+
             app.UseAuthorization();
 
             app.MapStaticAssets();
