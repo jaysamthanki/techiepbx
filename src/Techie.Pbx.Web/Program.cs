@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using log4net;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
@@ -40,6 +41,18 @@ namespace Techie.Pbx.Web
         public const string DefaultDatabasePath = "Data/tnpbx.db";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(Program));
+
+        /// <summary>
+        /// The pages any signed-in user may reach, by view engine path; every other page needs
+        /// the admin role (D165). The web client, because reaching it is the whole of what a
+        /// phone user's sign-in is for (D164), and the error page, because an exception is not
+        /// something to answer with "access denied".
+        /// </summary>
+        private static readonly HashSet<string> SignedInPages = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "/Error",
+            "/PhoneClient/Index",
+        };
 
         public static void Main(string[] args)
         {
@@ -127,12 +140,27 @@ namespace Techie.Pbx.Web
                 };
             });
 
+            // Two tiers (D165). The fallback stays "signed in", which is all a phone user is and
+            // all /phone, its WebSocket relay and the static files ask for. Everything else — every
+            // other page, every API controller — asks for the admin app role on top.
             builder.Services.AddAuthorization(options =>
             {
-                // By default, all incoming requests will be authorized according to the default policy.
                 options.FallbackPolicy = options.DefaultPolicy;
+                options.AddPolicy(AdminRole.PolicyName, policy => policy
+                    .RequireAuthenticatedUser()
+                    .RequireAssertion(context => AdminRole.IsAdmin(context.User)));
             });
-            builder.Services.AddRazorPages()
+
+            // Admin-only is the rule for a page and the exemptions are named, so a page added
+            // later is an admin page without anyone having to remember. The convention covers
+            // this app's own pages only: the Microsoft Identity UI pages (signed out, access
+            // denied) live in an area, which a folder convention does not reach.
+            builder.Services.AddRazorPages(options =>
+                    options.Conventions.AddFolderApplicationModelConvention("/", model =>
+                    {
+                        if (!SignedInPages.Contains(model.ViewEnginePath))
+                            model.EndpointMetadata.Add(new AuthorizeAttribute(AdminRole.PolicyName));
+                    }))
                 .AddMicrosoftIdentityUI();
 
             // The API is called by our own pages with the session cookie, so it needs the same
@@ -220,7 +248,12 @@ namespace Techie.Pbx.Web
             app.MapStaticAssets();
             app.MapRazorPages()
                .WithStaticAssets();
-            app.MapControllers();
+
+            // The admin role for every controller (D165). [AllowAnonymous] still wins where it is
+            // declared, so phone provisioning, the voicemail notify endpoint with its own bearer
+            // token (D129) and the Microsoft Identity sign-in/sign-out controller are untouched.
+            app.MapControllers()
+               .RequireAuthorization(AdminRole.PolicyName);
             MapAcmeChallenge(app);
             AsteriskWebSocketRelay.Map(app);
 

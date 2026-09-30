@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Web.Security;
 
 namespace Techie.Pbx.Web.Pages.PhoneClient
 {
@@ -13,8 +14,13 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
     /// is a dial pad and four buttons; js/phone.js registers it to Asterisk with JsSIP over the
     /// app's own WebSocket relay (D160), and the Client handler below hands the script what one
     /// extension needs to register. Deliberately not in the admin nav — it is the end-user
-    /// softphone, not management surface — so its one entry point is the "Open web client" link
-    /// in the extension edit modal.
+    /// softphone, not management surface — so an admin's one entry point is the "Open web
+    /// client" link in the extension edit modal.
+    ///
+    /// The one page a signed-in user without the admin role may reach (D165). An admin sees
+    /// every web-enabled extension; anyone else sees only the extensions whose voicemail email
+    /// is the address they signed in with (D164). <see cref="PhoneUser"/> decides, for the
+    /// dropdown and for the handler alike.
     ///
     /// The folder is PhoneClient rather than Phone: a <c>Techie.Pbx.Web.*.Phone</c> namespace
     /// shadows the Core <c>Phone</c> model and breaks Pages/Phones with CS0118. The URL is still
@@ -27,7 +33,13 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         private readonly ExtensionRepository extensions;
         private readonly SettingsRepository settings;
 
-        /// <summary>Enabled extensions with the web client on: the page's dropdown.</summary>
+        /// <summary>Whether the user holds the admin role: decides what an empty page says.</summary>
+        public bool IsAdmin { get; private set; }
+
+        /// <summary>
+        /// The page's dropdown: the enabled, web-enabled extensions this user may open — all of
+        /// them for an admin, their own for anyone else.
+        /// </summary>
         public List<Extension> WebExtensions { get; private set; } = new();
 
         public IndexModel()
@@ -38,18 +50,22 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
 
         public void OnGet()
         {
-            this.WebExtensions = this.WebEnabled();
+            this.IsAdmin = AdminRole.IsAdmin(this.User);
+            this.WebExtensions = this.Allowed();
         }
 
         /// <summary>
         /// What the page's script needs to register ONE extension: the SIP URI of its
         /// <c>-web</c> device, the secret and the relay's WebSocket URL, all built from the
         /// request's own host and <see cref="HttpConfRenderer"/>'s constants. Anything but an
-        /// enabled, web-enabled extension is a 404.
+        /// enabled, web-enabled extension this user may open is a 404 — for a non-admin, that
+        /// is every extension whose voicemail email is not their sign-in address, and the
+        /// answer is the same as for one that does not exist.
         ///
-        /// The secret in the clear is the stance the extension edit form already takes (D112):
-        /// /phone is an admin-only PoC page. Revisit before any non-admin user is given this
-        /// page (D161).
+        /// The secret stays in the clear, because the softphone needs it to REGISTER, but it is
+        /// only ever served to the extension's owner or to an admin — who can read it on the
+        /// extension edit form anyway (D112). That closes D161's "revisit before any non-admin
+        /// user is given this page" (D164).
         /// </summary>
         public async Task<IActionResult> OnGetClientAsync(string? ext)
         {
@@ -67,8 +83,9 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
                 return this.BadRequest();
             }
 
-            var extension = this.extensions.GetByNumber((ext ?? "").Trim());
-            if (extension == null || !extension.Enabled || !extension.WebClient)
+            var number = (ext ?? "").Trim();
+            var extension = this.Allowed().FirstOrDefault(e => e.Number == number);
+            if (extension == null)
                 return this.NotFound();
 
             Log.Info($"Web client registration details for {extension.Number} fetched by {this.User.Identity?.Name}");
@@ -93,7 +110,6 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
             });
         }
 
-        private List<Extension> WebEnabled() =>
-            this.extensions.GetAll().Where(e => e.Enabled && e.WebClient).ToList();
+        private List<Extension> Allowed() => PhoneUser.Extensions(this.User, this.extensions.GetAll());
     }
 }

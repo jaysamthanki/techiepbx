@@ -10,7 +10,16 @@
     <h1 class="h3 mb-0">Web client</h1>
 </div>
 
-@if (Model.WebExtensions.Count == 0)
+@if (Model.WebExtensions.Count == 0 && !Model.IsAdmin)
+{
+    @* A phone user nobody has matched to an extension (D164): say so, rather than an empty page. *@
+    <p>
+        No extension carries your email, so there is no phone to open here. Ask an admin to put
+        your email address on your extension as its voicemail email and to switch the web client
+        on for it, then reload this page.
+    </p>
+}
+else if (Model.WebExtensions.Count == 0)
 {
     <p>
         No extension has the web client switched on. Tick <strong>Web client</strong> on an

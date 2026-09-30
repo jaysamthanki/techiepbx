@@ -31,8 +31,14 @@ namespace Techie.Pbx.Web.Security
             // A real Entra sign-in always wins; the bypass only fills in for the absence of one.
             if (context.User.Identity?.IsAuthenticated != true && this.settings.Allows(address))
             {
+                // The admin role too (D165): break-glass has to reach the admin pages, and
+                // those now ask for the role rather than for any sign-in at all.
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                    new[] { new Claim(ClaimTypes.Name, LocalBypassSettings.IdentityName) },
+                    new[]
+                    {
+                        new Claim(ClaimTypes.Name, LocalBypassSettings.IdentityName),
+                        new Claim(AdminRole.ClaimType, AdminRole.Value),
+                    },
                     LocalBypassSettings.AuthenticationType));
 
                 Log.Info($"Local sign-in bypass: {context.Request.Method} {context.Request.Path} from {address} treated as '{LocalBypassSettings.IdentityName}'");
