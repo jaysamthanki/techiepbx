@@ -3592,3 +3592,22 @@ mailboxes all have `delete=no`, which is why this was never seen there.
   used without inline, attach=no and transcribe=no still honoured) — the fallback-order
   decisions were made `public static` on the controller so they are tested decisions rather
   than glue, now that the test project references the web project (which D129 predates).
+
+### D163. The web client stays STUN-only, from the setting that already exists (2026-09-29, web client)
+
+The /phone PoC shipped with empty `iceServers` (D161) because the lab is reached over
+LAN/VPN. The user decided 2026-09-29: no TURN, no coturn — the browser gets STUN from the
+same `Sip.StunServer` setting the transport already uses (default stun.l.google.com:19302),
+rendered into the page's `pcConfig.iceServers` as `{ urls: "stun:<value>" }`. One setting
+serves both the Asterisk transport and the browser, so there is nothing new to configure.
+Known limit, accepted: users behind symmetric NAT will not connect until TURN exists; the
+D161 note "revisit before this crosses a NAT" stays open for TURN only.
+
+### D164. Phone-user sign-in is Entra ID, matched on the voicemail email (2026-09-29, web client, pending open questions)
+
+The /phone page stops being admin-only: a user signs in with the tenant's Entra ID and is
+matched to their extension by the `VoicemailEmail` already stored on it (the same address
+voicemail already uses — one address per person, Teams-compatible). An address that carries
+more than one web-enabled extension gets a dropdown of those extensions after sign-in.
+Open at record time: how phone users are separated from admins under D139 (the enterprise
+app requires assignment, and assigned users are admins today).

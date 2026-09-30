@@ -349,3 +349,4 @@ Still to do:
 - **The announcements directory is created `asterisk:asterisk` 2770**, which is what the lab VM
   has; D56 describes it as `root:asterisk`. Both work — `tnpbx` writes there through the
   `asterisk` group either way — but the two should be reconciled.
+| 44 | Web client STUN + phone-user sign-in | F10 | **Planned** (D163, D164). Part a: render `Sip.StunServer` into /phone `pcConfig.iceServers` (D163, small). Part b: Entra ID sign-in for phone users, matched on `VoicemailEmail`, dropdown when one address owns several web-enabled extensions (D164) — blocked on the admin-vs-phone-user separation question. |
