@@ -32,12 +32,30 @@ namespace Techie.Pbx.Asterisk.Config
 
             // Asterisk 22's res_rtp_asterisk takes stunaddr as host or host:port and re-resolves
             // it periodically; verified on the lab VM before this was written (D72).
-            if (transport.StunServer != null)
+            //
+            // With the host mapping below it is left out even when a STUN server is set (D167).
+            // rtp.conf.sample says not to combine the two, and on the lab VM stunaddr never
+            // worked anyway: pjproject resolved stun.l.google.com's AAAA record, the box has no
+            // IPv6 route, and server-reflexive gathering failed every time.
+            if (transport.StunServer != null && !transport.UsesIceHostMapping)
                 sb.Append($"stunaddr = {ConfText.Safe(transport.StunServer, "STUN server")}\n");
 
             // ICE is only worth its candidates when something knows what the outside looks like.
             if (transport.UsesIce)
                 sb.Append("icesupport = yes\n");
+
+            // Behind 1:1 NAT the only host candidate Asterisk knows is the private interface,
+            // which a browser outside cannot reach. This is a section, not a [general] option:
+            // one '<local> => <advertised>' line per interface (D167).
+            if (transport.UsesIceHostMapping)
+            {
+                var local = ConfText.Safe(transport.LocalAddress!, "Local address");
+                var external = ConfText.Safe(transport.ExternalAddress!, "External address");
+
+                sb.Append('\n');
+                sb.Append("[ice_host_candidates]\n");
+                sb.Append($"{local} => {external}\n");
+            }
 
             return sb.ToString();
         }

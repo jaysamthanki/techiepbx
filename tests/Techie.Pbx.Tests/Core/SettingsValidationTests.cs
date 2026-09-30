@@ -43,6 +43,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.SipCodecs)]
         [InlineData(SettingsKeys.SipLocalNets)]
         [InlineData(SettingsKeys.SipExternalAddress)]
+        [InlineData(SettingsKeys.SipLocalAddress)]
         [InlineData(SettingsKeys.SystemTimezone)]
         [InlineData(SettingsKeys.SystemNtpServer)]
         [InlineData(SettingsKeys.ProvisioningAdminPassword)]
@@ -187,6 +188,8 @@ namespace Techie.Pbx.Tests.Core
         [Theory]
         [InlineData(SettingsKeys.SipBindAddress, "0.0.0.0")]
         [InlineData(SettingsKeys.SipExternalAddress, "203.0.113.10")]
+        [InlineData(SettingsKeys.SipLocalAddress, "10.8.20.8")]
+        [InlineData(SettingsKeys.SipLocalAddress, "fd00::8")]
         public void An_address_setting_takes_an_ip_address(string key, string value)
         {
             Assert.Empty(SettingsValidation.Errors(key, value));
@@ -195,6 +198,7 @@ namespace Techie.Pbx.Tests.Core
         [Theory]
         [InlineData(SettingsKeys.SipBindAddress, "every interface")]
         [InlineData(SettingsKeys.SipExternalAddress, "pbx.example.com")]
+        [InlineData(SettingsKeys.SipLocalAddress, "10.8.20.0/24")]
         public void An_address_setting_refuses_anything_that_is_not_one(string key, string value)
         {
             Assert.NotEmpty(SettingsValidation.Errors(key, value));

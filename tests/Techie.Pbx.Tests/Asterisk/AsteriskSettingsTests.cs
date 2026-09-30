@@ -55,10 +55,13 @@ namespace Techie.Pbx.Tests.Asterisk
                 (SettingsKeys.SipBindAddress, "0.0.0.0"),
                 (SettingsKeys.SipPort, "5060"),
                 (SettingsKeys.SipLocalNets, "10.8.20.0/24, 192.168.0.0/16"),
-                (SettingsKeys.SipExternalAddress, "203.0.113.10")));
+                (SettingsKeys.SipExternalAddress, "203.0.113.10"),
+                (SettingsKeys.SipLocalAddress, "10.8.20.8")));
 
             Assert.Equal(new[] { "10.8.20.0/24", "192.168.0.0/16" }, transport.LocalNets);
             Assert.Equal("203.0.113.10", transport.ExternalAddress);
+            Assert.Equal("10.8.20.8", transport.LocalAddress);
+            Assert.True(transport.UsesIceHostMapping);
             Assert.Empty(transport.Validate());
         }
 

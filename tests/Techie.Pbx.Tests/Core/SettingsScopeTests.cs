@@ -60,6 +60,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.SipBindAddress,
                     SettingsKeys.SipCodecs,
                     SettingsKeys.SipExternalAddress,
+                    SettingsKeys.SipLocalAddress,
                     SettingsKeys.SipLocalNets,
                     SettingsKeys.SipMaxContacts,
                     SettingsKeys.SipPort,

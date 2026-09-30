@@ -3651,3 +3651,39 @@ address than the user's own.
 
 Decided while building: none pending; the fallback order above was chosen as the
 backward-compatible reading of "ties to the entra email".
+
+### D167. Behind 1:1 NAT, rtp.conf maps the host candidate instead of asking STUN (2026-09-30, web client, amends D72)
+
+The web client failed across NAT on the lab VM. The chain, verified live 2026-09-30:
+
+- Asterisk offered the browser **only private ICE host candidates** (10.8.20.8). Nothing
+  outside the NAT can reach those, so ICE never completed and the call had no audio.
+- `stunaddr` (D72) was supposed to add the server-reflexive candidate and **never worked
+  there**: pjproject resolves `stun.l.google.com`'s AAAA record, the VM has no IPv6 route, and
+  srflx gathering failed every time.
+
+The fix, verified on the VM by hand and now generated: an **`[ice_host_candidates]` section**
+in rtp.conf — a section, not a `[general]` option — mapping each local interface address to
+the address to advertise, `<local> => <advertised>`:
+
+```
+[ice_host_candidates]
+10.8.20.8 => 20.14.91.194
+```
+
+- A new setting, **`Sip.LocalAddress`** (Asterisk scope, IPv4 or IPv6, optional), is the
+  server's own interface address; `Sip.ExternalAddress` already holds the public one. The
+  section is rendered only when **both** are set. One mapping line; a multi-homed box would
+  need more, and that is not built.
+- When the mapping is rendered, **`stunaddr` is left out even if `Sip.StunServer` is set**.
+  Asterisk 22's rtp.conf.sample says not to specify stunaddr alongside `ice_host_candidates`,
+  and the AAAA trap above means it contributed nothing but a failing lookup anyway. Without
+  the mapping (no external or no local address), stunaddr renders exactly as before.
+- `icesupport = yes` is unchanged: it already follows a STUN server or an external address.
+- The browser's own STUN (D163) is untouched — `Sip.StunServer` still feeds the page's
+  `iceServers`; this decision is about what Asterisk advertises.
+- rtp.conf is read at startup, so setting or changing the local address is a restart (D33),
+  which the applier already reports for rtp.conf.
+
+Decided while building: a local address without an external one is stored but maps to
+nothing (no validation error), matching how the other optional Sip keys behave.

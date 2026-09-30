@@ -127,6 +127,11 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("External address must be an IP address, e.g. 203.0.113.10.");
                     break;
 
+                case SettingsKeys.SipLocalAddress:
+                    if (!IPAddress.TryParse(text, out _))
+                        errors.Add("Local address must be an IP address, e.g. 10.8.20.8.");
+                    break;
+
                 case SettingsKeys.SipLocalNets:
                     LocalNets(errors, text);
                     break;
