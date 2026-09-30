@@ -261,6 +261,13 @@ namespace Techie.Pbx.Web
                             (context.Request.Path == "/" || context.Request.Path == ""),
                 branch => branch.Run(context =>
                 {
+                    // Why a signed-in user was redirected: the portal can show a role assignment
+                    // while the token still carries none, and this is the one place that knows.
+                    var roles = string.Join(",", context.User.Claims
+                        .Where(claim => claim.Type.Contains("role", StringComparison.OrdinalIgnoreCase))
+                        .Select(claim => claim.Type + "=" + claim.Value));
+                    Log.Info($"Root redirected to /phone for {context.User.Identity?.Name} (role claims: " +
+                        $"{(roles.Length > 0 ? roles : "none")})");
                     context.Response.Redirect("/phone");
                     return Task.CompletedTask;
                 }));
