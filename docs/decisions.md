@@ -3614,3 +3614,21 @@ voicemail already uses — one address per person, Teams-compatible). An address
 more than one web-enabled extension gets a dropdown of those extensions after sign-in.
 Open at record time: how phone users are separated from admins under D139 (the enterprise
 app requires assignment, and assigned users are admins today).
+
+### D165. One Entra app; "admin" is a role claim, not the assignment (2026-09-29, web client auth, amends D139)
+
+With phone users signing in (D164), the D139 rule "every assigned user is an admin" cannot
+hold. The user chose 2026-09-29 to keep **one app registration**: any tenant user may sign
+in, and **admin authority is an Entra app-role claim the app checks**. Consequences, accepted:
+
+- Every admin page requires the admin claim; a phone user's sign-in reaches `/phone` and
+  nothing else. `/phone` matches the sign-in email (case-insensitive) against
+  `VoicemailEmail`; an extension with no voicemail email cannot be reached that way (also
+  chosen: no fallback), and one address owning several web-enabled extensions gets the
+  existing dropdown, restricted to those extensions.
+- D139's gap reopens in a new shape and is closed again by the claim: an *assigned* user is
+  no longer an admin by assignment alone; only role assignees are. Admin add/remove stays an
+  Entra-side workflow with no visibility inside the app — the same trade as D139, now for
+  admins instead of everyone.
+- The lab's `LocalAuthenticationBypass` keeps its meaning: bypass users are admins (break-glass
+  has to be), so bypass stays restricted to trusted networks only.
