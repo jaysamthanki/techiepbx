@@ -135,6 +135,17 @@ Fill in your own Entra ID app registration in `/opt/tnpbx/appsettings.json`:
 
 The repo ships these blank — they are deployment values, not source.
 
+**Admin is an app role, not an assignment** (D165). In the Entra portal, on that
+app registration: **App roles → Create app role** with display name *Admin* and
+**Value exactly `TNPBX.Admin`** (role values cannot contain spaces — the app
+compares the claim against that literal string). Then, under **Enterprise
+applications**, assign that role to the users (or a group) who manage the PBX.
+Any other tenant user may still sign in — they get the phone client and nothing
+else. Changing roles in Entra does not reach users whose sign-in cookie predates
+the change until they fully sign out and back in.
+
+**Phone users need no Entra setup at all** — see [The web phone](#the-web-phone-phone)
+
 **Also add your own network to the local auth bypass.** `appsettings.json` ships with
 `LocalAuthenticationBypass.AllowedNetworks` limited to `127.0.0.1/32` — meaning only
 loopback. That is a practical blocker: Entra ID's sign-in redirect requires an HTTPS
@@ -195,6 +206,47 @@ Renewals happen automatically in the background before expiry.
 
 Later re-deploys use the same `app-deploy.sh`: it preserves the existing
 `appsettings.json`, database (`Data/`) and installed tooling across updates.
+
+## The web phone (`/phone`)
+
+The browser softphone lives at **`http://<host>:8080/phone`** — same app, same
+sign-in as the admin UI. Who sees what is decided by the claims in the sign-in
+(D163–D166):
+
+- **Admins** (users carrying the `TNPBX.Admin` app-role claim) get the full
+  management UI.
+- **Everyone else** — any user of the Entra tenant — gets `/phone` and nothing
+  else: answering and placing calls for their own extension from the browser,
+  alongside the desk phone. Both ring at once (the dialplan rings the
+  `PJSIP/<ext>` endpoint and the `<ext>-web` endpoint together).
+
+**How a sign-in maps to an extension.** After sign-in the app matches the user's
+email (case-insensitive) against extensions, in this order:
+
+1. **UserEmail** — the sign-in address on the extension's *Main* tab,
+2. **VoicemailEmail** — the fallback, so extensions set up before UserEmail
+   existed keep working.
+
+An extension with neither matches nobody; one address owning several
+web-enabled extensions gets a dropdown restricted to those. **Web client** must
+also be ticked on the extension (Main tab) — that is what creates the second
+`<ext>-web` SIP endpoint and allows it to register over the browser's WebSocket.
+
+**What a phone user needs to exist, end to end:**
+
+1. The extension exists and has **Web client** ticked.
+2. The extension's **UserEmail** (or VoicemailEmail) is the user's Entra sign-in
+   address.
+3. The user browses to `/phone` and signs in with their normal work account —
+   no app-role assignment, no extra Entra configuration.
+4. The browser asks for microphone access; allow it. Calls then work as on the
+   desk phone, including inbound — the browser rings whenever the extension is
+   called.
+
+Sign-in requires HTTPS or an allowed bypass network (see step 4) — the
+WebSocket the softphone registers through rides the same authenticated session
+cookie, which is why `/phone` is never reachable without it.
+
 
 ## Updating
 
