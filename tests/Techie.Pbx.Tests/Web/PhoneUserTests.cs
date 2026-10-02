@@ -31,6 +31,36 @@ namespace Techie.Pbx.Tests.Web
         private static Extension Web(string number, string voicemailEmail, string userEmail = "") =>
             new() { Number = number, Name = "Extension " + number, Enabled = true, WebClient = true, UserEmail = userEmail, VoicemailEmail = voicemailEmail };
 
+        private static Extension Voicemail(Extension extension)
+        {
+            extension.VoicemailEnabled = true;
+            return extension;
+        }
+
+        /// <summary>
+        /// The Voicemail badge's mailboxes (D169): owned, enabled, web-enabled and with voicemail
+        /// on — and only owned, even for an admin.
+        /// </summary>
+        [Fact]
+        public void The_badge_counts_only_the_users_own_voicemail_mailboxes()
+        {
+            var extensions = new List<Extension>
+            {
+                Voicemail(Web("100", "sam@example.com")),
+                Web("101", "sam@example.com"),
+                Voicemail(Web("102", "alex@example.com")),
+                Voicemail(new Extension { Number = "104", Enabled = true, WebClient = false, VoicemailEmail = "sam@example.com" }),
+                Voicemail(new Extension { Number = "105", Enabled = false, WebClient = true, VoicemailEmail = "sam@example.com" }),
+                Voicemail(Web("106", "reception@example.com", "sam@example.com")),
+            };
+
+            Assert.Equal(new[] { "100", "106" }, PhoneUser.Mailboxes(User((PhoneUser.EmailClaim, "Sam@Example.com")), extensions));
+            Assert.Equal(new[] { "102" }, PhoneUser.Mailboxes(User((AdminRole.ClaimType, AdminRole.Value), (PhoneUser.EmailClaim, "alex@example.com")), extensions));
+            Assert.Empty(PhoneUser.Mailboxes(User((AdminRole.ClaimType, AdminRole.Value)), extensions));
+            Assert.Empty(PhoneUser.Mailboxes(new ClaimsPrincipal(new ClaimsIdentity()), extensions));
+            Assert.Empty(PhoneUser.Mailboxes(null, extensions));
+        }
+
         [Fact]
         public void An_admin_gets_every_web_enabled_extension()
         {

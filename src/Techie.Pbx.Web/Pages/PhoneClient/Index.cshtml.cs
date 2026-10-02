@@ -110,6 +110,24 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
             });
         }
 
+        /// <summary>
+        /// The Voicemail button's badge: the unread messages across the signed-in user's own
+        /// voicemail mailboxes (D169), counted on the spool. No parameter on purpose — the
+        /// mailboxes come from the sign-in alone (<see cref="PhoneUser.Mailboxes"/>), so there is
+        /// nothing to ask about anybody else's. A user who owns no voicemail mailbox gets a 404,
+        /// which the page treats the same as zero: no badge.
+        /// </summary>
+        public IActionResult OnGetUnread()
+        {
+            var mailboxes = PhoneUser.Mailboxes(this.User, this.extensions.GetAll());
+            if (mailboxes.Count == 0)
+                return this.NotFound();
+
+            var unread = VoicemailInbox.Unread(VoicemailSpool.Root, VoicemailConfRenderer.MailboxContext, mailboxes);
+
+            return new JsonResult(new { unread });
+        }
+
         private List<Extension> Allowed() => PhoneUser.Extensions(this.User, this.extensions.GetAll());
     }
 }

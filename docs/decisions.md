@@ -3687,3 +3687,37 @@ the address to advertise, `<local> => <advertised>`:
 
 Decided while building: a local address without an external one is stored but maps to
 nothing (no validation error), matching how the other optional Sip keys behave.
+
+### D168. A web client's registration counts toward its extension's status badge (2026-10-01, web client)
+
+The Extensions page's status badge only matched contacts whose AOR was exactly the extension
+number, so an extension registered only from /phone showed "Not registered": the web client
+registers to the `<ext>-web` AOR (D159). `RegistrationStatus.Map` now folds a `-web` AOR into
+its extension — the same "one reachable contact anywhere is Registered" rule already used for
+several desk contacts, so desk only, web only and both all read Registered. Still pure and
+still one AMI `PJSIPShowContacts`; nothing in what Asterisk loads or exposes changes. The
+tooltips say "a phone or web client" so the badge does not claim a desk phone it cannot see.
+
+### D169. /phone's unread voicemail count is read from the spool, not AMI (2026-10-01, web client, voicemail)
+
+The /phone Voicemail button (dials `*97`) carries an unread badge. AMI was the obvious source
+and is refused: `VoicemailUsersList` is outside our manager.conf allowlist (verified live), and
+widening AMI privileges is a decision not taken for a badge. Instead the web process counts
+files on disk, read-only, which it can already do as `tnpbx:asterisk` (D129):
+
+- **Path:** `/var/spool/asterisk/voicemail/default/<mailbox>/INBOX/msg*.txt` — one `.txt` per
+  message. app_voicemail keeps new messages in `INBOX` and moves them to `Old` once heard, so
+  INBOX = new, which is what MWI reports. A missing folder (no message yet) or an unreadable
+  one is 0, logged; context and mailbox are shape-checked before they become a path.
+- **Scope:** the sum across the signed-in user's **own** extensions (UserEmail, then voicemail
+  email, D166) that are enabled, web-enabled and voicemail-enabled — for an admin too, whose
+  dropdown of every extension does not make every mailbox theirs. The handler takes no
+  parameter, so no client can name a mailbox; a user owning none gets a 404, which the page
+  shows as no badge.
+- **Polling:** on page load and every 30 s. The badge is a sum across the user's mailboxes,
+  while `*97` opens the registered extension's mailbox — the same thing for the usual one
+  extension per person.
+
+Decided while building: only `msg*.txt` is counted (stricter than `*.txt`, the same files in
+practice); the handler is a plain GET without the antiforgery check the Client handler has,
+because the answer is one count of the caller's own messages and carries no secret.

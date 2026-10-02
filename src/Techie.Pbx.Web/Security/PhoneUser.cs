@@ -69,6 +69,25 @@ namespace Techie.Pbx.Web.Security
         }
 
         /// <summary>
+        /// The mailboxes behind this user's Voicemail badge on /phone (D169): the voicemail-enabled
+        /// extensions among the enabled, web-enabled ones they own. Ownership only, for an admin
+        /// too — the badge is "your messages", and an admin's dropdown of every extension does
+        /// not make every mailbox theirs. Empty when nobody is signed in.
+        /// </summary>
+        public static List<string> Mailboxes(ClaimsPrincipal? user, IEnumerable<Extension> extensions)
+        {
+            if (user?.Identity?.IsAuthenticated != true)
+                return new List<string>();
+
+            var email = Email(user);
+
+            return extensions
+                .Where(e => e.Enabled && e.WebClient && e.VoicemailEnabled && Owns(email, e))
+                .Select(e => e.Number)
+                .ToList();
+        }
+
+        /// <summary>
         /// Whether this sign-in address owns the extension, ignoring case and surrounding space
         /// (D166). The user email decides where there is one: it matches or it does not, and a
         /// voicemail email that happens to be the sign-in address changes nothing. Only an

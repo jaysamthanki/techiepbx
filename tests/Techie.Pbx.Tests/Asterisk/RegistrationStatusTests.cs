@@ -71,6 +71,50 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(RegistrationState.Registered, states["1001"]);
         }
 
+        /// <summary>
+        /// The web client registers to the extension's "-web" AOR (D159), and counts toward the
+        /// extension like a desk phone does (D168): desk only, web only, both, or neither.
+        /// </summary>
+        [Theory]
+        [InlineData(true, false, RegistrationState.Registered)]
+        [InlineData(false, true, RegistrationState.Registered)]
+        [InlineData(true, true, RegistrationState.Registered)]
+        [InlineData(false, false, RegistrationState.NotRegistered)]
+        public void The_web_client_counts_toward_its_extension(bool desk, bool web, RegistrationState expected)
+        {
+            var contacts = new List<PjsipContact>();
+
+            if (desk)
+                contacts.Add(Contact("1001", "Reachable"));
+
+            if (web)
+                contacts.Add(Contact("1001-web", "Reachable"));
+
+            var states = RegistrationStatus.Map(contacts, new[] { "1001" });
+
+            Assert.Equal(new[] { "1001" }, states.Keys);
+            Assert.Equal(expected, states["1001"]);
+        }
+
+        [Fact]
+        public void A_reachable_web_client_outweighs_an_unreachable_desk_phone()
+        {
+            var contacts = new[] { Contact("1001", "Unreachable"), Contact("1001-web", "Reachable") };
+
+            var states = RegistrationStatus.Map(contacts, new[] { "1001" });
+
+            Assert.Equal(RegistrationState.Registered, states["1001"]);
+        }
+
+        [Fact]
+        public void A_web_client_for_an_extension_not_asked_about_is_ignored()
+        {
+            var states = RegistrationStatus.Map(new[] { Contact("1002-web", "Reachable") }, new[] { "1001" });
+
+            Assert.Equal(new[] { "1001" }, states.Keys);
+            Assert.Equal(RegistrationState.NotRegistered, states["1001"]);
+        }
+
         [Fact]
         public void Every_extension_asked_about_gets_an_answer()
         {

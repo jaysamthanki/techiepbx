@@ -19,6 +19,9 @@
     const hangupButton = document.getElementById('phone-hangup');
     const holdButton = document.getElementById('phone-hold');
     const statusLine = document.getElementById('phone-status');
+    const unreadBadge = document.getElementById('phone-unread');
+    const unreadCount = document.getElementById('phone-unread-count');
+    const voicemailButton = document.getElementById('phone-voicemail');
     const xferButton = document.getElementById('phone-xfer');
 
     // iceServers starts empty — a LAN or VPN needs no STUN, and the handler only sends one
@@ -55,6 +58,7 @@
         callButton.textContent = ringingIn() ? 'Answer' : 'Call';
         callButton.disabled = !registered || (session ? !ringingIn() : !digits);
         hangupButton.disabled = session === null;
+        voicemailButton.disabled = !registered || session !== null;
         holdButton.textContent = established() && session.isOnHold().local ? 'Resume' : 'Hold';
         holdButton.disabled = !established();
         xferButton.disabled = !established() || !digits;
@@ -240,6 +244,11 @@
 
     // ---- The buttons. ----
 
+    function pressBackspace() {
+        display.value = display.value.slice(0, -1);
+        updateButtons();
+    }
+
     function pressCall() {
         playAudio();
 
@@ -259,8 +268,8 @@
         playAudio();
 
         // In a call the pad is a DTMF pad; the digits stay in the display either way, because
-        // in-call they are also the transfer target.
-        if (established()) {
+        // in-call they are also the transfer target. '+' (keyboard only) has no DTMF tone.
+        if (established() && digit !== '+') {
             session.sendDTMF(digit);
         }
 
@@ -290,6 +299,15 @@
         }
     }
 
+    // *97 from the registered extension: Asterisk opens that extension's own mailbox.
+    function pressVoicemail() {
+        if (session === null && ua !== null && registered) {
+            playAudio();
+            display.value = page.dataset.voicemailCode;
+            ua.call(display.value, callOptions);
+        }
+    }
+
     function pressXfer() {
         if (!established() || display.value.length === 0) {
             return;
@@ -299,6 +317,20 @@
         // the session's 'ended' handler like any other hangup.
         setStatus('Transferring to ' + display.value + '…');
         session.refer(display.value);
+    }
+
+    // ---- The unread voicemail badge (D169): the user's own mailboxes, hidden at zero. ----
+
+    async function refreshUnread() {
+        let unread = 0;
+        try {
+            unread = (await pbx.send('GET', page.dataset.unreadUrl)).unread;
+        } catch (ignored) {
+            // No mailbox of their own (a 404) or the server is away: no badge either way.
+        }
+
+        unreadCount.textContent = unread;
+        unreadBadge.classList.toggle('d-none', !(unread > 0));
     }
 
     // ---- Wiring. ----
@@ -314,7 +346,34 @@
     clearButton.addEventListener('click', pressClear);
     hangupButton.addEventListener('click', pressHangup);
     holdButton.addEventListener('click', pressHold);
+    voicemailButton.addEventListener('click', pressVoicemail);
     xferButton.addEventListener('click', pressXfer);
+
+    // The physical keyboard drives the pad too. Form fields keep their keys (the dropdown
+    // jumps by typed digit), except the display, which is read-only and so has none of its
+    // own. A focused button keeps Enter and Space, which press it; digits still reach the pad,
+    // so typing goes on working after a keypad click. Shortcuts with modifiers are left alone.
+    document.addEventListener('keydown', function (event) {
+        if (event.ctrlKey || event.altKey || event.metaKey) {
+            return;
+        }
+
+        const target = event.target;
+        if (target !== display && target.closest('input, textarea, select')) {
+            return;
+        }
+
+        if (/^[0-9*#+]$/.test(event.key)) {
+            event.preventDefault();
+            pressDigit(event.key);
+        } else if (event.key === 'Backspace') {
+            event.preventDefault();
+            pressBackspace();
+        } else if (event.key === 'Enter' && !target.closest('button')) {
+            event.preventDefault();
+            pressCall();
+        }
+    });
 
     extensionSelect.addEventListener('change', function () {
         connect(extensionSelect.value);
@@ -329,4 +388,7 @@
     });
 
     connect(extensionSelect.value);
+
+    refreshUnread();
+    setInterval(refreshUnread, 30000);
 })();
