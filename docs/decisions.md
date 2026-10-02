@@ -3603,6 +3603,15 @@ registration handler and rendered into the page's `pcConfig.iceServers` as
 so there is nothing new to configure; and the setting keeps its own semantics — **unset means
 off for both** (a LAN or VPN box needs no STUN), which is D163's case for not giving it a
 default.
+
+**Amended 2026-10-02 (with D167): the browser gets no STUN at all.** Once Asterisk advertises its
+public IP as the ICE host candidate, the browser's own connectivity checks cross the NAT to it and
+Asterisk learns the return address from them, so a STUN server bought nothing. Worse, it cost
+~40 s on every call: JsSIP waits for ICE gathering to complete before sending the INVITE, and
+gathering against `stun.l.google.com` (DNS + binding timeouts) stalled the whole call setup —
+measured on Android, reproduced on desktop, pinpointed via `localStorage.debug = 'JsSIP:*'`
+pausing at `createLocalDescription()`. The registration handler now always sends
+`stun: null`, and the page gathers host candidates only, in milliseconds.
 Known limit, accepted: users behind symmetric NAT will not connect until TURN exists; the
 D161 note "revisit before this crosses a NAT" stays open for TURN only.
 

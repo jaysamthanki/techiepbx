@@ -9,6 +9,10 @@
     // Only a signed-in user without the role loses them: the signed-out page keeps the layout
     // it always had.
     var showAdminNav = User.Identity?.IsAuthenticated != true || Techie.Pbx.Web.Security.AdminRole.IsAdmin(User);
+    // The softphone is a phone, not an admin page: no status poll there either (D164 dropped it
+    // for phone users; this drops it for an admin visiting /phone too — a call page does not
+    // need to know whether config is out of sync).
+    var showAdminNavOnThisPage = showAdminNav && !ViewContext.HttpContext.Request.Path.StartsWithSegments("/phone");
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -137,7 +141,7 @@
                         there is something to apply (D43). The poll is what makes it appear after a
                         change and disappear after an apply; the events just make it quicker.
                     *@
-                    @if (showAdminNav)
+                    @if (showAdminNavOnThisPage)
                     {
                         <div class="d-flex align-items-center ms-2"
                              hx-get="/ConfigStatus"

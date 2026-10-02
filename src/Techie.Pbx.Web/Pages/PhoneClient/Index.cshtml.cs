@@ -94,11 +94,13 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
             // yet): a browser refuses a mixed-scheme WebSocket either way round.
             var scheme = this.Request.IsHttps ? "wss" : "ws";
 
-            // The same STUN the transport uses (D163): the browser's candidates need it before
-            // this crosses a NAT, and one setting serves both. Unset stays off — no STUN for
-            // Asterisk means none for the browser either, which is right on a LAN or VPN.
-            var stun = this.settings.Get(SettingsKeys.SipStunServer);
-
+            // No STUN for the browser (amends D163): with Asterisk advertising its public IP as
+            // the ICE host candidate (D167), the browser's own checks cross the NAT to it and
+            // Asterisk learns the return address from them, so a STUN server buys nothing. It
+            // also cost dearly: JsSIP waits for ICE gathering to complete before sending the
+            // INVITE, and gathering against a STUN server that DNS- or times-out stalled the
+            // call setup by ~40s on every network we tried. Empty iceServers gather in
+            // milliseconds.
             return new JsonResult(new
             {
                 number = extension.Number,
@@ -106,7 +108,7 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
                 uri = $"sip:{extension.Number}{PjsipConfRenderer.WebClientSuffix}@{this.Request.Host.Host}",
                 secret = extension.Secret,
                 wsUrl = $"{scheme}://{this.Request.Host}{HttpConfRenderer.ProxyPath}",
-                stun = string.IsNullOrEmpty(stun) ? null : $"stun:{stun}",
+                stun = (string)null,
             });
         }
 
