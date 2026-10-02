@@ -68,16 +68,16 @@ cd /root/techiepbx/scripts/fail2ban
 **3a. From a release (no build machine, no .NET SDK).** Download the prebuilt
 tarballs for your architecture from the
 [Releases page](https://github.com/jaysamthanki/techiepbx/releases) — current
-release **v0.1.4** — onto the box:
+release **v0.2.0** — onto the box:
 
 ```bash
 cd /root/techiepbx
 # arm64:
-wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.4/tnpbx-web-arm64.tgz
-wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.4/tnpbx-helper-arm64.tgz
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.2.0/tnpbx-web-arm64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.2.0/tnpbx-helper-arm64.tgz
 # x64:
-wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.4/tnpbx-web-x64.tgz
-wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.1.4/tnpbx-helper-x64.tgz
+wget -O tnpbx-web.tgz    https://github.com/jaysamthanki/techiepbx/releases/download/v0.2.0/tnpbx-web-x64.tgz
+wget -O tnpbx-helper.tgz https://github.com/jaysamthanki/techiepbx/releases/download/v0.2.0/tnpbx-helper-x64.tgz
 ```
 
 (`wget -O` saves the arch-suffixed download under the plain name, so step 4's
