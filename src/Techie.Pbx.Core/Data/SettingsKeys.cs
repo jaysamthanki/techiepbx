@@ -65,6 +65,14 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         public const string SipCodecs = "Sip.Codecs";
 
+        /// <summary>
+        /// The address of this server's own network interface behind 1:1 NAT, e.g. 10.8.20.8.
+        /// Together with <see cref="SipExternalAddress"/> it becomes rtp.conf's
+        /// [ice_host_candidates] mapping, so ICE advertises the public address instead of the
+        /// private one (D167). Unset means no mapping.
+        /// </summary>
+        public const string SipLocalAddress = "Sip.LocalAddress";
+
         /// <summary>Comma separated CIDRs, e.g. "10.8.20.0/24".</summary>
         public const string SipLocalNets = "Sip.LocalNets";
 
@@ -269,6 +277,7 @@ namespace Techie.Pbx.Core.Data
             SipStunServer,
             SipCodecs,
             SipLocalNets,
+            SipLocalAddress,
             SipMaxContacts,
             SipExternalAddress,
             ProvisioningUsername,
@@ -348,6 +357,7 @@ namespace Techie.Pbx.Core.Data
             [SipStunServer] = SettingScope.Asterisk,
             [SipCodecs] = SettingScope.Asterisk,
             [SipLocalNets] = SettingScope.Asterisk,
+            [SipLocalAddress] = SettingScope.Asterisk,
             [SipExternalAddress] = SettingScope.Asterisk,
             [SipMaxContacts] = SettingScope.Asterisk,
 

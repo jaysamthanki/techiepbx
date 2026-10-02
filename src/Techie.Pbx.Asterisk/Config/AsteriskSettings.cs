@@ -53,6 +53,7 @@ namespace Techie.Pbx.Asterisk.Config
             transport.BindAddress = Text(settings, SettingsKeys.SipBindAddress) ?? transport.BindAddress;
             transport.Port = Number(settings, SettingsKeys.SipPort, transport.Port);
             transport.ExternalAddress = Text(settings, SettingsKeys.SipExternalAddress);
+            transport.LocalAddress = Text(settings, SettingsKeys.SipLocalAddress);
             transport.MaxContacts = Number(settings, SettingsKeys.SipMaxContacts, transport.MaxContacts);
             transport.StunServer = Text(settings, SettingsKeys.SipStunServer);
 

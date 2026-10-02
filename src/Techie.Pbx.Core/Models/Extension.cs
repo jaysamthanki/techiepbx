@@ -57,6 +57,14 @@ namespace Techie.Pbx.Core.Models
 
         public string Secret { get; set; } = "";
 
+        /// <summary>
+        /// The Entra sign-in address that owns this extension, or empty for none (D166): the
+        /// account that may open it on /phone. Separate from <see cref="VoicemailEmail"/>, which
+        /// is only where voicemail mail goes and may be a different address. App-side only — it
+        /// is written into no Asterisk config.
+        /// </summary>
+        public string UserEmail { get; set; } = "";
+
         /// <summary>Attach the recording to the email. Only means anything once F4 sends them.</summary>
         public bool VoicemailAttachRecording { get; set; } = true;
 
@@ -66,7 +74,10 @@ namespace Techie.Pbx.Core.Models
         /// </summary>
         public bool VoicemailDeleteAfterEmail { get; set; }
 
-        /// <summary>Where voicemail notifications will go. Nothing sends them yet (F4).</summary>
+        /// <summary>
+        /// Where this mailbox's voicemail email is sent. Also the /phone owner while
+        /// <see cref="UserEmail"/> is empty (D166), which is what it was before that column existed.
+        /// </summary>
         public string VoicemailEmail { get; set; } = "";
 
         public bool VoicemailEnabled { get; set; }
@@ -83,6 +94,15 @@ namespace Techie.Pbx.Core.Models
         /// all without an address to email, so the renderer writes it for a mailbox that has one.
         /// </summary>
         public bool VoicemailTranscribe { get; set; }
+
+        /// <summary>
+        /// Whether this extension also gets the browser-based web client (D159, PoC). On, a
+        /// second device <c>&lt;Number&gt;-web</c> is rendered beside the extension's own —
+        /// same context, caller ID, mailbox and secret — and every Dial that rings the
+        /// extension rings both. It is also what gates Asterisk's HTTP server: no extension
+        /// with this on, no http.conf listener at all.
+        /// </summary>
+        public bool WebClient { get; set; }
 
         /// <summary>
         /// What is wrong with the forwarding field, if anything (D130). Its own method because it
@@ -185,6 +205,14 @@ namespace Techie.Pbx.Core.Models
             // switched back on is the one it was.
             if (VoicemailEnabled && !VoicemailPinPattern().IsMatch(VoicemailPin))
                 errors.Add("Voicemail PIN must be 4 to 8 digits.");
+
+            if (UserEmail.Length > 0)
+            {
+                if (UserEmail.Length > 128)
+                    errors.Add("User email must be 128 characters or fewer.");
+                else if (!EmailPattern().IsMatch(UserEmail))
+                    errors.Add("User email must be an email address, e.g. name@example.com.");
+            }
 
             if (VoicemailEmail.Length > 0)
             {

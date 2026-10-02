@@ -138,6 +138,12 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "This server's own address on its network interface when it is behind 1:1 NAT. With the external address set, media advertises the external address in place of this one, which is what lets the web client's audio cross the NAT. Blank means no mapping.",
+                Key = SettingsKeys.SipLocalAddress,
+                Sample = "10.8.20.8",
+            },
+            new SettingDescriptor
+            {
                 Description = "The username a desk phone presents to fetch its configuration. It is the user half of the user:pass in the DHCP option 160 URL you give the phones — http://user:pass@this-server/polycom — so keep it to letters, digits, dots, dashes and underscores. Blank turns provisioning off: with no username and password stored, every provisioning request is refused.",
                 Key = SettingsKeys.ProvisioningUsername,
                 Sample = "phones",

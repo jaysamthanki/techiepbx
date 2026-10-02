@@ -247,7 +247,8 @@ Key/value rather than a column per setting, so adding one needs no schema script
 
 Current keys: `Asterisk.ConfDirectory`, `Ami.Host`, `Ami.Port`, `Ami.Username`, `Ami.Secret`,
 `Ami.TimeoutSeconds`, `Sip.BindAddress`, `Sip.Port`, `Sip.LocalNets` (comma separated CIDRs),
-`Sip.ExternalAddress`.
+`Sip.ExternalAddress`, `Sip.LocalAddress` (the server's own interface address behind 1:1 NAT,
+mapped to the external one as rtp.conf's ICE host candidate, D167).
 
 Also `Sip.TcpPort`, `Sip.TlsPort`, `Sip.StunServer`, `Sip.Codecs`, `System.Timezone`,
 `Provisioning.Username` and `Provisioning.Password` — the last two being the user:pass a phone

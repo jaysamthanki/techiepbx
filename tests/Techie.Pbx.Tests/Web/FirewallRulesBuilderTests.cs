@@ -15,13 +15,16 @@ namespace Techie.Pbx.Tests.Web
         private static Dictionary<string, string> Settings(params (string Key, string Value)[] values) =>
             values.ToDictionary(pair => pair.Key, pair => pair.Value);
 
+        private static List<FirewallRule> Build(Dictionary<string, string> settings) =>
+            FirewallRulesBuilder.Build(settings);
+
         private static FirewallRule Rule(IEnumerable<FirewallRule> rules, string label) =>
             rules.Single(rule => rule.Label == label);
 
         [Fact]
         public void A_bare_system_opens_sip_udp_rtp_and_the_three_web_ports()
         {
-            var rules = FirewallRulesBuilder.Build(Settings());
+            var rules = Build(Settings());
 
             Assert.Equal(
                 new[] { "SIP UDP", "RTP UDP", "Web HTTP", "Web HTTPS", "Web bootstrap" },
@@ -31,7 +34,7 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Sip_udp_follows_the_configured_port()
         {
-            var rules = FirewallRulesBuilder.Build(Settings((SettingsKeys.SipPort, "5070")));
+            var rules = Build(Settings((SettingsKeys.SipPort, "5070")));
             var sip = Rule(rules, "SIP UDP");
 
             Assert.Equal(FirewallProtocol.Udp, sip.Protocol);
@@ -42,20 +45,20 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Sip_udp_defaults_to_5060_when_nothing_is_stored()
         {
-            Assert.Equal(PjsipTransport.DefaultPort, Rule(FirewallRulesBuilder.Build(Settings()), "SIP UDP").StartPort);
+            Assert.Equal(PjsipTransport.DefaultPort, Rule(Build(Settings()), "SIP UDP").StartPort);
         }
 
         /// <summary>Unset means no TCP transport is rendered at all (D70), so there is nothing to open.</summary>
         [Fact]
         public void Sip_tcp_is_left_out_when_no_tcp_port_is_set()
         {
-            Assert.DoesNotContain(FirewallRulesBuilder.Build(Settings()), rule => rule.Label == "SIP TCP");
+            Assert.DoesNotContain(Build(Settings()), rule => rule.Label == "SIP TCP");
         }
 
         [Fact]
         public void Sip_tcp_appears_when_a_tcp_port_is_set()
         {
-            var tcp = Rule(FirewallRulesBuilder.Build(Settings((SettingsKeys.SipTcpPort, "5060"))), "SIP TCP");
+            var tcp = Rule(Build(Settings((SettingsKeys.SipTcpPort, "5060"))), "SIP TCP");
 
             Assert.Equal(FirewallProtocol.Tcp, tcp.Protocol);
             Assert.Equal(5060, tcp.StartPort);
@@ -64,13 +67,13 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Sip_tls_is_left_out_when_no_tls_port_is_set()
         {
-            Assert.DoesNotContain(FirewallRulesBuilder.Build(Settings()), rule => rule.Label == "SIP TLS");
+            Assert.DoesNotContain(Build(Settings()), rule => rule.Label == "SIP TLS");
         }
 
         [Fact]
         public void Sip_tls_appears_when_a_tls_port_is_set()
         {
-            var tls = Rule(FirewallRulesBuilder.Build(Settings((SettingsKeys.SipTlsPort, "5061"))), "SIP TLS");
+            var tls = Rule(Build(Settings((SettingsKeys.SipTlsPort, "5061"))), "SIP TLS");
 
             Assert.Equal(FirewallProtocol.Tcp, tls.Protocol);
             Assert.Equal(5061, tls.StartPort);
@@ -81,15 +84,26 @@ namespace Techie.Pbx.Tests.Web
         public void A_blank_tls_port_counts_as_unset()
         {
             Assert.DoesNotContain(
-                FirewallRulesBuilder.Build(Settings((SettingsKeys.SipTlsPort, "   "))),
+                Build(Settings((SettingsKeys.SipTlsPort, "   "))),
                 rule => rule.Label == "SIP TLS");
+        }
+
+        /// <summary>
+        /// The web client's SIP WebSocket opens no firewall rule at all (D160): the browser
+        /// dials the app's own HTTPS port and the app relays to Asterisk's loopback server,
+        /// so it crosses no firewall anywhere whatever the extensions say.
+        /// </summary>
+        [Fact]
+        public void The_web_client_never_opens_a_firewall_rule()
+        {
+            Assert.DoesNotContain(Build(Settings()), rule => rule.Label is "SIP WS" or "SIP WSS");
         }
 
         /// <summary>The media range is the renderer's constants, not numbers typed again here.</summary>
         [Fact]
         public void Rtp_is_the_range_rtp_conf_is_rendered_from()
         {
-            var rtp = Rule(FirewallRulesBuilder.Build(Settings()), "RTP UDP");
+            var rtp = Rule(Build(Settings()), "RTP UDP");
 
             Assert.Equal(FirewallProtocol.Udp, rtp.Protocol);
             Assert.Equal(RtpConfRenderer.PortStart, rtp.StartPort);
@@ -99,10 +113,11 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Every_rule_built_is_a_rule_the_helper_would_accept()
         {
-            var rules = FirewallRulesBuilder.Build(Settings(
-                (SettingsKeys.SipPort, "5060"),
-                (SettingsKeys.SipTcpPort, "5060"),
-                (SettingsKeys.SipTlsPort, "5061")));
+            var rules = Build(
+                Settings(
+                    (SettingsKeys.SipPort, "5060"),
+                    (SettingsKeys.SipTcpPort, "5060"),
+                    (SettingsKeys.SipTlsPort, "5061")));
 
             Assert.Empty(HelperRequest.FirewallApply(rules).Validate());
         }
@@ -110,8 +125,8 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void Two_identical_lists_are_in_sync()
         {
-            var expected = FirewallRulesBuilder.Build(Settings());
-            var applied = FirewallRulesBuilder.Build(Settings());
+            var expected = Build(Settings());
+            var applied = Build(Settings());
 
             Assert.True(FirewallRulesBuilder.Match(expected, applied));
         }
@@ -119,8 +134,8 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void A_changed_port_is_out_of_sync()
         {
-            var expected = FirewallRulesBuilder.Build(Settings((SettingsKeys.SipPort, "5060")));
-            var applied = FirewallRulesBuilder.Build(Settings((SettingsKeys.SipPort, "5070")));
+            var expected = Build(Settings((SettingsKeys.SipPort, "5060")));
+            var applied = Build(Settings((SettingsKeys.SipPort, "5070")));
 
             Assert.False(FirewallRulesBuilder.Match(expected, applied));
         }
@@ -128,8 +143,8 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void An_extra_rule_is_out_of_sync()
         {
-            var expected = FirewallRulesBuilder.Build(Settings());
-            var applied = FirewallRulesBuilder.Build(Settings((SettingsKeys.SipTlsPort, "5061")));
+            var expected = Build(Settings());
+            var applied = Build(Settings((SettingsKeys.SipTlsPort, "5061")));
 
             Assert.False(FirewallRulesBuilder.Match(expected, applied));
             Assert.False(FirewallRulesBuilder.Match(applied, expected));
@@ -139,7 +154,7 @@ namespace Techie.Pbx.Tests.Web
         [Fact]
         public void An_empty_applied_list_is_out_of_sync()
         {
-            Assert.False(FirewallRulesBuilder.Match(FirewallRulesBuilder.Build(Settings()), new List<FirewallRule>()));
+            Assert.False(FirewallRulesBuilder.Match(Build(Settings()), new List<FirewallRule>()));
         }
     }
 }

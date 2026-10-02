@@ -271,6 +271,12 @@ namespace Techie.Pbx.Asterisk.Config
                 new("modules.conf", null, ModulesConfRenderer.Render()),
                 new("rtp.conf", null, RtpConfRenderer.Render(this.transport)),
                 new("pjsip_notify.conf", null, NotifyConfRenderer.Render()),
+                // The loopback HTTP server the web client's SIP WebSocket rides on, enabled only
+                // while a web-enabled extension exists (D159). The browser never reaches it: the
+                // app relays the WebSocket on its own 443 (D160). Startup-read like rtp.conf:
+                // reloading the http core mid-flight is not something this system relies on, so
+                // a change here is applied by the restart the apply then asks for.
+                new(HttpConfRenderer.FileName, null, HttpConfRenderer.Render(all)),
 
                 new("logger.conf", LoggerModule, LoggerConfRenderer.Render()),
                 new("manager.conf", ManagerModule, ManagerConfRenderer.Render(this.ami)),

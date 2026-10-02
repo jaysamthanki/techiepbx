@@ -41,6 +41,10 @@ namespace Techie.Pbx.Web.Services
             if (transport.TlsPort != null)
                 rules.Add(FirewallRule.Port(FirewallProtocol.Tcp, transport.TlsPort.Value, "SIP TLS"));
 
+            // No web-socket port rule (D160): the browser's SIP WebSocket arrives on the web
+            // app's own HTTPS port and the app relays it to Asterisk's loopback-only HTTP
+            // server, so it crosses no firewall anywhere.
+
             // The media range, from the constants rtp.conf is rendered from.
             rules.Add(new FirewallRule(FirewallProtocol.Udp, RtpConfRenderer.PortStart, RtpConfRenderer.PortEnd, "RTP UDP"));
 

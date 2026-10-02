@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <!-- The product version. Bumped in one place; every project inherits it. Tag vX.Y.Z on release. -->
-    <Version>0.1.3</Version>
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
 </Project>

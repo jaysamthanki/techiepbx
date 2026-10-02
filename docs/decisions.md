@@ -3447,6 +3447,112 @@ bottom; make it a control panel — pick a setup, see only its settings, test at
 - `MailController`, the test endpoint and `pbx.sendTestMail` are unchanged.
 
 
+### D159. Web client PoC, piece 1: the Asterisk side (2026-09-28, web client)
+
+User approved a PoC: a browser-based softphone served by the app at /phone, registering to
+Asterisk over a SIP WebSocket (WebRTC). This piece is the Asterisk-side plumbing only; the
+/phone UI itself is piece 2 and does not exist yet.
+
+- **One checkbox per extension** (`Extensions.WebClient`, schema 029, off by default). On, the
+  extension gets a second PJSIP device `<Number>-web` — endpoint, auth and aor — beside its own.
+  Off everywhere renders every file byte for byte as before.
+- **The `-web` device shares the extension's secret** (PoC decision: one credential per person,
+  revisit before this leaves PoC), its context, caller ID, outbound caller ID claim (D125) and
+  mailbox (D108). `webrtc = yes` supplies the DTLS/ICE/AVPF defaults a browser requires.
+- **G.711 only (`allow = ulaw,alaw`)**: this Asterisk 22 source build ships no `codec_opus.so`
+  (verified on the lab VM), browsers speak G.711 natively, and Asterisk already transcodes
+  G.722 ↔ G.711 for the wideband desk phones. The `-web` aor reuses the global MaxContacts and
+  adds `remove_existing = yes`: one web client per extension, and a re-opened tab replaces the
+  contact a closed one left behind.
+- **Every Dial forks in one place.** The dialplan builds an extension's device string in a single
+  helper, so a direct dial, a ring group member, a forwarding target and the voicemail
+  fallthrough behind them all ring `PJSIP/101&PJSIP/101-web` in the one Dial they always were.
+  The hint keeps watching the handset alone, as it does for forwarding (D121).
+- **http.conf is generated and gated on the checkbox**: `enabled = no` until at least one enabled
+  extension has the web client — an idle HTTP server is attack surface. Enabled, it binds the
+  SIP transports' bind address, ws on 8088, and wss on 8089 exactly while the pjsip TLS
+  transport's certificate exists (D101), pointing at the same combined PEM. (Asterisk has no
+  `tlsport` option; the port rides on `tlsbindaddr`.) Startup-read, so a change is a restart
+  like rtp.conf (D33). Browsers refuse ws from an https page, so the /phone page will require
+  the wss side; the ws line is still written so the file says what is listening.
+- **Modules**: `res_http_websocket.so` and `res_pjsip_transport_websocket.so` join the allowlist
+  (both present on the lab VM). `chan_websocket.so` and `res_websocket_client.so` deliberately
+  do not — a media channel driver nothing dials and outbound WebSocket connections nothing
+  makes.
+- **Firewall**: TCP 8088 and 8089 ("SIP WS"/"SIP WSS") open on the same gate as http.conf —
+  `FirewallRulesBuilder` now takes the extension rows and asks the renderer's own
+  `HttpConfRenderer.Enabled`, so the firewall and what is listening cannot disagree (D142).
+  Both ports whether or not a certificate exists yet, for the reason 443 opens before one
+  does (D99). No Helper change: the rules are the same typed `FirewallRule` port messages.
+
+### D160. Web client PoC: the WebSocket rides the web app's own 443 (2026-09-29, web client)
+
+Amends D159's http.conf/firewall halves the day after they were lab-verified: the browser-facing
+wss port idea does not survive contact with the deployment. This lab's cloud firewall (the
+Azure NSG) allows only 80, 443, the media range and a few chosen ports — and that is typical of
+real deployments, not special. Opening a second HTTPS port everywhere, for a feature one
+checkbox controls, is exactly the surface this project does not keep.
+
+- **Asterisk's HTTP server binds loopback only** (`127.0.0.1:8088`, plain ws, no TLS half at
+  all). The browser never reaches it.
+- **The web app relays.** The browser dials `wss://<hostname>/asterisk-ws` on the web app's own
+  HTTPS port — a port that is already open and already firewalled — and `AsteriskWebSocketRelay`
+  forwards every frame byte-for-byte to the loopback WebSocket and back. TLS is the web app's
+  certificate (D99): one cert, one place, nothing for an operator to keep in step.
+- **A relay, not a parser**: the app never looks inside the SIP frames; registration, digest
+  auth and every call stay Asterisk's business. Authorized like any page (fallback policy):
+  the handshake is a same-origin request from the /phone page and carries the session cookie.
+  When no extension has the web client the relay answers 404 — the same gate http.conf is
+  written by, so the two cannot disagree.
+- **The firewall's ws/wss rules are gone.** `FirewallRulesBuilder` takes the settings alone
+  again; the WebSocket crosses no firewall anywhere. On the lab the previously applied 8088/8089
+  rules are simply superseded by the next apply.
+- **The path, the upstream URI and the gate live in `HttpConfRenderer`**, beside the file that
+  configures the server they point at — three constants, one class, so the relay, the file and
+  the (future) /phone page cannot drift apart on what the URL is.
+
+### D161. Web client PoC, piece 2: the /phone page (2026-09-28, web client)
+
+Piece 2 of D159/D160: the browser softphone itself, at /phone — a dial pad, Call/Answer,
+Hang up, Hold and blind Xfer, registering with JsSIP (vendored, MIT) over the D160 relay.
+No history, no presence, no multiple calls: the PoC's scope, on purpose.
+
+- **An admin-only PoC page, reached from the extension edit modal, not the nav.** /phone sits
+  behind the same sign-in as every page but stays out of the admin nav — it is the end-user
+  softphone, not management surface. Its one entry point is an "Open web client" link in the
+  extension edit modal's footer, shown while the extension has the web client on. That also
+  means only an admin can reach it at all for now, which is what makes the next point tolerable.
+- **The page's script fetches the extension's SIP secret from a page handler**
+  (`/phone?handler=Client&ext=…`), which answers `{ number, name, uri, secret, wsUrl }` for an
+  enabled, web-enabled extension and 404s anything else. The secret in the clear to an admin is
+  the stance the edit form already takes (D112), not a new one. The handler is a GET (it reads),
+  but it carries a credential, so it demands the same antiforgery token every POST carries —
+  validated by hand, because Razor Pages only checks the token on unsafe verbs by itself.
+  **Revisit before any non-admin user is ever given /phone**: that needs a per-user identity
+  story, not a handler that hands any signed-in admin any extension's secret.
+- **Every URL the script uses is built server-side from the request host and
+  `HttpConfRenderer`'s constants** (`ProxyPath` for `wsUrl`, ws:// when the page itself came
+  over plain HTTP), so the page cannot drift from the relay. `pcConfig` has **empty
+  `iceServers`**: no STUN/TURN, because the PoC runs on a LAN/VPN where host candidates reach
+  the server directly. Revisit before this crosses a NAT.
+- **One dial pad, three jobs.** Before a call the digits are the number to call; in a call each
+  press sends DTMF and stays in the display, whose current digits are also the blind transfer
+  target (`session.refer`; attended transfer deliberately not built). The display clears when a
+  call is answered, so the DTMF/transfer digits start blank.
+- **The folder is `Pages/PhoneClient` with `@page "/phone"`**, not `Pages/Phone`: a
+  `Techie.Pbx.Web.*.Phone` namespace shadows the Core `Phone` model type and breaks Pages/Phones
+  with CS0118 (hit once already).
+
+**Piece 2 bring-up amendment (same day, lab-verified):** a call to a `-web` endpoint died at
+SDP creation — `Couldn't add sdp streams for stream 0:audio-0:audio:sendrecv (ulaw|alaw)` —
+even though `webrtc = yes` configures DTLS (the Asterisk 22 source above shows it even
+auto-generates an ephemeral certificate when none is named). The missing piece was
+**`res_srtp.so`**, which was built but not in the allowlist: DTLS-SRTP media needs the SRTP
+module at call time. It joins the web client's module group (D31's rule: a feature's modules
+arrive in the same change). After a restart, the same INVITE forked to `PJSIP/103&PJSIP/103-web`
+and `PJSIP/103-web-00000001 is ringing` reached the browser through the relay — the incoming
+path is verified end to end to the ring; answered-call audio (mic) is a desk test.
+
 ### D162. The recording rides the callback body, so delete=yes cannot race it (2026-09-29, voicemail, amends D129)
 Verified on the live lab and a fresh deployment: `app_voicemail` forks `mailcmd` into the
 background and, for a mailbox with `delete=yes`, deletes the INBOX files immediately after —
@@ -3486,3 +3592,141 @@ mailboxes all have `delete=no`, which is why this was never seen there.
   used without inline, attach=no and transcribe=no still honoured) — the fallback-order
   decisions were made `public static` on the controller so they are tested decisions rather
   than glue, now that the test project references the web project (which D129 predates).
+
+### D163. The web client stays STUN-only, from the setting that already exists (2026-09-29, web client)
+
+The /phone PoC shipped with empty `iceServers` (D161) because the lab is reached over
+LAN/VPN. The user decided 2026-09-29: no TURN, no coturn — the browser gets STUN from the
+same `Sip.StunServer` setting the transport already uses, handed to the page by the
+registration handler and rendered into the page's `pcConfig.iceServers` as
+`{ urls: "stun:<value>" }`. One setting serves both the Asterisk transport and the browser,
+so there is nothing new to configure; and the setting keeps its own semantics — **unset means
+off for both** (a LAN or VPN box needs no STUN), which is D163's case for not giving it a
+default.
+
+**Amended 2026-10-02 (with D167): the browser gets no STUN at all.** Once Asterisk advertises its
+public IP as the ICE host candidate, the browser's own connectivity checks cross the NAT to it and
+Asterisk learns the return address from them, so a STUN server bought nothing. Worse, it cost
+~40 s on every call: JsSIP waits for ICE gathering to complete before sending the INVITE, and
+gathering against `stun.l.google.com` (DNS + binding timeouts) stalled the whole call setup —
+measured on Android, reproduced on desktop, pinpointed via `localStorage.debug = 'JsSIP:*'`
+pausing at `createLocalDescription()`. The registration handler now always sends
+`stun: null`, and the page gathers host candidates only, in milliseconds.
+Known limit, accepted: users behind symmetric NAT will not connect until TURN exists; the
+D161 note "revisit before this crosses a NAT" stays open for TURN only.
+
+### D164. Phone-user sign-in is Entra ID, matched on the voicemail email (2026-09-29, web client, pending open questions)
+
+The /phone page stops being admin-only: a user signs in with the tenant's Entra ID and is
+matched to their extension by the `VoicemailEmail` already stored on it (the same address
+voicemail already uses — one address per person, Teams-compatible). An address that carries
+more than one web-enabled extension gets a dropdown of those extensions after sign-in.
+Open at record time: how phone users are separated from admins under D139 (the enterprise
+app requires assignment, and assigned users are admins today).
+
+### D165. One Entra app; "admin" is a role claim, not the assignment (2026-09-29, web client auth, amends D139)
+
+With phone users signing in (D164), the D139 rule "every assigned user is an admin" cannot
+hold. The user chose 2026-09-29 to keep **one app registration**: any tenant user may sign
+in, and **admin authority is an Entra app-role claim the app checks**. Consequences, accepted:
+
+- Every admin page requires the admin claim; a phone user's sign-in reaches `/phone` and
+  nothing else. `/phone` matches the sign-in email (case-insensitive) against
+  `VoicemailEmail`; an extension with no voicemail email cannot be reached that way (also
+  chosen: no fallback), and one address owning several web-enabled extensions gets the
+  existing dropdown, restricted to those extensions.
+- D139's gap reopens in a new shape and is closed again by the claim: an *assigned* user is
+  no longer an admin by assignment alone; only role assignees are. Admin add/remove stays an
+  Entra-side workflow with no visibility inside the app — the same trade as D139, now for
+  admins instead of everyone.
+- The lab's `LocalAuthenticationBypass` keeps its meaning: bypass users are admins (break-glass
+  has to be), so bypass stays restricted to trusted networks only.
+
+### D166. A separate UserEmail ties the extension to the Entra sign-in; the modal splits into tabs (2026-09-30, extensions)
+
+`VoicemailEmail` has been doing two jobs — where voicemail mail goes, and (since D164) which
+sign-in owns the extension for /phone. The user split them 2026-09-30: a new **UserEmail**
+column (schema 030) ties the extension to the Entra account, and VoicemailEmail stays what
+it always was, the destination the voicemail email is sent to — which may now be a different
+address than the user's own.
+
+- /phone matching (PhoneUser) matches **UserEmail first, VoicemailEmail as the fallback**:
+  existing deployments whose extensions only carry a voicemail email keep working, and an
+  extension with neither still belongs to nobody. Both are case-insensitive as before.
+- The extension edit modal becomes tabs: **Main** (Number, Name, UserEmail, Caller ID,
+  Forwarding, Password, Enabled, Web client) and **Voicemail** (Enabled, PIN, Email, the
+  checkboxes). One form, two Bootstrap tab panes — the page posts exactly as it does today;
+  tabs are presentation, not separate saves.
+
+Decided while building: none pending; the fallback order above was chosen as the
+backward-compatible reading of "ties to the entra email".
+
+### D167. Behind 1:1 NAT, rtp.conf maps the host candidate instead of asking STUN (2026-09-30, web client, amends D72)
+
+The web client failed across NAT on the lab VM. The chain, verified live 2026-09-30:
+
+- Asterisk offered the browser **only private ICE host candidates** (10.8.20.8). Nothing
+  outside the NAT can reach those, so ICE never completed and the call had no audio.
+- `stunaddr` (D72) was supposed to add the server-reflexive candidate and **never worked
+  there**: pjproject resolves `stun.l.google.com`'s AAAA record, the VM has no IPv6 route, and
+  srflx gathering failed every time.
+
+The fix, verified on the VM by hand and now generated: an **`[ice_host_candidates]` section**
+in rtp.conf — a section, not a `[general]` option — mapping each local interface address to
+the address to advertise, `<local> => <advertised>`:
+
+```
+[ice_host_candidates]
+10.8.20.8 => 20.14.91.194
+```
+
+- A new setting, **`Sip.LocalAddress`** (Asterisk scope, IPv4 or IPv6, optional), is the
+  server's own interface address; `Sip.ExternalAddress` already holds the public one. The
+  section is rendered only when **both** are set. One mapping line; a multi-homed box would
+  need more, and that is not built.
+- When the mapping is rendered, **`stunaddr` is left out even if `Sip.StunServer` is set**.
+  Asterisk 22's rtp.conf.sample says not to specify stunaddr alongside `ice_host_candidates`,
+  and the AAAA trap above means it contributed nothing but a failing lookup anyway. Without
+  the mapping (no external or no local address), stunaddr renders exactly as before.
+- `icesupport = yes` is unchanged: it already follows a STUN server or an external address.
+- The browser's own STUN (D163) is untouched — `Sip.StunServer` still feeds the page's
+  `iceServers`; this decision is about what Asterisk advertises.
+- rtp.conf is read at startup, so setting or changing the local address is a restart (D33),
+  which the applier already reports for rtp.conf.
+
+Decided while building: a local address without an external one is stored but maps to
+nothing (no validation error), matching how the other optional Sip keys behave.
+
+### D168. A web client's registration counts toward its extension's status badge (2026-10-01, web client)
+
+The Extensions page's status badge only matched contacts whose AOR was exactly the extension
+number, so an extension registered only from /phone showed "Not registered": the web client
+registers to the `<ext>-web` AOR (D159). `RegistrationStatus.Map` now folds a `-web` AOR into
+its extension — the same "one reachable contact anywhere is Registered" rule already used for
+several desk contacts, so desk only, web only and both all read Registered. Still pure and
+still one AMI `PJSIPShowContacts`; nothing in what Asterisk loads or exposes changes. The
+tooltips say "a phone or web client" so the badge does not claim a desk phone it cannot see.
+
+### D169. /phone's unread voicemail count is read from the spool, not AMI (2026-10-01, web client, voicemail)
+
+The /phone Voicemail button (dials `*97`) carries an unread badge. AMI was the obvious source
+and is refused: `VoicemailUsersList` is outside our manager.conf allowlist (verified live), and
+widening AMI privileges is a decision not taken for a badge. Instead the web process counts
+files on disk, read-only, which it can already do as `tnpbx:asterisk` (D129):
+
+- **Path:** `/var/spool/asterisk/voicemail/default/<mailbox>/INBOX/msg*.txt` — one `.txt` per
+  message. app_voicemail keeps new messages in `INBOX` and moves them to `Old` once heard, so
+  INBOX = new, which is what MWI reports. A missing folder (no message yet) or an unreadable
+  one is 0, logged; context and mailbox are shape-checked before they become a path.
+- **Scope:** the sum across the signed-in user's **own** extensions (UserEmail, then voicemail
+  email, D166) that are enabled, web-enabled and voicemail-enabled — for an admin too, whose
+  dropdown of every extension does not make every mailbox theirs. The handler takes no
+  parameter, so no client can name a mailbox; a user owning none gets a 404, which the page
+  shows as no badge.
+- **Polling:** on page load and every 30 s. The badge is a sum across the user's mailboxes,
+  while `*97` opens the registered extension's mailbox — the same thing for the usual one
+  extension per person.
+
+Decided while building: only `msg*.txt` is counted (stricter than `*.txt`, the same files in
+practice); the handler is a plain GET without the antiforgery check the Client handler has,
+because the answer is one count of the caller's own messages and carries no secret.

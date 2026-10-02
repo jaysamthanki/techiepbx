@@ -1,0 +1,106 @@
+@page "/phone"
+@model IndexModel
+@{
+    ViewData["Title"] = "Web client";
+
+    var clientUrl = Url.Page("Index", "Client");
+    var unreadUrl = Url.Page("Index", "Unread");
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-0">Web client</h1>
+</div>
+
+@if (Model.WebExtensions.Count == 0 && !Model.IsAdmin)
+{
+    @* A phone user nobody has matched to an extension (D164): say so, rather than an empty page. *@
+    <p>
+        No extension carries your email, so there is no phone to open here. Ask an admin to put
+        your email address on your extension as its voicemail email and to switch the web client
+        on for it, then reload this page.
+    </p>
+}
+else if (Model.WebExtensions.Count == 0)
+{
+    <p>
+        No extension has the web client switched on. Tick <strong>Web client</strong> on an
+        extension (Connectivity &rarr; Extensions), apply the config, then reload this page.
+    </p>
+}
+else
+{
+    @* The script reads the handler URLs and the voicemail code from here; everything else it
+       finds by id. *@
+    <div id="phone-client" class="mx-auto" style="max-width: 22rem;" data-client-url="@clientUrl"
+         data-unread-url="@unreadUrl" data-voicemail-code="@Techie.Pbx.Core.Models.SystemCodes.VoicemailMain">
+        <div class="mb-3">
+            <label class="form-label" for="phone-extension">Extension</label>
+            <select class="form-select" id="phone-extension">
+                @foreach (var extension in Model.WebExtensions)
+                {
+                    <option value="@extension.Number">@extension.Number — @extension.Name</option>
+                }
+            </select>
+        </div>
+
+        <p id="phone-status" class="text-body-secondary text-center mb-2" aria-live="polite">Connecting…</p>
+
+        @* Filled from the keypad and the keyboard: the number to call, then DTMF sent and the
+           transfer target. *@
+        <input id="phone-display" class="form-control form-control-lg font-monospace text-center mb-3"
+               readonly aria-label="Number" />
+
+        <div class="row row-cols-3 g-2 mb-2">
+            @foreach (var digit in new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#" })
+            {
+                <div class="col d-grid">
+                    <button type="button" class="btn btn-outline-secondary btn-lg font-monospace" data-digit="@digit">@digit</button>
+                </div>
+            }
+        </div>
+
+        <div class="row row-cols-2 g-2 mb-3">
+            <div class="col d-grid">
+                @* Dials *97, the mailbox of whichever extension is registered. The badge is the
+                   unread count across the user's own mailboxes (D169), hidden at zero. *@
+                <button type="button" id="phone-voicemail" class="btn btn-outline-secondary btn-sm position-relative" disabled>
+                    Voicemail
+                    <span id="phone-unread" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">
+                        <span id="phone-unread-count">0</span>
+                        <span class="visually-hidden">unread messages</span>
+                    </span>
+                </button>
+            </div>
+            <div class="col d-grid">
+                <button type="button" id="phone-clear" class="btn btn-outline-secondary btn-sm">Clear</button>
+            </div>
+        </div>
+
+        <div class="row row-cols-4 g-2">
+            <div class="col d-grid">
+                <button type="button" id="phone-call" class="btn btn-success" disabled>Call</button>
+            </div>
+            <div class="col d-grid">
+                <button type="button" id="phone-hangup" class="btn btn-danger" disabled>Hang up</button>
+            </div>
+            <div class="col d-grid">
+                <button type="button" id="phone-hold" class="btn btn-outline-secondary" disabled>Hold</button>
+            </div>
+            <div class="col d-grid">
+                <button type="button" id="phone-xfer" class="btn btn-outline-secondary" disabled>Xfer</button>
+            </div>
+        </div>
+
+        @* The far end's audio. autoplay for the browsers that allow it; phone.js calls play()
+           on user gestures for the ones that block autoplayed audio until one. *@
+        <audio id="phone-audio" autoplay></audio>
+    </div>
+}
+
+@section Scripts {
+    @if (Model.WebExtensions.Count > 0)
+    {
+        <script src="~/lib/jssip/jssip.min.js"></script>
+        <script src="~/js/phone.js" asp-append-version="true"></script>
+    }
+}

@@ -41,9 +41,9 @@ namespace Techie.Pbx.Web.Pages.Settings
                 },
                 new()
                 {
-                    Help = "For a server behind 1:1 NAT: the public address callers see, and the private " +
-                        "networks that are on this side of it. Leave both blank on a server with a public address of its own.",
-                    Rows = Rows(stored, SettingsKeys.SipExternalAddress, SettingsKeys.SipLocalNets),
+                    Help = "For a server behind 1:1 NAT: the public address callers see, the private " +
+                        "networks that are on this side of it, and this server's own private address. Leave them blank on a server with a public address of its own.",
+                    Rows = Rows(stored, SettingsKeys.SipExternalAddress, SettingsKeys.SipLocalNets, SettingsKeys.SipLocalAddress),
                     Title = "NAT",
                 },
                 new()

@@ -125,6 +125,51 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// Behind 1:1 NAT the local address maps to the external one as an ICE host candidate,
+        /// in its own section, and stunaddr is dropped even though a STUN server is set: the
+        /// sample says not to combine them, and stunaddr's AAAA lookup never worked on the lab
+        /// VM (D167).
+        /// </summary>
+        [Fact]
+        public void Rtp_with_ice_host_candidates_matches_expected_file()
+        {
+            var transport = new PjsipTransport
+            {
+                ExternalAddress = "20.14.91.194",
+                LocalAddress = "10.8.20.8",
+                LocalNets = { "10.8.20.0/24" },
+                StunServer = "stun.l.google.com:19302",
+            };
+
+            Assert.Equal(Expected("rtp-ice-host-candidates.conf"), RtpConfRenderer.Render(transport));
+        }
+
+        /// <summary>
+        /// A local address on its own maps to nothing, so no section is written and a STUN server
+        /// keeps its stunaddr (D167).
+        /// </summary>
+        [Fact]
+        public void A_local_address_without_an_external_one_writes_no_mapping()
+        {
+            var transport = new PjsipTransport
+            {
+                LocalAddress = "10.8.20.8",
+                StunServer = "stun.l.google.com:19302",
+            };
+
+            Assert.Equal(Expected("rtp-stun.conf"), RtpConfRenderer.Render(transport));
+        }
+
+        [Fact]
+        public void A_local_address_that_is_not_an_ip_address_is_refused()
+        {
+            var transport = new PjsipTransport { LocalAddress = "pbx.local" };
+
+            Assert.Contains("Local address must be an IP address.", transport.Validate());
+            Assert.Throws<InvalidOperationException>(() => RtpConfRenderer.Render(transport));
+        }
+
+        /// <summary>
         /// rtp.conf is read at startup only, so the applier has to report it as needing a restart
         /// rather than pretending a reload picked it up (D33).
         /// </summary>
@@ -247,18 +292,34 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// The things a PBX gets attacked through that we do not use: other channel drivers,
-        /// anonymous SIP identification, and the HTTP server.
+        /// anonymous SIP identification, and the WebSocket pieces the web client does not need —
+        /// chan_websocket is a media channel driver nothing here dials, and res_websocket_client
+        /// makes outbound WebSocket connections nothing here makes (D159).
         /// </summary>
         [Theory]
         [InlineData("chan_sip")]
         [InlineData("chan_iax2")]
         [InlineData("chan_skinny")]
+        [InlineData("chan_websocket")]
+        [InlineData("res_websocket_client")]
         [InlineData("res_pjsip_endpoint_identifier_anonymous")]
-        [InlineData("res_http_websocket")]
         [InlineData("res_agi")]
         public void The_allowlist_leaves_out_what_we_do_not_use(string module)
         {
             Assert.DoesNotContain(module, ModulesConfRenderer.Render());
+        }
+
+        /// <summary>
+        /// The web client's SIP WebSocket needs both halves (D159): the WebSocket support on the
+        /// HTTP server, and the pjsip transport that speaks SIP over it. Both are inert while
+        /// http.conf says enabled = no, which is every system without a web-enabled extension.
+        /// </summary>
+        [Theory]
+        [InlineData("res_http_websocket.so")]
+        [InlineData("res_pjsip_transport_websocket.so")]
+        public void The_allowlist_carries_what_the_web_client_registers_through(string module)
+        {
+            Assert.Contains(module, ModulesConfRenderer.Modules);
         }
 
         [Fact]

@@ -40,6 +40,12 @@ namespace Techie.Pbx.Web.Pages.Extensions
         /// </summary>
         public string? Secret { get; set; } = "";
 
+        /// <summary>
+        /// The Microsoft sign-in that owns this extension on /phone, or blank for none (D166).
+        /// Not the voicemail destination: that is <see cref="VoicemailEmail"/>.
+        /// </summary>
+        public string? UserEmail { get; set; } = "";
+
         public bool VoicemailAttachRecording { get; set; } = true;
         public bool VoicemailDeleteAfterEmail { get; set; }
         public string? VoicemailEmail { get; set; } = "";
@@ -51,5 +57,11 @@ namespace Techie.Pbx.Web.Pages.Extensions
         /// address to email and the box has whisper.cpp installed, which is optional.
         /// </summary>
         public bool VoicemailTranscribe { get; set; }
+
+        /// <summary>
+        /// The browser-based web client (D159, PoC): a second SIP device that rings alongside
+        /// this extension's own phone.
+        /// </summary>
+        public bool WebClient { get; set; }
     }
 }

@@ -3,6 +3,16 @@
     // htmx sends this on every request it makes (hx-headers below); our own fetch calls read it
     // from the meta tag. The header name is Program.AntiforgeryHeaderName.
     var requestToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+
+    // A phone user (D164) reaches /phone and nothing else (D165), so the admin menus, the
+    // apply-status poll and the home link would each be a link or a request that is refused.
+    // Only a signed-in user without the role loses them: the signed-out page keeps the layout
+    // it always had.
+    var showAdminNav = User.Identity?.IsAuthenticated != true || Techie.Pbx.Web.Security.AdminRole.IsAdmin(User);
+    // The softphone is a phone, not an admin page: no status poll there either (D164 dropped it
+    // for phone users; this drops it for an admin visiting /phone too — a call page does not
+    // need to know whether config is out of sync).
+    var showAdminNavOnThisPage = showAdminNav && !ViewContext.HttpContext.Request.Path.StartsWithSegments("/phone");
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -39,13 +49,22 @@
            to the light palette instead of letting data-bs-theme decide. *@
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm bg-body-tertiary border-bottom box-shadow mb-3">
             <div class="container">
-                <a class="navbar-brand" asp-area="" asp-page="/Status/Index">TNPBX</a>
+                @if (showAdminNav)
+                {
+                    <a class="navbar-brand" asp-area="" asp-page="/Status/Index">TNPBX</a>
+                }
+                else
+                {
+                    <a class="navbar-brand" asp-area="" asp-page="/PhoneClient/Index">TNPBX</a>
+                }
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
                         aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
+                        @if (showAdminNav)
+                        {
                         @* Connectivity: the things a call arrives on or leaves by — the extension, the
                            handset it rings and the trunk to the outside — as against Call Handling,
                            which is what happens to a call once it is here (D120). *@
@@ -113,6 +132,7 @@
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Status/Logs">Logs</a></li>
                             </ul>
                         </li>
+                        }
                     </ul>
                     <partial name="_LoginPartial" />
 
@@ -121,9 +141,12 @@
                         there is something to apply (D43). The poll is what makes it appear after a
                         change and disappear after an apply; the events just make it quicker.
                     *@
-                    <div class="d-flex align-items-center ms-2"
-                         hx-get="/ConfigStatus"
-                         hx-trigger="load, every 5s, configChanged from:body, configApplied from:body"></div>
+                    @if (showAdminNavOnThisPage)
+                    {
+                        <div class="d-flex align-items-center ms-2"
+                             hx-get="/ConfigStatus"
+                             hx-trigger="load, every 5s, configChanged from:body, configApplied from:body"></div>
+                    }
 
                     @*
                         Light or dark. Both icons are in the page and CSS shows the one that matches

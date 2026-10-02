@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using log4net;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,7 @@ using Techie.Pbx.Core.Security;
 using Techie.Pbx.Web.CallRecords;
 using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
+using Techie.Pbx.Web.Services;
 
 namespace Techie.Pbx.Web
 {
@@ -39,6 +41,18 @@ namespace Techie.Pbx.Web
         public const string DefaultDatabasePath = "Data/tnpbx.db";
 
         private static readonly ILog Log = LogManager.GetLogger(typeof(Program));
+
+        /// <summary>
+        /// The pages any signed-in user may reach, by view engine path; every other page needs
+        /// the admin role (D165). The web client, because reaching it is the whole of what a
+        /// phone user's sign-in is for (D164), and the error page, because an exception is not
+        /// something to answer with "access denied".
+        /// </summary>
+        private static readonly HashSet<string> SignedInPages = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "/Error",
+            "/PhoneClient/Index",
+        };
 
         public static void Main(string[] args)
         {
@@ -72,6 +86,13 @@ namespace Techie.Pbx.Web
 
             builder.WebHost.ConfigureKestrel(options =>
             {
+                // The OIDC sign-in reply carries every cookie the browser still holds for this
+                // site, and Entra's own correlation cookies from failed attempts stack up: the
+                // default 32 KB request-header limit then refuses the POST with a bare 431 before
+                // sign-in can finish (seen live 2026-09-30). 64 KB leaves a browser that must
+                // re-sign-in several times over still comfortably inside.
+                options.Limits.MaxRequestHeadersTotalSize = 64 * 1024;
+
                 foreach (var binding in bindings)
                 {
                     if (binding.UsesCertificate && certificate != null)
@@ -126,12 +147,27 @@ namespace Techie.Pbx.Web
                 };
             });
 
+            // Two tiers (D165). The fallback stays "signed in", which is all a phone user is and
+            // all /phone, its WebSocket relay and the static files ask for. Everything else — every
+            // other page, every API controller — asks for the admin app role on top.
             builder.Services.AddAuthorization(options =>
             {
-                // By default, all incoming requests will be authorized according to the default policy.
                 options.FallbackPolicy = options.DefaultPolicy;
+                options.AddPolicy(AdminRole.PolicyName, policy => policy
+                    .RequireAuthenticatedUser()
+                    .RequireAssertion(context => AdminRole.IsAdmin(context.User)));
             });
-            builder.Services.AddRazorPages()
+
+            // Admin-only is the rule for a page and the exemptions are named, so a page added
+            // later is an admin page without anyone having to remember. The convention covers
+            // this app's own pages only: the Microsoft Identity UI pages (signed out, access
+            // denied) live in an area, which a folder convention does not reach.
+            builder.Services.AddRazorPages(options =>
+                    options.Conventions.AddFolderApplicationModelConvention("/", model =>
+                    {
+                        if (!SignedInPages.Contains(model.ViewEnginePath))
+                            model.EndpointMetadata.Add(new AuthorizeAttribute(AdminRole.PolicyName));
+                    }))
                 .AddMicrosoftIdentityUI();
 
             // The API is called by our own pages with the session cookie, so it needs the same
@@ -188,6 +224,11 @@ namespace Techie.Pbx.Web
 
             app.UseRouting();
 
+            // Makes the WebSocket feature exist for the relay's endpoint (D160): without this,
+            // AcceptWebSocketAsync and IsWebSocketRequest are unavailable app-wide, and the
+            // relay answers 400 to a perfectly valid handshake.
+            app.UseWebSockets();
+
             app.UseAuthentication();
 
             // The failsafe sign-in, and only when it has been asked for (D24).
@@ -209,13 +250,41 @@ namespace Techie.Pbx.Web
             if (PbxRequestLog.Enabled)
                 app.UseMiddleware<RequestLogUserMiddleware>();
 
+            // A phone user who lands on the root would otherwise be refused before any handler of
+            // theirs could run — the root is an admin page — and "Access denied" is the wrong first
+            // screen for a sign-in whose whole purpose is /phone (D165). Redirected here, before
+            // authorization, they never see the refusal; every other admin path still answers
+            // access denied, and the signed-out root still goes to Entra's sign-in.
+            app.UseWhen(
+                context => context.User.Identity?.IsAuthenticated == true &&
+                            !Techie.Pbx.Web.Security.AdminRole.IsAdmin(context.User) &&
+                            (context.Request.Path == "/" || context.Request.Path == ""),
+                branch => branch.Run(context =>
+                {
+                    // Why a signed-in user was redirected: the portal can show a role assignment
+                    // while the token still carries none, and this is the one place that knows.
+                    var roles = string.Join(",", context.User.Claims
+                        .Where(claim => claim.Type.Contains("role", StringComparison.OrdinalIgnoreCase))
+                        .Select(claim => claim.Type + "=" + claim.Value));
+                    Log.Info($"Root redirected to /phone for {context.User.Identity?.Name} (role claims: " +
+                        $"{(roles.Length > 0 ? roles : "none")})");
+                    context.Response.Redirect("/phone");
+                    return Task.CompletedTask;
+                }));
+
             app.UseAuthorization();
 
             app.MapStaticAssets();
             app.MapRazorPages()
                .WithStaticAssets();
-            app.MapControllers();
+
+            // The admin role for every controller (D165). [AllowAnonymous] still wins where it is
+            // declared, so phone provisioning, the voicemail notify endpoint with its own bearer
+            // token (D129) and the Microsoft Identity sign-in/sign-out controller are untouched.
+            app.MapControllers()
+               .RequireAuthorization(AdminRole.PolicyName);
             MapAcmeChallenge(app);
+            AsteriskWebSocketRelay.Map(app);
 
             PbxSounds.Open(app.Configuration, app.Environment.ContentRootPath);
             PbxEntra.Open(app.Configuration);

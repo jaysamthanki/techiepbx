@@ -18,8 +18,10 @@ namespace Techie.Pbx.Asterisk.Ami
 
         /// <summary>
         /// Matches contacts to the extension numbers we asked about. Pure, so the mapping is
-        /// testable without a connection. A contact's endpoint name is the extension number in
-        /// our generated config (D19); contacts for anything else are ignored.
+        /// testable without a connection. A contact's AOR is the extension number in our
+        /// generated config (D19), or the number with "-web" on the end for the extension's web
+        /// client (D159), which counts toward the same extension (D168); contacts for anything
+        /// else are ignored.
         /// </summary>
         public static Dictionary<string, RegistrationState> Map(IEnumerable<PjsipContact> contacts, IEnumerable<string> numbers)
         {
@@ -30,13 +32,15 @@ namespace Techie.Pbx.Asterisk.Ami
 
             foreach (var contact in contacts)
             {
-                if (!states.TryGetValue(contact.Aor, out var known))
+                var number = ExtensionNumberOf(contact.Aor);
+
+                if (!states.TryGetValue(number, out var known))
                     continue;
 
-                // One extension can have several contacts (a desk phone and a softphone, say).
+                // One extension can have several contacts (a desk phone and the web client, say).
                 // One reachable contact is enough to call the extension registered.
                 if (known != RegistrationState.Registered)
-                    states[contact.Aor] = StateFor(contact.Status);
+                    states[number] = StateFor(contact.Status);
             }
 
             return states;
@@ -117,6 +121,15 @@ namespace Techie.Pbx.Asterisk.Ami
 
             return unknown;
         }
+
+        /// <summary>
+        /// The extension a contact's AOR belongs to: the web client's "-web" AOR is its
+        /// extension's (D168), and any other AOR is returned as it is.
+        /// </summary>
+        private static string ExtensionNumberOf(string aor) =>
+            aor.EndsWith(PjsipConfRenderer.WebClientSuffix, StringComparison.Ordinal)
+                ? aor[..^PjsipConfRenderer.WebClientSuffix.Length]
+                : aor;
 
         /// <summary>
         /// A contact exists, so the phone has registered. Only an explicit "Unreachable" means

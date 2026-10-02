@@ -44,14 +44,14 @@ namespace Techie.Pbx.Web.Pages.Shared
         {
             RegistrationState.Registered => this.IsTrunk
                 ? "The provider has accepted our registration."
-                : "A phone is registered against this extension.",
+                : "A phone or web client is registered against this extension.",
             RegistrationState.Rejected => "The provider refused our credentials. Check the username and password.",
             RegistrationState.Unreachable => this.IsTrunk
                 ? "The provider registered us but has stopped answering."
-                : "A phone registered but has stopped answering Asterisk.",
+                : "A phone or web client registered but has stopped answering Asterisk.",
             RegistrationState.NotRegistered => this.IsTrunk
                 ? "This trunk is not registered with its provider."
-                : "No phone has registered against this extension.",
+                : "No phone or web client has registered against this extension.",
             _ => "Asterisk could not be asked over AMI.",
         };
 
