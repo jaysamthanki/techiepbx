@@ -34,12 +34,6 @@ namespace Techie.Pbx.Web
         /// </summary>
         public const string AntiforgeryHeaderName = "RequestVerificationToken";
 
-        /// <summary>
-        /// Where the database goes when Database:Path says nothing: a Data folder inside the
-        /// install, so that copying the app folder copies everything it owns (D25).
-        /// </summary>
-        public const string DefaultDatabasePath = "Data/tnpbx.db";
-
         private static readonly ILog Log = LogManager.GetLogger(typeof(Program));
 
         /// <summary>
@@ -301,13 +295,8 @@ namespace Techie.Pbx.Web
         /// Database:Path, or the default, and a relative path is relative to the install rather
         /// than to whatever directory the service happened to start in.
         /// </summary>
-        private static string DatabasePath(IWebHostEnvironment environment, IConfiguration configuration)
-        {
-            var configured = configuration["Database:Path"];
-            var path = string.IsNullOrWhiteSpace(configured) ? DefaultDatabasePath : configured.Trim();
-
-            return Path.IsPathRooted(path) ? path : Path.Combine(environment.ContentRootPath, path);
-        }
+        private static string DatabasePath(IWebHostEnvironment environment, IConfiguration configuration) =>
+            Database.ResolvePath(configuration[Database.PathSetting], Database.DefaultPath, environment.ContentRootPath);
 
         /// <summary>
         /// The one endpoint outside the Entra cookie that is not phone provisioning: the ACME

@@ -34,6 +34,12 @@ namespace Techie.Pbx.Asterisk.Audio
         /// </summary>
         public const long MaxUploadBytes = 20L * 1024 * 1024;
 
+        /// <summary>
+        /// The appsettings.json key for the base path, read by the web app and the backup CLI.
+        /// Unset means <see cref="DefaultSoundsPath"/>.
+        /// </summary>
+        public const string PathSetting = "Announcements:SoundsPath";
+
         /// <summary>The one directory under the base path that this feature owns.</summary>
         public const string SubDirectory = "announcements";
 

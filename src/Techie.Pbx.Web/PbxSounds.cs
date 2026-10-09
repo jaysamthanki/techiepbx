@@ -1,5 +1,6 @@
 using log4net;
 using Techie.Pbx.Asterisk.Audio;
+using Techie.Pbx.Core.Data;
 
 namespace Techie.Pbx.Web
 {
@@ -13,9 +14,6 @@ namespace Techie.Pbx.Web
     /// </summary>
     public static class PbxSounds
     {
-        /// <summary>The configuration key for the base path. Unset means the Asterisk default.</summary>
-        public const string PathSetting = "Announcements:SoundsPath";
-
         private static readonly ILog Log = LogManager.GetLogger(typeof(PbxSounds));
 
         private static AnnouncementStore? store;
@@ -35,11 +33,8 @@ namespace Techie.Pbx.Web
         /// </summary>
         public static void Open(IConfiguration configuration, string contentRootPath)
         {
-            var configured = configuration[PathSetting];
-            var path = string.IsNullOrWhiteSpace(configured) ? AnnouncementStore.DefaultSoundsPath : configured.Trim();
-
-            if (!Path.IsPathRooted(path))
-                path = Path.Combine(contentRootPath, path);
+            var path = Database.ResolvePath(
+                configuration[AnnouncementStore.PathSetting], AnnouncementStore.DefaultSoundsPath, contentRootPath);
 
             store = new AnnouncementStore(path);
             Log.Info($"Announcement audio lives in {store.SoundsPath}");

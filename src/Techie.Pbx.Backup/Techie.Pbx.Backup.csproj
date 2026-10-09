@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Same official deploy shape as the web app and the helper: one self-contained single-file
+         executable, installed on the box as `tnpbx` (D171). -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="log4net" Version="3.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Asterisk for the sounds and voicemail paths; it brings Core (the database, the schema
+         scripts and the archive name rules) with it. -->
+    <ProjectReference Include="..\Techie.Pbx.Asterisk\Techie.Pbx.Asterisk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="log4net.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

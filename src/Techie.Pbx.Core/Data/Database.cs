@@ -11,16 +11,31 @@ namespace Techie.Pbx.Core.Data
     /// </summary>
     public class Database
     {
+        /// <summary>
+        /// Where the database goes when Database:Path says nothing: a Data folder inside the
+        /// install, so that copying the app folder copies everything it owns (D25).
+        /// </summary>
+        public const string DefaultPath = "Data/tnpbx.db";
+
+        /// <summary>The appsettings.json key the web app and the backup CLI both read the path from.</summary>
+        public const string PathSetting = "Database:Path";
+
         private static readonly ILog Log = LogManager.GetLogger(typeof(Database));
 
-        private readonly string _connectionString;
+        private readonly string connectionString;
 
         public string FilePath { get; }
 
+        /// <summary>
+        /// The schema version the scripts in this build migrate up to. A database newer than this
+        /// was written by a newer build, and nothing here can migrate it down (D171).
+        /// </summary>
+        public static int LatestSchemaVersion => LoadSchemaScripts().Max(s => s.Version);
+
         public Database(string filePath)
         {
-            FilePath = filePath;
-            _connectionString = new SqliteConnectionStringBuilder
+            this.FilePath = filePath;
+            this.connectionString = new SqliteConnectionStringBuilder
             {
                 DataSource = filePath,
                 Mode = SqliteOpenMode.ReadWriteCreate,
@@ -28,23 +43,16 @@ namespace Techie.Pbx.Core.Data
             }.ToString();
         }
 
-        public SqliteConnection Open()
-        {
-            var connection = new SqliteConnection(_connectionString);
-            connection.Open();
-            return connection;
-        }
-
         /// <summary>
         /// Creates the database if needed and applies any pending schema scripts.
         /// </summary>
         public void Migrate()
         {
-            using var connection = Open();
+            using var connection = this.Open();
 
             // Secrets live in here; keep it private to the service account.
             if (!OperatingSystem.IsWindows())
-                File.SetUnixFileMode(FilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                File.SetUnixFileMode(this.FilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
             var current = connection.ExecuteScalar<long>("PRAGMA user_version");
 
@@ -57,6 +65,25 @@ namespace Techie.Pbx.Core.Data
 
                 Log.Info($"Applied schema version {version}");
             }
+        }
+
+        public SqliteConnection Open()
+        {
+            var connection = new SqliteConnection(this.connectionString);
+            connection.Open();
+            return connection;
+        }
+
+        /// <summary>
+        /// A path from configuration, or the default when it says nothing; a relative path is
+        /// relative to the install rather than to whatever directory the process started in (D25).
+        /// The one rule for every configured path, so the web app and the backup CLI cannot
+        /// disagree about where a file is.
+        /// </summary>
+        public static string ResolvePath(string? configured, string fallback, string contentRoot)
+        {
+            var path = string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
+            return Path.IsPathRooted(path) ? path : Path.Combine(contentRoot, path);
         }
 
         private static List<(int Version, string Sql)> LoadSchemaScripts()

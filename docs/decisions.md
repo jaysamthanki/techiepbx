@@ -3832,3 +3832,12 @@ stayed and why, and the import's announcement of that name does not land either 
 fails, its warning says the rest). The clear and the land are not one transaction: a failed
 import can leave the tables half-cleared, and the fix is to run the import again, which clears
 whatever is left and lands again.
+
+Implementation (2026-10-09): `src/Techie.Pbx.Backup`, a root console binary installed as `tnpbx`
+(so the CLI is separate from the D142 typed-message socket daemon; backup/restore are operator
+actions, not web-app messages, and cron runs the same binary). DB copy via SQLite's online
+backup API, archive streamed through system tar. 34 new tests. Live round-trip on the lab:
+full backup (1,147 entries, 150 MB), delete an announcement + a phone by hand, restore, both
+back, web restarted and healthy, the replaced DB kept as `tnpbx.db.pre-restore`. Note: the
+binary transitively carries ImageSharp (D173) through Techie.Pbx.Asterisk's sounds-path reuse —
+same posture, unused decode paths, unchanged decision.
