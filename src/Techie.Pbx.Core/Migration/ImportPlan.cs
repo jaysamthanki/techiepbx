@@ -11,6 +11,12 @@ namespace Techie.Pbx.Core.Migration
         /// <summary>How many FreePBX chan_sip extensions become PJSIP endpoints (D170).</summary>
         public int ChanSipExtensions { get; set; }
 
+        /// <summary>
+        /// The TNPBX rows this import deletes before anything lands (D174): the six tables the
+        /// import owns, snapshotted from this database so the preview can say what will go.
+        /// </summary>
+        public ExistingConfig Cleared { get; set; } = new();
+
         public List<Extension> Extensions { get; set; } = new();
 
         /// <summary>The FreePBX inbound routes that will land, before each is multiplied by the trunks.</summary>

@@ -91,7 +91,7 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
-        public void An_existing_extension_number_is_skipped_never_overwritten()
+        public void An_existing_extension_is_cleared_and_the_freePBX_one_lands()
         {
             var manifest = Manifest();
             manifest.Extensions!.Add(Ext("101"));
@@ -102,11 +102,10 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
-            Assert.Equal("102", Assert.Single(plan.Extensions).Number);
-            var warning = Assert.Single(plan.Warnings);
-            Assert.Equal(MigrationSection.Extensions, warning.Section);
-            Assert.Contains("Extension 101 was not imported", warning.What);
-            Assert.Contains("never overwrites", warning.Why);
+            // The import clears its tables first (D174): both land, and the preview says what went.
+            Assert.Equal(new[] { "101", "102" }, plan.Extensions.Select(e => e.Number));
+            Assert.Contains("101", plan.Cleared.ExtensionNumbers);
+            Assert.DoesNotContain(plan.Warnings, w => w.What.Contains("was not imported"));
         }
 
         [Fact]
@@ -161,7 +160,7 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
-        public void A_colliding_trunk_name_gets_imported_on_the_end()
+        public void A_colliding_trunk_name_is_cleared_so_nothing_needs_a_suffix()
         {
             var manifest = Manifest();
             manifest.Trunks!.Add(Trunk("callcentric"));
@@ -171,7 +170,8 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
-            Assert.Equal("callcentric-imported", Assert.Single(plan.Trunks).Name);
+            Assert.Equal("callcentric", Assert.Single(plan.Trunks).Name);
+            Assert.Contains("callcentric", plan.Cleared.TrunkNames);
         }
 
         [Theory]
@@ -379,7 +379,7 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
-        public void An_existing_mac_is_skipped_and_a_second_phone_on_one_line_gets_no_keys()
+        public void An_existing_mac_is_cleared_and_a_second_phone_on_one_line_gets_no_keys()
         {
             var manifest = Manifest();
             manifest.Extensions!.Add(Ext("104"));
@@ -392,10 +392,13 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
-            Assert.Equal(new[] { "0004f2000002", "0004f2000003" }, plan.Phones.Select(p => p.Phone.Mac));
+            // All three land (the existing one is cleared first, D174); the first to claim line 104 keeps it.
+            Assert.Equal(new[] { "0004f2000001", "0004f2000002", "0004f2000003" }, plan.Phones.Select(p => p.Phone.Mac));
+            Assert.Contains("0004f2000001", plan.Cleared.PhoneMacs);
             Assert.Single(plan.Phones[0].Buttons);
             Assert.Empty(plan.Phones[1].Buttons);
-            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000001 was not imported." && w.Why.Contains("never overwrites"));
+            Assert.Empty(plan.Phones[2].Buttons);
+            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000002 was imported without keys.");
             Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000003 was imported without keys.");
         }
 
@@ -419,12 +422,12 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
-            var mailbox = Assert.Single(plan.Mailboxes);
-            Assert.Equal("101", mailbox.Mailbox);
-            Assert.Equal(2, mailbox.Messages);
-            Assert.Equal(new[] { "INBOX/msg0000.txt", "INBOX/msg0000.wav", "Old/msg0000.WAV", "Old/msg0000.txt" }, mailbox.Files);
-            Assert.Equal(2, plan.VoicemailMessages);
-            Assert.Contains(plan.Warnings, w => w.What.Contains("mailbox 102") && w.Why.Contains("already existed"));
+            // Extension 102 is cleared first (D174), so its mailbox is one the import creates too.
+            Assert.Equal(new[] { "101", "102" }, plan.Mailboxes.Select(m => m.Mailbox));
+            Assert.Equal(2, plan.Mailboxes[0].Messages);
+            Assert.Equal(new[] { "INBOX/msg0000.txt", "INBOX/msg0000.wav", "Old/msg0000.WAV", "Old/msg0000.txt" }, plan.Mailboxes[0].Files);
+            Assert.Equal(3, plan.VoicemailMessages);
+            Assert.DoesNotContain(plan.Warnings, w => w.Why.Contains("already existed"));
             Assert.Contains(plan.Warnings, w => w.What.Contains("mailbox 103") && w.Why.Contains("was not imported"));
         }
 
@@ -446,8 +449,10 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
+            // The announcement that was here is cleared first (D174), so the name lands as it was.
             Assert.Equal(2, plan.Sounds.Count);
-            Assert.Equal("Main greeting (imported)", plan.Sounds[0].Announcement.Name);
+            Assert.Equal("Main greeting", plan.Sounds[0].Announcement.Name);
+            Assert.Contains("Main greeting", plan.Cleared.AnnouncementNames);
             Assert.Equal("en/custom/QB_Main_Line_Greeting.wav", plan.Sounds[0].SourceFile);
             Assert.Equal(new[] { "en/custom/QB_Main_Line_Greeting.g722" }, plan.Sounds[0].IgnoredFiles);
             Assert.True(plan.Sounds[0].Convertible);

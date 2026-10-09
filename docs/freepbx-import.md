@@ -33,6 +33,18 @@ Everything else FreePBX has (IVRs, ring groups, time conditions, parking, queues
 **not** in v1. Destinations that name them are reported by the importer as
 `skipped, needs manual attention` rather than silently dropped.
 
+## The import clears first (D174)
+
+The six tables the import owns — extensions, trunks, phones (with their keys), outbound routes,
+inbound routes and announcements — are **emptied before anything lands**. There is no
+keep-or-overwrite decision to make: what the import lands is everything there will be.
+The preview shows what will be deleted before the operator can confirm; the report says what
+was. Settings, users, parking and everything else the import does not own are untouched, and
+voicemail already in the spool is never deleted by the clear (messages are copied in, never
+removed). Re-running an import is clean: it clears and lands the same rows again, so a retry
+after a failed import does not leave half of the old one behind. **Take a backup first** —
+`tnpbx restore` (D171) or a database copy — if anything already there matters.
+
 ## Manifest v1
 
 Top level:

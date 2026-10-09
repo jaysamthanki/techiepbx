@@ -10,6 +10,17 @@
     @Model.Phones.Count phone(s) and @Model.VoicemailMessages voicemail message(s).
 </div>
 
+@if (Model.Cleared.ExtensionNumbers.Count + Model.Cleared.TrunkNames.Count + Model.Cleared.PhoneMacs.Count +
+     Model.Cleared.OutboundRouteNames.Count + Model.Cleared.InboundRouteNames.Count + Model.Cleared.AnnouncementNames.Count > 0)
+{
+    <div class="alert alert-secondary">
+        Cleared first (D174): @Model.Cleared.ExtensionNumbers.Count extension(s), @Model.Cleared.TrunkNames.Count
+        trunk(s), @Model.Cleared.PhoneMacs.Count phone(s) with their keys, @Model.Cleared.OutboundRouteNames.Count
+        outbound route(s), @Model.Cleared.InboundRouteNames.Count inbound route(s) and
+        @Model.Cleared.AnnouncementNames.Count announcement(s) that were already here were deleted.
+    </div>
+}
+
 @if (Model.Trunks.Count > 0)
 {
     <div class="alert alert-warning">

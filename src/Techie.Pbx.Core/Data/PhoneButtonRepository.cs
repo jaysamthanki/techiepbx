@@ -33,6 +33,13 @@ namespace Techie.Pbx.Core.Data
             this.database = database;
         }
 
+        /// <summary>Every key on one phone. The migration importer clears the phone's keys with it (D174).</summary>
+        public void DeleteForPhone(long phoneID)
+        {
+            using var connection = this.database.Open();
+            connection.Execute("DELETE FROM PhoneButtons WHERE PhoneID = @phoneID", new { phoneID });
+        }
+
         /// <summary>One phone's assigned keys, in key order. A key nobody assigned has no row.</summary>
         public List<PhoneButton> GetForPhone(long phoneID)
         {

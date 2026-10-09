@@ -38,6 +38,9 @@ namespace Techie.Pbx.Asterisk.Migration
 
         private readonly AnnouncementRepository announcements;
         private readonly PhoneButtonRepository buttons;
+
+        /// <summary>Kept for the clear-first snapshot <see cref="ExistingConfig.FromDatabase"/> reads (D174).</summary>
+        private readonly Database database;
         private readonly ExtensionRepository extensions;
         private readonly InboundRouteRepository inbound;
         private readonly OutboundRouteRepository outbound;
@@ -53,6 +56,7 @@ namespace Techie.Pbx.Asterisk.Migration
         public MigrationImporter(Database database, AnnouncementStore sounds, string spoolRoot)
         {
             this.announcements = new AnnouncementRepository(database);
+            this.database = database;
             this.buttons = new PhoneButtonRepository(database);
             this.extensions = new ExtensionRepository(database);
             this.inbound = new InboundRouteRepository(database);
@@ -68,6 +72,7 @@ namespace Techie.Pbx.Asterisk.Migration
         {
             var report = new ImportReport { Warnings = new List<MigrationWarning>(plan.Warnings) };
 
+            this.ClearExisting(report);
             this.ImportExtensions(plan, report);
             var trunkIDs = this.ImportTrunks(plan, report);
             this.ImportOutboundRoutes(plan, report, trunkIDs);
@@ -76,12 +81,50 @@ namespace Techie.Pbx.Asterisk.Migration
             this.ImportPhones(plan, report);
             this.ImportVoicemail(plan, report);
 
-            Log.Info($"FreePBX import: {report.Extensions.Count} extensions, {report.Trunks.Count} trunks (disabled), " +
-                     $"{report.OutboundRoutes.Count} outbound routes, {report.InboundRoutes.Count} inbound routes, " +
-                     $"{report.Announcements.Count} announcements, {report.Phones.Count} phones, " +
-                     $"{report.VoicemailMessages} voicemail messages, {report.Warnings.Count} warnings");
+            Log.Info($"FreePBX import: cleared {report.Cleared.ExtensionNumbers.Count} extension(s), " +
+                     $"{report.Cleared.TrunkNames.Count} trunk(s), {report.Cleared.PhoneMacs.Count} phone(s), " +
+                     $"{report.Cleared.OutboundRouteNames.Count} outbound route(s), " +
+                     $"{report.Cleared.InboundRouteNames.Count} inbound route(s), " +
+                     $"{report.Cleared.AnnouncementNames.Count} announcement(s); then {report.Extensions.Count} " +
+                     $"extensions, {report.Trunks.Count} trunks (disabled), {report.OutboundRoutes.Count} outbound " +
+                     $"routes, {report.InboundRoutes.Count} inbound routes, {report.Announcements.Count} " +
+                     $"announcements, {report.Phones.Count} phones, {report.VoicemailMessages} voicemail messages, " +
+                     $"{report.Warnings.Count} warnings");
 
             return report;
+        }
+
+        /// <summary>
+        /// The import clears first (D174): extensions, trunks, phones with their keys, routes and
+        /// announcements are the import's tables, and everything already in them goes before
+        /// anything lands — no keep-or-overwrite decisions, the import is the whole truth once it
+        /// finishes. Settings, users and everything else it does not own are untouched, and the
+        /// voicemail spool of a cleared extension is left alone: messages are copied, never deleted.
+        /// </summary>
+        private void ClearExisting(ImportReport report)
+        {
+            report.Cleared = ExistingConfig.FromDatabase(this.database);
+
+            foreach (var phone in this.phones.GetAll())
+                this.buttons.DeleteForPhone(phone.PhoneID);
+
+            foreach (var route in this.outbound.GetAll())
+                this.outbound.Delete(route.OutboundRouteID);
+
+            foreach (var route in this.inbound.GetAll())
+                this.inbound.Delete(route.InboundRouteID);
+
+            foreach (var trunk in this.trunks.GetAll())
+                this.trunks.Delete(trunk.TrunkID);
+
+            foreach (var announcement in this.announcements.GetAll())
+                this.announcements.Delete(announcement.AnnouncementID);
+
+            foreach (var extension in this.extensions.GetAll())
+                this.extensions.Delete(extension.ExtensionID);
+
+            foreach (var phone in this.phones.GetAll())
+                this.phones.Delete(phone.PhoneID);
         }
 
         /// <summary>One message, folder by folder, never over a message that is already there.</summary>

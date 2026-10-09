@@ -16,6 +16,12 @@ namespace Techie.Pbx.Asterisk.Migration
         /// <summary>What the apply after the import did, in the words the navbar's apply uses.</summary>
         public string ApplySummary { get; set; } = "";
 
+        /// <summary>
+        /// The rows this import deleted before anything landed, read fresh at import time (D174):
+        /// the six tables the import owns, so the report can say what went.
+        /// </summary>
+        public ExistingConfig Cleared { get; set; } = new();
+
         public List<string> Extensions { get; set; } = new();
 
         /// <summary>"DID 17142029302 on callcentric", one per row written.</summary>

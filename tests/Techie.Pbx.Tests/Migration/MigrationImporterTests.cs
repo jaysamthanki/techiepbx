@@ -138,7 +138,7 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
-        public void An_extension_that_appeared_after_the_preview_is_not_overwritten()
+        public void An_extension_that_appeared_after_the_preview_is_cleared_and_replaced()
         {
             var plan = this.Plan(this.Manifest());
 
@@ -147,23 +147,33 @@ namespace Techie.Pbx.Tests.Migration
 
             var report = this.Run(plan);
 
-            Assert.Equal("Already here", new ExtensionRepository(this.database).GetByNumber("101")!.Name);
-            Assert.Equal(new[] { "102" }, report.Extensions);
-            Assert.Contains(report.Warnings, w => w.What == "Extension 101 was not imported." && w.Why.Contains("already exists"));
+            // The import clears its tables first (D174), even what appeared after the preview.
+            Assert.Equal(new[] { "101", "102" }, report.Extensions);
+            Assert.Contains("101", report.Cleared.ExtensionNumbers);
+            var extension = new ExtensionRepository(this.database).GetByNumber("101")!;
+            Assert.Equal("User 101", extension.Name);
+            Assert.NotEqual("ExistingSecret12345", extension.Secret);
         }
 
         [Fact]
-        public void Running_a_plan_twice_skips_everything_the_first_run_wrote()
+        public void Running_a_plan_twice_clears_and_lands_the_same_rows_again()
         {
             var manifest = this.Manifest();
             this.Run(this.Plan(manifest));
 
             var second = this.Plan(manifest);
 
-            Assert.Empty(second.Extensions);
-            Assert.Empty(second.Phones);
-            Assert.Equal("callcentric-imported", Assert.Single(second.Trunks).Name);
-            Assert.Equal("Default-imported", Assert.Single(second.OutboundRoutes).Route.Name);
+            // Re-running is clean (D174): everything is planned again, no -imported suffixes.
+            Assert.Equal(new[] { "101", "102" }, second.Extensions.Select(e => e.Number));
+            Assert.Equal("callcentric", Assert.Single(second.Trunks).Name);
+            Assert.Equal("Default", Assert.Single(second.OutboundRoutes).Route.Name);
+            Assert.Contains("101", second.Cleared.ExtensionNumbers);
+
+            this.Run(second);
+
+            Assert.Equal(2, new ExtensionRepository(this.database).GetAll().Count);
+            Assert.Single(new TrunkRepository(this.database).GetAll());
+            Assert.Single(new PhoneRepository(this.database).GetAll());
         }
 
         [Fact]

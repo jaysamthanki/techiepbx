@@ -3811,3 +3811,17 @@ PolycomImageResizer (D154), only decodes PNG/JPEG (locked Configuration, magic-b
 and only ever encodes PNG, so the affected TIFF encoders are unreachable from an upload.
 Stay on 3.1.12, documented in the csproj; revisit if we ever encode other formats, expose
 more decoders, or buy a license.
+
+### D174. The FreePBX import clears its tables first (2026-10-09, import)
+
+Requested after the first live import: the importer deletes every row in the six tables it owns —
+extensions, trunks, phones with their keys, outbound routes, inbound routes and announcements —
+before anything lands. No keep-or-overwrite decisions, no `-imported` suffixes, no skip warnings
+for numbers or MACs that are already here: what the import lands is everything there will be.
+The plan snapshots what is there now (`ImportPlan.Cleared`) so the preview's red alert can say
+exactly what goes; the report reads it fresh (`ImportReport.Cleared`) and says what went.
+Settings, users, parking and everything else the import does not own are untouched. Voicemail
+already in the spool is never deleted by the clear — messages are copied in, never removed.
+Side benefits: re-imports are idempotent (clear + land again, no suffixes), and inbound routes
+whose destination extension existed here but is not in the export are correctly skipped as
+unreachable, because after the clear there is nothing for them to point at.

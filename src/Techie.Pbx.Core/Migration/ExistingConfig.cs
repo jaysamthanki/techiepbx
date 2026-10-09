@@ -15,6 +15,10 @@ namespace Techie.Pbx.Core.Migration
         public HashSet<string> ClaimedLines { get; set; } = new(StringComparer.Ordinal);
 
         public HashSet<string> ExtensionNumbers { get; set; } = new(StringComparer.Ordinal);
+
+        /// <summary>Inbound route names, for the import's cleared-first snapshot and report (D174).</summary>
+        public HashSet<string> InboundRouteNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
         public HashSet<string> OutboundRouteNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> PhoneMacs { get; set; } = new(StringComparer.Ordinal);
         public HashSet<string> TrunkNames { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -24,6 +28,7 @@ namespace Techie.Pbx.Core.Migration
             AnnouncementNames = new(new AnnouncementRepository(database).GetAll().Select(a => a.Name), StringComparer.OrdinalIgnoreCase),
             ClaimedLines = new(new PhoneButtonRepository(database).GetLines().Select(b => b.TargetValue), StringComparer.Ordinal),
             ExtensionNumbers = new(new ExtensionRepository(database).GetAll().Select(e => e.Number), StringComparer.Ordinal),
+            InboundRouteNames = new(new InboundRouteRepository(database).GetAll().Select(r => r.Description), StringComparer.OrdinalIgnoreCase),
             OutboundRouteNames = new(new OutboundRouteRepository(database).GetAll().Select(r => r.Name), StringComparer.OrdinalIgnoreCase),
             PhoneMacs = new(new PhoneRepository(database).GetAll().Select(p => p.Mac), StringComparer.Ordinal),
             TrunkNames = new(new TrunkRepository(database).GetAll().Select(t => t.Name), StringComparer.OrdinalIgnoreCase),

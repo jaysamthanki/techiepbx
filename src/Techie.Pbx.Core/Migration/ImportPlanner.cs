@@ -17,17 +17,21 @@ namespace Techie.Pbx.Core.Migration
     ///
     /// The rules, in the order things depend on each other:
     /// <list type="bullet">
-    /// <item><b>Extensions</b> never overwrite: a number this TNPBX already has is skipped. chan_sip
-    /// and pjsip both land as PJSIP, same number and secret. A secret or PIN TNPBX would refuse is
-    /// replaced with a generated one and said so, rather than costing the extension.</item>
-    /// <item><b>Trunks</b> always land <c>Enabled = false</c> (D170). A name that collides gets
-    /// <c>-imported</c>.</item>
+    /// <item><b>The import clears first</b> (D174): extensions, trunks, phones with their keys,
+    /// routes and announcements are the import's tables, and everything already in them goes
+    /// before anything lands — <see cref="ImportPlan.Cleared"/> is what was there, so the preview
+    /// can say it. There is no keep-or-overwrite decision to make; settings, users and everything
+    /// else the import does not own are untouched.</item>
+    /// <item><b>Extensions</b> all land: chan_sip and pjsip both become PJSIP, same number and
+    /// secret. A secret or PIN TNPBX would refuse is replaced with a generated one and said so,
+    /// rather than costing the extension.</item>
+    /// <item><b>Trunks</b> always land <c>Enabled = false</c> (D170).</item>
     /// <item><b>Outbound routes</b> are one per FreePBX pattern, through <see cref="FreePbxPattern"/>.</item>
     /// <item><b>Inbound routes</b> carry an extension destination or nothing
     /// (<see cref="FreePbxDestination"/>). FreePBX's are not bound to a trunk and ours are, so each
     /// becomes one route per imported trunk.</item>
     /// <item><b>Sounds</b> are one announcement per recording, the WAV copy preferred.</item>
-    /// <item><b>Phones</b> never overwrite a MAC. The line is key 1 and FreePBX's keys follow it.</item>
+    /// <item><b>Phones</b> all land: the line is key 1 and FreePBX's keys follow it.</item>
     /// <item><b>Voicemail</b> goes only into mailboxes this import creates.</item>
     /// </list>
     /// </summary>
@@ -42,11 +46,16 @@ namespace Techie.Pbx.Core.Migration
         /// <summary>A validation stand-in for a trunk ID the import does not have yet.</summary>
         private const long PlaceholderTrunkID = 1;
 
-        private readonly ExistingConfig existing;
         private readonly MigrationManifest manifest;
         private readonly ImportOptions options;
         private readonly ImportPlan plan = new();
         private readonly string root;
+
+        /// <summary>
+        /// What this TNPBX already has. Only read to fill <see cref="ImportPlan.Cleared"/>: the
+        /// import deletes all of it first (D174), so from here on the tables it owns are empty.
+        /// </summary>
+        private ExistingConfig existing;
 
         /// <summary>FreePBX trunk name to the name it was planned under here.</summary>
         private readonly Dictionary<string, string> trunkNames = new(StringComparer.Ordinal);
@@ -65,6 +74,11 @@ namespace Techie.Pbx.Core.Migration
             var source = this.manifest.Source ?? new ManifestSource();
             this.plan.Source = $"{Text(source.Distribution)} {Text(source.Version)} (Asterisk {Text(source.Asterisk)}), " +
                                $"exported {Text(this.manifest.Exported)}";
+
+            // The import deletes everything in the six tables it owns before anything lands (D174),
+            // so the plan works out as if none of it was there. The snapshot is the preview's to say.
+            this.plan.Cleared = this.existing;
+            this.existing = new ExistingConfig();
 
             this.PlanExportWarnings();
             this.PlanExtensions();
@@ -286,14 +300,6 @@ namespace Techie.Pbx.Core.Migration
                     this.Warn(MigrationSection.Extensions, $"A second extension {number} was not imported.",
                         "The export lists that number twice; the first one was imported.",
                         "Check the FreePBX box for the duplicate.");
-                    continue;
-                }
-
-                if (this.existing.ExtensionNumbers.Contains(number))
-                {
-                    this.Warn(MigrationSection.Extensions, $"Extension {number} was not imported.",
-                        "This TNPBX already has an extension with that number, and an import never overwrites one.",
-                        "Compare the two by hand. To take the FreePBX one, delete the existing extension and import again.");
                     continue;
                 }
 
@@ -523,7 +529,7 @@ namespace Techie.Pbx.Core.Migration
         /// </summary>
         private void PlanOutboundRoutes()
         {
-            var taken = new HashSet<string>(this.existing.OutboundRouteNames, StringComparer.OrdinalIgnoreCase);
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var groups = (this.manifest.OutboundRoutes ?? new List<ManifestOutboundRoute>())
                 .GroupBy(r => (Name: Text(r.Name), r.Priority))
                 .ToList();
@@ -642,7 +648,7 @@ namespace Techie.Pbx.Core.Migration
         /// </summary>
         private void PlanPhones()
         {
-            var claimed = new HashSet<string>(this.existing.ClaimedLines, StringComparer.Ordinal);
+            var claimed = new HashSet<string>(StringComparer.Ordinal);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var parkingMapped = false;
 
@@ -655,14 +661,6 @@ namespace Techie.Pbx.Core.Migration
                 {
                     this.Warn(MigrationSection.Phones, $"{label} was not imported.", "That is not a MAC address.",
                         "Nothing: a phone that provisions from TNPBX adds itself.");
-                    continue;
-                }
-
-                if (this.existing.PhoneMacs.Contains(mac))
-                {
-                    this.Warn(MigrationSection.Phones, $"{label} was not imported.",
-                        "This TNPBX already has a phone with that MAC, and an import never overwrites one.",
-                        "Check its keys on the Phones page.");
                     continue;
                 }
 
@@ -765,7 +763,7 @@ namespace Techie.Pbx.Core.Migration
         private void PlanSounds()
         {
             var soundsRoot = Path.Combine(this.root, "files", "sounds") + Path.DirectorySeparatorChar;
-            var taken = new HashSet<string>(this.existing.AnnouncementNames, StringComparer.OrdinalIgnoreCase);
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             var groups = (this.manifest.Sounds ?? new List<ManifestSound>())
                 .GroupBy(s => StripAudioExtension(Text(s.Filename)), StringComparer.Ordinal)
@@ -847,7 +845,7 @@ namespace Techie.Pbx.Core.Migration
         /// </summary>
         private void PlanTrunks()
         {
-            var taken = new HashSet<string>(this.existing.TrunkNames, StringComparer.OrdinalIgnoreCase);
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var chanSip = 0;
 
             foreach (var source in this.manifest.Trunks ?? new List<ManifestTrunk>())
@@ -1037,9 +1035,7 @@ namespace Techie.Pbx.Core.Migration
                 if (!Extension.IsValidNumber(mailbox) || !imported.TryGetValue(mailbox, out var extension))
                 {
                     this.Warn(MigrationSection.Voicemail, $"{planned.Messages} voicemail message(s) for mailbox {Printable(mailbox)} were not copied.",
-                        this.existing.ExtensionNumbers.Contains(mailbox)
-                            ? $"Extension {mailbox} already existed here, and messages only go into mailboxes the import creates."
-                            : $"Extension {Printable(mailbox)} was not imported.",
+                        $"Extension {Printable(mailbox)} was not imported.",
                         $"If they matter, copy them by hand from files/voicemail/{Printable(mailbox)} in the export.");
                     continue;
                 }
@@ -1079,9 +1075,8 @@ namespace Techie.Pbx.Core.Migration
             return clean.Length <= 80 ? clean : clean[..80] + "…";
         }
 
-        /// <summary>Whether a call or a key can point at this extension: here already, or about to be.</summary>
+        /// <summary>Whether a call or a key can point at this extension: the import clears first (D174), so about-to-be is the whole question.</summary>
         private bool Reachable(string number) =>
-            this.existing.ExtensionNumbers.Contains(number) ||
             this.plan.Extensions.Any(e => string.Equals(e.Number, number, StringComparison.Ordinal));
 
         /// <summary>The file name without the audio extension FreePBX added, so that formats of one recording group.</summary>

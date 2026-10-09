@@ -4,6 +4,9 @@
     var plan = Model.Plan!;
     var trunkCount = plan.Trunks.Count;
     var mailboxesWithEmail = plan.Extensions.Count(e => e.VoicemailEmail.Length > 0);
+    var cleared = plan.Cleared;
+    var clearedCount = cleared.ExtensionNumbers.Count + cleared.TrunkNames.Count + cleared.PhoneMacs.Count +
+                      cleared.OutboundRouteNames.Count + cleared.InboundRouteNames.Count + cleared.AnnouncementNames.Count;
 }
 @*
     The preview (D170): exactly what the import will write, worked out against this database right
@@ -11,6 +14,20 @@
     disabled until the operator ticks the box saying they have read this; migration.js does that.
 *@
 <p class="text-secondary mb-2">From @plan.Source. Nothing has been imported yet.</p>
+
+@if (clearedCount > 0)
+{
+    <div class="alert alert-danger">
+        <strong>This import DELETES first.</strong>
+        Everything this TNPBX already has in the import's tables goes before anything lands:
+        @cleared.ExtensionNumbers.Count extension(s), @cleared.TrunkNames.Count trunk(s),
+        @cleared.PhoneMacs.Count phone(s) with their keys, @cleared.OutboundRouteNames.Count outbound
+        route(s), @cleared.InboundRouteNames.Count inbound route(s) and @cleared.AnnouncementNames.Count
+        announcement(s). There is nothing to keep or overwrite: what the import lands below is
+        everything there will be. Settings and users are untouched, and voicemail already in the
+        spool is never deleted. Take a backup first if any of it matters.
+    </div>
+}
 
 @if (trunkCount > 0)
 {
