@@ -171,7 +171,8 @@ foreach ($trunkRows as $t) {
         'channelId' => $t['channelid'],
         'serverHost' => $host,
         'serverPort' => $port,
-        'username' => $p['username'] ?? $peer['username'] ?? $user['username'] ?? '',
+        // chan_sip trunks keep the auth user in defaultuser (or fromuser), never "username".
+        'username' => $p['username'] ?? $peer['defaultuser'] ?? $peer['fromuser'] ?? $user['defaultuser'] ?? $user['username'] ?? '',
         'authUsername' => $p['auth_username'] ?? '',
         'password' => $p['secret'] ?? $peer['secret'] ?? $user['secret'] ?? '',
         'register' => ($p['registration'] ?? '') === 'send',
@@ -204,7 +205,10 @@ foreach (q($db, 'SELECT route_id, name, outcid, emergency_route, intracompany_ro
             'trunkName' => $routeTrunks[$r['route_id']][0] ?? null,
             'trunkSequence' => $routeTrunks[$r['route_id']] ?? [],
             'dialPattern' => $p['match_pattern_pass'],
-            'prependDigits' => $p['match_pattern_prefix'] ?: $p['prepend_digits'],
+            // match_pattern_prefix is digits the caller dials that get STRIPPED before the
+            // trunk ("9|NXXXXXX"); prepend_digits are ADDED to the front. Not interchangeable.
+            'stripDigits' => strlen($p['match_pattern_prefix']),
+            'prependDigits' => $p['prepend_digits'],
             'callerId' => $r['outcid'],
             'emergency' => $r['emergency_route'] === 'yes',
         ];

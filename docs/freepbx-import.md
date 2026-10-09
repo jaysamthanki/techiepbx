@@ -95,8 +95,9 @@ reports the disabled trunks explicitly and the operator enables them at cutover.
 | `name` | `outbound_routes.name` | |
 | `priority` | `outbound_routes.seq` | |
 | `trunkName` | `outbound_route_trunks` → resolved by name | importer resolves to TrunkID; unknown trunk = warning |
-| `dialPattern` | `trunk_route_pattern` (base) | FreePBX pattern grammar (`N`, `X`, `Z`, `[...]`, `.`) preserved as-is |
-| `prependDigits` / `stripDigits` | same table | |
+| `dialPattern` | `outbound_route_patterns.match_pattern_pass` | FreePBX pattern grammar (`N`, `X`, `Z`, `[...]`, `.`) preserved as-is |
+| `stripDigits` | `match_pattern_prefix` (its length) | digits the caller dials that get STRIPPED before the trunk (`9\|NXXXXXX`) — not the same thing as prepend |
+| `prependDigits` | `prepend_digits` | digits ADDED to the front of what goes to the trunk |
 
 Pattern grammar translation happens **in the importer**, not the exporter, so the manifest
 stays a faithful copy of what FreePBX had and grammar bugs are fixed in one place with

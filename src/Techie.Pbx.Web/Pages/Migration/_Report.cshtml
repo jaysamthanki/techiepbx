@@ -1,0 +1,49 @@
+@using Techie.Pbx.Asterisk.Migration
+@model ImportReport
+@*
+    What the import wrote (D170), every warning — the preview's and any that only appeared while
+    writing — and what the apply afterwards did.
+*@
+<div class="alert alert-success">
+    Imported @Model.Extensions.Count extension(s), @Model.Trunks.Count trunk(s), @Model.OutboundRoutes.Count outbound
+    route(s), @Model.InboundRoutes.Count inbound route row(s), @Model.Announcements.Count announcement(s),
+    @Model.Phones.Count phone(s) and @Model.VoicemailMessages voicemail message(s).
+</div>
+
+@if (Model.Trunks.Count > 0)
+{
+    <div class="alert alert-warning">
+        <strong>These trunks are DISABLED:</strong> @string.Join(", ", Model.Trunks).
+        Switch them on on the <a asp-page="/Trunks/Index">Trunks</a> page at cutover, once FreePBX's
+        trunks are off — not before.
+    </div>
+}
+
+<div class="alert @(Model.ApplyFailed ? "alert-danger" : "alert-secondary")">
+    <strong>Apply:</strong> @Model.ApplySummary
+</div>
+
+@if (Model.StagingKept)
+{
+    <div class="alert alert-warning">
+        Some voicemail could not be written into the spool. The export's voicemail is kept on this
+        server until the next upload so it can be copied by hand; the warnings below give the
+        command for each mailbox. Everything else in the upload has been deleted.
+    </div>
+}
+
+<table class="table table-sm">
+    <tbody>
+        <tr><td style="width: 12rem;">Extensions</td><td class="font-monospace">@string.Join(", ", Model.Extensions)</td></tr>
+        <tr><td>Trunks (disabled)</td><td>@string.Join(", ", Model.Trunks)</td></tr>
+        <tr><td>Outbound routes</td><td>@string.Join(", ", Model.OutboundRoutes)</td></tr>
+        <tr><td>Inbound routes</td><td>@string.Join("; ", Model.InboundRoutes)</td></tr>
+        <tr><td>Announcements</td><td>@string.Join(", ", Model.Announcements)</td></tr>
+        <tr><td>Phones</td><td class="font-monospace">@string.Join(", ", Model.Phones)</td></tr>
+        <tr><td>Voicemail messages</td><td>@Model.VoicemailMessages</td></tr>
+    </tbody>
+</table>
+
+<partial name="_Warnings" model="Model.Warnings" />
+
+<a class="btn btn-secondary" asp-page="Index">Done</a>

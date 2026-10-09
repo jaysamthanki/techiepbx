@@ -119,7 +119,8 @@ namespace Techie.Pbx.Web.Controllers
             return this.Ok(new MessageResponse(result.Message));
         }
 
-        private static string Summarise(ApplyResult result)
+        /// <summary>What an apply did, in one sentence. Internal because the FreePBX import applies too (D170).</summary>
+        internal static string Summarise(ApplyResult result)
         {
             if (result.ChangedFiles.Count == 0)
                 return "Nothing to do: the config files already match the database.";

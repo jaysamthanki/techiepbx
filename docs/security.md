@@ -100,6 +100,12 @@ startup WARNING names the allowed networks.
   the same sense and lives under the same mode: it is the credential the script proves itself with
   on `/api/voicemail/notify`. Generated, never typed, and masked in the settings table like the
   AMI secret.
+- A FreePBX export (D170) carries every extension and trunk secret in plain text. The importer
+  unpacks it into `Data/import/<random id>/`, a 0700 directory beside the database, keeps only
+  the latest upload, and deletes it once the import has run — all of it, or everything but the
+  voicemail when messages are left to be copied into the spool by hand. The preview and report
+  show no secret. The tarball itself is refused whole if any entry is absolute, contains `..`, a
+  backslash or a NUL, is a link, device or FIFO, or if it unpacks to more than 1 GB.
 
 ### The voicemail mailcmd script
 

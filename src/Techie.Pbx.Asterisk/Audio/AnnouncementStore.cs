@@ -196,6 +196,39 @@ namespace Techie.Pbx.Asterisk.Audio
             }
         }
 
+        /// <summary>
+        /// Places a WAV as the announcement's audio exactly as it is, without converting it. Only
+        /// the FreePBX import calls this (D170), and only when <see cref="Save"/> failed — ffmpeg
+        /// missing, or refusing the file — because a FreePBX recording is very often already the
+        /// 8 kHz mono WAV Asterisk plays, and keeping it beats importing a silent announcement.
+        /// The caller says so to the operator: an upload never takes this path, and nothing here
+        /// claims the file plays.
+        ///
+        /// Still refuses anything that is not a RIFF WAVE file, so a raw telephony file is never
+        /// stored under a <c>.wav</c> name.
+        /// </summary>
+        public string SaveUnconverted(Announcement announcement, string sourcePath)
+        {
+            using (var source = File.OpenRead(sourcePath))
+            {
+                if (source.Length > MaxUploadBytes)
+                    throw new AudioUploadException($"That file is bigger than {MaxUploadBytes / (1024 * 1024)} MB.");
+
+                if (AudioSignature.Detect(source) != AudioContainer.Wav)
+                    throw new AudioUploadException("Only a WAV file can be kept unconverted.");
+            }
+
+            var fileName = Announcement.FileNameFor(announcement.Name);
+            var target = this.PathFor(announcement.AnnouncementID, fileName);
+
+            this.EnsureDirectories(announcement.AnnouncementID);
+            File.Copy(sourcePath, target, overwrite: true);
+            SetMode(target, AudioFileMode);
+
+            Log.Warn($"Announcement {announcement.AnnouncementID} audio stored UNCONVERTED as {fileName} ({new FileInfo(target).Length} bytes)");
+            return fileName;
+        }
+
         /// <summary>One announcement's directory, checked to be inside the base path.</summary>
         private string DirectoryFor(long announcementID) =>
             this.Inside(Path.Combine(

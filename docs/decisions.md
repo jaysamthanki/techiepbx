@@ -3772,3 +3772,31 @@ DB by apply. Single versioned tarball: manifest.json + payload, same shape as th
 Nightly local backups land in /opt/tnpbx/backups with a retention count (default 7). Restore stops the web app,
 verifies manifest + sqlite integrity, refuses backups from a NEWER app version, swaps the DB, migrates, restores
 sounds, starts the app. v1 ships unencrypted but admin-only; encryption is a separate future decision.
+
+### D172. FreePBX import mapping rules (2026-10-08, import)
+
+The mapping choices the importer makes when FreePBX concepts have no 1:1 TNPBX counterpart
+(all surface in the import preview and report as warnings, never silently):
+
+- Routes may reference a DISABLED imported trunk (D170): route repositories gained an
+  importer-only insert path; the rendered dialplan omits routes whose trunk is disabled until
+  the trunk is switched on.
+- A FreePBX inbound route (any trunk) becomes one TNPBX inbound route per imported trunk.
+  Caller-ID-matching inbound routes are skipped (no caller-ID routing in TNPBX); unsupported
+  destinations (IVR, ring group) skip the route and the warning names the raw FreePBX string.
+- A missing/invalid SIP secret or a blank voicemail PIN gets a generated value + warning,
+  rather than dropping the extension or importing a credentialless secret.
+- A trunk with a password but no recoverable username imports without the password and with
+  registration off, so its routes still land (the operator re-enters auth at cutover).
+- Polycom parking keys 71-79 map to TNPBX parking slots 1-9; unrecognized phone models import
+  with a blank model rather than being refused.
+- Sound files ffmpeg cannot convert import as unconverted WAVs (announcement with no audio if
+  the source was gsm/g722-only) + warning.
+- Re-importing is idempotent-ish: existing extensions/phones skipped, colliding trunks/routes
+  land with `-imported` suffix names.
+- Known gap: voicemail spool copy on the lab layout needs root (spool is asterisk-only
+  0755); the report prints the root copy command per mailbox until a Helper message exists.
+- Exporter bugs found during the importer dry run, fixed in export.php: FreePBX
+  match_pattern_prefix is STRIP digits (9|NXXXXXX), not prepend — the manifest now carries
+  stripDigits (prefix length) + prependDigits (prepend_digits) separately; chan_sip trunk
+  auth usernames live in the sip table's defaultuser/fromuser keywords, not "username".

@@ -1,0 +1,209 @@
+@using Techie.Pbx.Core.Models
+@model IndexModel
+@{
+    var plan = Model.Plan!;
+    var trunkCount = plan.Trunks.Count;
+    var mailboxesWithEmail = plan.Extensions.Count(e => e.VoicemailEmail.Length > 0);
+}
+@*
+    The preview (D170): exactly what the import will write, worked out against this database right
+    now, and every warning. Nothing has been written. The import button below stays hollow and
+    disabled until the operator ticks the box saying they have read this; migration.js does that.
+*@
+<p class="text-secondary mb-2">From @plan.Source. Nothing has been imported yet.</p>
+
+@if (trunkCount > 0)
+{
+    <div class="alert alert-warning">
+        <strong>Every trunk lands DISABLED.</strong>
+        This import is meant to run while the FreePBX box is still live, and a trunk that registered
+        from here would fight production for the provider's registration and could take its inbound
+        calls. At cutover, once FreePBX's trunks are off, switch each one on on the
+        <a asp-page="/Trunks/Index">Trunks</a> page: @string.Join(", ", plan.Trunks.Select(t => t.Name)).
+    </div>
+}
+
+<table class="table table-sm w-auto">
+    <tbody>
+        <tr><td>Extensions</td><td class="text-end fw-semibold">@plan.Extensions.Count</td>
+            <td class="text-secondary">@plan.ChanSipExtensions of them chan_sip, landing as PJSIP</td></tr>
+        <tr><td>Trunks</td><td class="text-end fw-semibold">@trunkCount</td>
+            <td class="text-secondary">all disabled</td></tr>
+        <tr><td>Outbound routes</td><td class="text-end fw-semibold">@plan.OutboundRoutes.Count</td>
+            <td class="text-secondary">one per FreePBX pattern</td></tr>
+        <tr><td>Inbound routes</td><td class="text-end fw-semibold">@plan.InboundRouteCount</td>
+            <td class="text-secondary">@plan.InboundRoutes.Count row(s): one per route per imported trunk</td></tr>
+        <tr><td>Sounds</td><td class="text-end fw-semibold">@plan.Sounds.Count</td>
+            <td class="text-secondary">as announcements, converted to 8 kHz mono WAV</td></tr>
+        <tr><td>Phones</td><td class="text-end fw-semibold">@plan.Phones.Count</td>
+            <td class="text-secondary">@plan.Phones.Count(p => p.Buttons.Count > 0) with keys</td></tr>
+        <tr><td>Voicemail messages</td><td class="text-end fw-semibold">@plan.VoicemailMessages</td>
+            <td class="text-secondary">in @plan.Mailboxes.Count mailbox(es)</td></tr>
+        <tr><td>Warnings</td><td class="text-end fw-semibold">@plan.Warnings.Count</td>
+            <td class="text-secondary">listed below</td></tr>
+    </tbody>
+</table>
+
+<details class="mb-2">
+    <summary>Extensions (@plan.Extensions.Count)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>Number</th><th>Name</th><th>Outbound caller ID</th><th>Voicemail</th><th>Voicemail email</th></tr></thead>
+        <tbody>
+            @foreach (var extension in plan.Extensions)
+            {
+                <tr>
+                    <td class="font-monospace">@extension.Number</td>
+                    <td>@extension.Name</td>
+                    <td class="font-monospace">@extension.OutboundCallerID</td>
+                    <td>@(extension.VoicemailEnabled ? "On" : "Off")</td>
+                    <td>@extension.VoicemailEmail</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Trunks (@trunkCount, all disabled)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>Name</th><th>Server</th><th>Username</th><th>Registers</th><th>Provider addresses</th><th>Codecs</th></tr></thead>
+        <tbody>
+            @foreach (var trunk in plan.Trunks)
+            {
+                <tr>
+                    <td>@trunk.Name <span class="badge text-bg-secondary">Disabled</span></td>
+                    <td class="font-monospace">@trunk.ServerHost:@trunk.ServerPort</td>
+                    <td class="font-monospace">@trunk.Username</td>
+                    <td>@(trunk.Register ? "Yes" : "No")</td>
+                    <td class="font-monospace">@(trunk.MatchAddresses.Length > 0 ? trunk.MatchAddresses : "—")</td>
+                    <td class="font-monospace">@trunk.Codecs</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Outbound routes (@plan.OutboundRoutes.Count)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>Name</th><th>Priority</th><th>FreePBX pattern</th><th>TNPBX pattern</th><th>Strip</th><th>Prepend</th><th>Trunk</th></tr></thead>
+        <tbody>
+            @foreach (var planned in plan.OutboundRoutes)
+            {
+                <tr>
+                    <td>@planned.Route.Name</td>
+                    <td>@planned.Route.Priority</td>
+                    <td class="font-monospace">@planned.SourcePattern</td>
+                    <td class="font-monospace">@planned.Route.DialPattern</td>
+                    <td>@planned.Route.StripDigits</td>
+                    <td class="font-monospace">@planned.Route.PrependDigits</td>
+                    <td>@planned.TrunkName</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Inbound routes (@plan.InboundRouteCount, @plan.InboundRoutes.Count rows)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>DID</th><th>Description</th><th>FreePBX destination</th><th>Destination</th><th>Trunk</th></tr></thead>
+        <tbody>
+            @foreach (var planned in plan.InboundRoutes)
+            {
+                <tr>
+                    <td class="font-monospace">@(planned.Route.CatchAll ? "Catch-all" : planned.Route.DID)</td>
+                    <td>@planned.Route.Description</td>
+                    <td class="font-monospace">@planned.SourceDestination</td>
+                    <td>@planned.Route.DestinationType @planned.Route.DestinationValue</td>
+                    <td>@planned.TrunkName</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Sounds (@plan.Sounds.Count)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>Announcement</th><th>From</th><th>Audio</th><th>Not imported (other formats)</th></tr></thead>
+        <tbody>
+            @foreach (var sound in plan.Sounds)
+            {
+                <tr>
+                    <td>@sound.Announcement.Name</td>
+                    <td class="font-monospace">@sound.SourceFile</td>
+                    <td>@(sound.Convertible ? "Converted on import" : "None — see warnings")</td>
+                    <td class="font-monospace">@string.Join(", ", sound.IgnoredFiles)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Phones (@plan.Phones.Count)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>MAC</th><th>Model</th><th>Keys</th></tr></thead>
+        <tbody>
+            @foreach (var planned in plan.Phones)
+            {
+                <tr>
+                    <td class="font-monospace">@planned.Phone.Mac</td>
+                    <td>@(planned.Phone.Model.Length > 0 ? planned.Phone.Model : "—")</td>
+                    <td>@(planned.Buttons.Count > 0 ? string.Join(", ", planned.Buttons.Select(b => $"{b.Position}: {b.TargetType} {b.TargetValue}")) : "None")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<details class="mb-2">
+    <summary>Voicemail (@plan.VoicemailMessages messages)</summary>
+    <table class="table table-sm mt-2">
+        <thead><tr><th>Mailbox</th><th>Messages</th></tr></thead>
+        <tbody>
+            @foreach (var mailbox in plan.Mailboxes)
+            {
+                <tr><td class="font-monospace">@mailbox.Mailbox</td><td>@mailbox.Messages</td></tr>
+            }
+        </tbody>
+    </table>
+</details>
+
+<partial name="_Warnings" model="plan.Warnings" />
+
+<form method="post" asp-page-handler="Import" class="card mt-4" data-migration-confirm>
+    <div class="card-body">
+        <input type="hidden" name="id" value="@Model.ID" />
+
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="migration-user-email" name="userEmailFromVoicemail" value="true"
+                   checked="@(Model.Options.UserEmailFromVoicemail ? "checked" : null)" />
+            <label class="form-check-label" for="migration-user-email">
+                Also use each voicemail email as the extension's /phone sign-in address
+            </label>
+            <div class="form-text">
+                Off by default. The sign-in address decides who may open the extension in the
+                browser (D166), which FreePBX's voicemail address was never asked; @mailboxesWithEmail
+                extension(s) have one.
+            </div>
+        </div>
+
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="migration-reviewed" name="reviewed" value="true" data-migration-reviewed />
+            <label class="form-check-label" for="migration-reviewed">
+                I have read the preview and its @plan.Warnings.Count warning(s), and understand the trunks land disabled
+            </label>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-outline-danger" disabled data-migration-import>Import</button>
+            <button type="submit" class="btn btn-secondary" asp-page-handler="Discard" formnovalidate>Discard upload</button>
+        </div>
+        <div class="form-text">
+            Writes everything above, then applies the config the way the toolbar's Apply does.
+            Existing extensions, trunks and phones are never overwritten.
+        </div>
+    </div>
+</form>

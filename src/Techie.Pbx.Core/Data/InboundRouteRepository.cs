@@ -46,9 +46,17 @@ namespace Techie.Pbx.Core.Data
                 $"SELECT {Columns} FROM InboundRoutes WHERE InboundRouteID = @inboundRouteID", new { inboundRouteID });
         }
 
-        public long Insert(InboundRoute route)
+        public long Insert(InboundRoute route) => this.Insert(route, allowDisabledTrunk: false);
+
+        /// <summary>
+        /// The same, optionally letting the route belong to a trunk that is switched off. The
+        /// FreePBX import is the one caller that asks (D170): its trunks land disabled, and their
+        /// routes have to land with them. The dialplan leaves a route on a disabled trunk out
+        /// until the trunk is switched back on, exactly as it does when a trunk is switched off.
+        /// </summary>
+        public long Insert(InboundRoute route, bool allowDisabledTrunk)
         {
-            this.ThrowIfInvalid(route);
+            this.ThrowIfInvalid(route, allowDisabledTrunk);
 
             using var connection = this.database.Open();
             try
@@ -70,7 +78,7 @@ namespace Techie.Pbx.Core.Data
 
         public void Update(InboundRoute route)
         {
-            this.ThrowIfInvalid(route);
+            this.ThrowIfInvalid(route, allowDisabledTrunk: false);
 
             using var connection = this.database.Open();
             try
@@ -105,7 +113,7 @@ namespace Techie.Pbx.Core.Data
         /// amended) — the renderer writes the name into the dialplan and refuses one it cannot
         /// find.
         /// </summary>
-        private void ThrowIfInvalid(InboundRoute route)
+        private void ThrowIfInvalid(InboundRoute route, bool allowDisabledTrunk)
         {
             var errors = route.Validate();
 
@@ -115,7 +123,7 @@ namespace Techie.Pbx.Core.Data
 
                 if (trunk == null)
                     errors.Add("That trunk no longer exists.");
-                else if (!trunk.Enabled)
+                else if (!trunk.Enabled && !allowDisabledTrunk)
                     errors.Add($"The {trunk.Name} trunk is disabled, so no calls would arrive on it.");
             }
 

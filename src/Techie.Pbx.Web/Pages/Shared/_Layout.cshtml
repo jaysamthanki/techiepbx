@@ -115,6 +115,9 @@
                                    presents itself, not something a call touches (D142). A status
                                    page with one button, so it needs no menu of its own. *@
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Firewall">Firewall</a></li>
+                                @* Not a setting either, but it is about this box as a whole and is used once, at the
+                                   move off FreePBX (D170), so it sits with the pages an admin opens rarely. *@
+                                <li><a class="dropdown-item" asp-area="" asp-page="/Migration/Index">Import from FreePBX</a></li>
                                 <li><hr class="dropdown-divider" /></li>
                                 <li><a class="dropdown-item" asp-area="" asp-page="/Settings/Index">All Settings</a></li>
                             </ul>

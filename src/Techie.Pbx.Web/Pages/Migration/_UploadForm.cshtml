@@ -1,0 +1,48 @@
+@using Techie.Pbx.Core.Migration
+@model UploadForm
+@{
+    var uploadUrl = Url.Page("Index", "Upload");
+    var maxMegabytes = MigrationArchive.MaxUploadBytes / (1024 * 1024);
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42). A refused upload comes back here with
+    the reason; a good one answers with HX-Redirect to its preview, which is a page of its own
+    because a preview is something to read rather than something to fill in.
+*@
+<form hx-post="@uploadUrl" hx-target="this" hx-swap="outerHTML" hx-encoding="multipart/form-data"
+      hx-disabled-elt="find button[type=submit]">
+    <div class="modal-header">
+        <h5 class="modal-title">Upload FreePBX export</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="mb-3">
+        <label class="form-label" for="migration-archive">Export file</label>
+        <input class="form-control" type="file" id="migration-archive" name="archive"
+               accept=".gz,.tgz,application/gzip" required />
+        <div class="form-text">
+            The <code>tnpbx-migrate.tar.gz</code> the exporter wrote, up to @maxMegabytes MB. It is
+            unpacked into a private folder on this server and read; nothing is imported yet.
+        </div>
+    </div>
+    </div>
+
+    <div class="modal-footer">
+        <span class="htmx-indicator text-secondary me-auto">Uploading and unpacking…</span>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Upload and preview</button>
+    </div>
+</form>

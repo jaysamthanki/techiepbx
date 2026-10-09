@@ -1,0 +1,66 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Import from FreePBX";
+
+    var formUrl = Url.Page("Index", "Form");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Import from FreePBX</h1>
+    @if (Model.Plan == null && Model.Report == null)
+    {
+        <button type="button" class="btn btn-primary"
+                hx-get="@formUrl"
+                hx-target="#form-modal-content"
+                data-bs-toggle="modal"
+                data-bs-target="#form-modal">Upload export</button>
+    }
+</div>
+
+@if (Model.Error.Length > 0)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+@if (Model.Report != null)
+{
+    <partial name="_Report" model="Model.Report" />
+}
+else if (Model.Plan != null)
+{
+    <partial name="_Preview" model="Model" />
+}
+else
+{
+    <p class="text-secondary">
+        Moves a running FreePBX onto this TNPBX: extensions with their secrets, voicemail boxes and
+        their messages, custom sounds, Polycom phones and their keys, trunks, and outbound and
+        inbound routes (D170). IVRs, ring groups, queues and the rest of FreePBX are not carried —
+        routes that point at them are listed for you to rebuild by hand.
+    </p>
+
+    <ol class="text-secondary">
+        <li>
+            On the FreePBX box, as root, run the exporter that ships with this release:
+            <code>php export.php</code>. It writes <code>tnpbx-migrate.tar.gz</code> and changes nothing on that box.
+        </li>
+        <li>Upload that file here. Nothing is written until you have read the preview and confirmed it.</li>
+        <li>
+            Every trunk lands <strong>disabled</strong>, so the import can run while FreePBX is still live.
+            Switch them on at cutover.
+        </li>
+    </ol>
+
+    <p class="text-secondary">
+        The export holds every extension and trunk secret in plain text. Move it straight from one
+        box to the other and delete the copy afterwards; this server deletes its own once the
+        import is done.
+    </p>
+}
+
+<partial name="_FormModal" />
+
+@section Scripts {
+    <script src="~/js/migration.js" asp-append-version="true"></script>
+}

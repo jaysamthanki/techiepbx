@@ -42,10 +42,20 @@ namespace Techie.Pbx.Core.Data
                 $"SELECT {Columns} FROM OutboundRoutes WHERE OutboundRouteID = @outboundRouteID", new { outboundRouteID });
         }
 
-        public long Insert(OutboundRoute route)
+        public long Insert(OutboundRoute route) => this.Insert(route, allowDisabledTrunk: false);
+
+        /// <summary>
+        /// The same, optionally letting the route point at a trunk that is switched off. The
+        /// FreePBX import is the one caller that asks (D170): its trunks land disabled so they
+        /// cannot fight production for the provider's registration, and their routes have to land
+        /// with them. A route on a disabled trunk is already a state this system has — switching a
+        /// trunk off leaves its routes — and the dialplan leaves such a route out until the trunk
+        /// is switched back on.
+        /// </summary>
+        public long Insert(OutboundRoute route, bool allowDisabledTrunk)
         {
             Normalize(route);
-            this.ThrowIfInvalid(route);
+            this.ThrowIfInvalid(route, allowDisabledTrunk);
 
             using var connection = this.database.Open();
             try
@@ -69,7 +79,7 @@ namespace Techie.Pbx.Core.Data
         public void Update(OutboundRoute route)
         {
             Normalize(route);
-            this.ThrowIfInvalid(route);
+            this.ThrowIfInvalid(route, allowDisabledTrunk: false);
 
             using var connection = this.database.Open();
             try
@@ -97,7 +107,7 @@ namespace Techie.Pbx.Core.Data
         /// class it names, when it names one, has to be a class that is there (D125) — the renderer
         /// writes the name into the dialplan and refuses one it cannot find.
         /// </summary>
-        private void ThrowIfInvalid(OutboundRoute route)
+        private void ThrowIfInvalid(OutboundRoute route, bool allowDisabledTrunk)
         {
             var errors = route.Validate();
 
@@ -107,7 +117,7 @@ namespace Techie.Pbx.Core.Data
 
                 if (trunk == null)
                     errors.Add("That trunk no longer exists.");
-                else if (!trunk.Enabled)
+                else if (!trunk.Enabled && !allowDisabledTrunk)
                     errors.Add($"The {trunk.Name} trunk is disabled, so no calls could go out over it.");
             }
 
