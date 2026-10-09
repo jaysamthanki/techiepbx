@@ -3755,3 +3755,20 @@ Moving a customer off FreePBX onto TNPBX is a two-half tool, not a FreePBX-backu
 - **chan_sip converts to pjsip at import** (same ext, same secret) — TNPBX only speaks pjsip.
 - Secrets are plaintext in FreePBX (DB + generated conf) — no decryption needed, confirmed
   against two real boxes (FreePBX 16/Asterisk 16 and FreePBX 17/Asterisk 22).
+
+### D171. Backup/restore lives in the helper, not the UI (2026-10-08, backup)
+
+The backup/restore tool is CLI-first in the privileged helper (`tnpbx backup`, `tnpbx restore <file>`), not a web
+feature. Reasons: the web process cannot safely replace its own SQLite database; a CLI is scriptable (cron →
+rsync/scp/S3 to whatever offsite target the operator already runs) rather than forcing us to build push-target
+settings; and restore is an installer-path operation anyway. The web UI may later grow a "download backup" button
+that shells the same helper path, but v1 ships no backup UI at all.
+
+Backup contents = the only real state: the SQLite DB (online-backup API copy, with schema user_version so restore
+runs pending migrations), announcement WAVs (/var/lib/asterisk/sounds/tnpbx), and the voicemail spool behind a flag
+(--full; config-only default). Generated confs, provisioning output and logs are excluded — they re-derive from the
+DB by apply. Single versioned tarball: manifest.json + payload, same shape as the FreePBX migration contract.
+
+Nightly local backups land in /opt/tnpbx/backups with a retention count (default 7). Restore stops the web app,
+verifies manifest + sqlite integrity, refuses backups from a NEWER app version, swaps the DB, migrates, restores
+sounds, starts the app. v1 ships unencrypted but admin-only; encryption is a separate future decision.
