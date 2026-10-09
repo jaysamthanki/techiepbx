@@ -3800,3 +3800,14 @@ The mapping choices the importer makes when FreePBX concepts have no 1:1 TNPBX c
   match_pattern_prefix is STRIP digits (9|NXXXXXX), not prepend — the manifest now carries
   stripDigits (prefix length) + prependDigits (prepend_digits) separately; chan_sip trunk
   auth usernames live in the sip table's defaultuser/fromuser keywords, not "username".
+
+### D173. ImageSharp stays on 3.1.12 despite the open advisories (2026-10-09, security)
+
+NU1903/NU1902 flag GHSA-jjfr-hcj7-qf5w (TIFF CCITT T6 encoder buffer overrun) and
+GHSA-wmxv-xphr-5c9g against SixLabors.ImageSharp 3.1.12. Both are encoder-path issues fixed
+only in 4.1.2+, and ImageSharp 4.x **refuses to compile Release builds without a paid Six
+Labors license** — which would break app-deploy.sh's Release publish. The one consumer,
+PolycomImageResizer (D154), only decodes PNG/JPEG (locked Configuration, magic-byte checked)
+and only ever encodes PNG, so the affected TIFF encoders are unreachable from an upload.
+Stay on 3.1.12, documented in the csproj; revisit if we ever encode other formats, expose
+more decoders, or buy a license.

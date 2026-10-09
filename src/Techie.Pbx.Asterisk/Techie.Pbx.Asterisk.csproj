@@ -2,6 +2,12 @@
 
   <ItemGroup>
     <!-- Resizes the Polycom background and logo uploads (D154). -->
+    <!-- Stays on 3.1.12 (D173): the two open advisories (GHSA-jjfr-hcj7-qf5w,
+         GHSA-wmxv-xphr-5c9g) are encoder-path issues fixed only in 4.1.2+, and 4.x
+         refuses to compile Release builds without a paid Six Labors license —
+         which would break the deploy pipeline. PolycomImageResizer only decodes
+         PNG/JPEG (locked) and only encodes PNG, so the affected encoders are
+         unreachable from an upload. Revisit if we ever encode TIFF or buy a license. -->
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
