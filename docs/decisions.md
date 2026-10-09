@@ -3825,3 +3825,10 @@ already in the spool is never deleted by the clear — messages are copied in, n
 Side benefits: re-imports are idempotent (clear + land again, no suffixes), and inbound routes
 whose destination extension existed here but is not in the export are correctly skipped as
 unreachable, because after the clear there is nothing for them to point at.
+
+One exception, found by the lab: an announcement an IVR greets with is KEPT, not cleared — the
+import does not own IVRs and will not break a menu (D58). The report says which announcements
+stayed and why, and the import's announcement of that name does not land either (its insert
+fails, its warning says the rest). The clear and the land are not one transaction: a failed
+import can leave the tables half-cleared, and the fix is to run the import again, which clears
+whatever is left and lands again.

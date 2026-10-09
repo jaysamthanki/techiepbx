@@ -227,6 +227,27 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
+        public void An_announcement_an_ivr_greets_with_is_kept_and_the_import_says_so()
+        {
+            var announcements = new AnnouncementRepository(this.database);
+            var announcementID = announcements.Insert(new Announcement { Name = "Main", Description = "", AudioFile = "menu.wav", Enabled = true });
+            new IvrRepository(this.database).Insert(new Ivr { Name = "menu", AnnouncementID = announcementID, PlayExtension = "", TimeoutSeconds = 10, Retries = 3 });
+
+            var manifest = this.Manifest();
+            manifest.Sounds!.Add(new ManifestSound { Filename = "en/custom/Main.wav", AnnouncementName = "Main" });
+            this.WriteFile("files/sounds/en/custom/Main.wav", Wav());
+
+            var report = this.Run(this.Plan(manifest));
+
+            // D174's one exception: an IVR greets with this announcement and the import does not
+            // own IVRs, so the row stays, the report says so, and the import's copy does not land.
+            Assert.DoesNotContain("Main", report.Cleared.AnnouncementNames);
+            Assert.Contains(report.Warnings, w => w.Section == MigrationSection.Announcements && w.What == "Announcement 'Main' was not cleared.");
+            Assert.Contains(report.Warnings, w => w.Section == MigrationSection.Sounds && w.What == "Announcement 'Main' was not imported.");
+            Assert.Contains("Main", new AnnouncementRepository(this.database).GetAll().Select(a => a.Name));
+        }
+
+        [Fact]
         public void A_raw_sound_lands_as_an_announcement_with_no_audio()
         {
             this.WriteFile("files/sounds/en/custom/Old.gsm", new byte[] { 1, 2, 3 });

@@ -118,7 +118,22 @@ namespace Techie.Pbx.Asterisk.Migration
                 this.trunks.Delete(trunk.TrunkID);
 
             foreach (var announcement in this.announcements.GetAll())
-                this.announcements.Delete(announcement.AnnouncementID);
+            {
+                try
+                {
+                    this.announcements.Delete(announcement.AnnouncementID);
+                }
+                catch (ValidationFailedException)
+                {
+                    // An IVR greets with it (D58) and the import does not own IVRs: leave the row
+                    // and say so, rather than breaking the menu. The import's announcement of the
+                    // same name will not land either, and that warning says the rest.
+                    report.Cleared.AnnouncementNames.Remove(announcement.Name);
+                    Warn(report, MigrationSection.Announcements, $"Announcement '{announcement.Name}' was not cleared.",
+                        "An IVR still greets with it, and the import does not own IVRs.",
+                        "The imported announcement of that name will not land either. Point the IVR at another announcement and delete this one by hand if it should be replaced.");
+                }
+            }
 
             foreach (var extension in this.extensions.GetAll())
                 this.extensions.Delete(extension.ExtensionID);

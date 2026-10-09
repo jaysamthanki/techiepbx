@@ -4,6 +4,7 @@ namespace Techie.Pbx.Core.Migration
     public static class MigrationSection
     {
         public const string Apply = "Apply";
+        public const string Announcements = "Announcements";
         public const string Export = "Export";
         public const string Extensions = "Extensions";
         public const string InboundRoutes = "Inbound routes";
