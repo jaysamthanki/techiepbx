@@ -3730,3 +3730,28 @@ files on disk, read-only, which it can already do as `tnpbx:asterisk` (D129):
 Decided while building: only `msg*.txt` is counted (stricter than `*.txt`, the same files in
 practice); the handler is a plain GET without the antiforgery check the Client handler has,
 because the answer is one count of the caller's own messages and carries no secret.
+
+### D170. FreePBX migration: exporter manifest contract + trunks land disabled (2026-10-08, import)
+
+Moving a customer off FreePBX onto TNPBX is a two-half tool, not a FreePBX-backup reader.
+
+- **Exporter** `scripts/freepbx-export/export.php` runs ON the FreePBX box (root or DB
+  reader), reads the `asterisk` MySQL DB, `/etc/asterisk/voicemail.conf`, the voicemail spool
+  and custom sounds, and emits `tnpbx-migrate.tar.gz` = `manifest.json` + `files/`. The
+  manifest (schema in docs/freepbx-import.md, versioned) is the ONLY contract: the importer
+  never parses FreePBX SQL or conf syntax, so version drift (14-17) is absorbed once inside
+  the exporter. Required scope: extensions+secrets (plaintext in the DB), voicemail messages
+  +PINs (PINs live in voicemail.conf, NOT the DB), per-ext email, custom sounds, Polycom
+  MACs/assignments (module tables), trunks+secrets, outbound routes, inbound routes.
+  Everything else (IVRs, ring groups, queues) is out of v1 — destinations naming them are
+  reported as skipped, not silently dropped.
+- **Trunks land `Enabled = false` on import.** A migration runs while production is live; an
+  imported trunk that registers from the TNPBX box would collide with production registrations
+  and could take inbound calls. The import report names the disabled trunks; the operator
+  enables them at cutover.
+- **Trunk dial-pattern grammar translation lives in the importer**, not the exporter — the
+  manifest stays a faithful copy of FreePBX
+  so grammar fixes happen in one tested place.
+- **chan_sip converts to pjsip at import** (same ext, same secret) — TNPBX only speaks pjsip.
+- Secrets are plaintext in FreePBX (DB + generated conf) — no decryption needed, confirmed
+  against two real boxes (FreePBX 16/Asterisk 16 and FreePBX 17/Asterisk 22).
