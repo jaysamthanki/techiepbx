@@ -3861,3 +3861,13 @@ would arrive on it") and the form's trunk dropdown hid disabled trunks entirely.
 lists every trunk. The dialplan already leaves a route on a disabled trunk out until the trunk is
 switched on, so nothing changes in what Asterisk runs. The FreePBX import keeps its
 `allowDisabledTrunk` path (D170) — it is now the same rule as everywhere else.
+
+### D177. The FreePBX export carries recorded voicemail greetings (2026-10-12, import)
+
+Asked after migrating pbx.sohm.com: the exporter globbed `msg*` only, so greet/busy/unavail and
+the recorded name would have been left behind on a box whose users recorded them (sohm's happened
+to have none, so nothing was lost). export.php now stages the mailbox's own recorded greetings
+beside INBOX/Old, and the import planner carries them into the mailbox root — a mailbox with
+only a greeting and no messages is still carried. app_voicemail greets with a user file when it
+finds one, so users keep their own voice. The `tnpbx backup --full` CLI already took the whole
+spool tree and needed no change.

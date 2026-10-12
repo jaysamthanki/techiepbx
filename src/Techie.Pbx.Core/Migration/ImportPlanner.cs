@@ -1040,6 +1040,16 @@ namespace Techie.Pbx.Core.Migration
                         .Select(f => $"{folder}/{f}"));
                 }
 
+                // The greetings the user recorded, which sit in the mailbox's own directory
+                // rather than a folder: greet/busy/unavail and the recorded name (D177). The
+                // exporter stages them next to INBOX/Old, and they are copied verbatim — a
+                // mailbox that never recorded one keeps the system default, because it has
+                // no file to carry.
+                planned.Files.AddRange(Directory.EnumerateFiles(directory)
+                    .Select(Path.GetFileName)
+                    .Where(f => f != null && GreetingFilePattern().IsMatch(f))
+                    .OrderBy(f => f, StringComparer.Ordinal));
+
                 if (planned.Files.Count == 0)
                     continue;
 
@@ -1128,6 +1138,14 @@ namespace Techie.Pbx.Core.Migration
         /// <summary>What app_voicemail writes: <c>msg0000.txt</c>, <c>msg0000.wav</c>, <c>msg0000.WAV</c>, <c>msg0000.gsm</c>.</summary>
         [GeneratedRegex(@"^msg[0-9]{4}\.[A-Za-z0-9]{1,5}\z")]
         private static partial Regex MessageFilePattern();
+
+        /// <summary>
+        /// A greeting the user recorded, in the mailbox's own directory: <c>greet.wav</c>,
+        /// <c>busy.wav</c>, <c>unavail.wav</c>, the recorded name <c>greet.WAV</c> and the same
+        /// in every format app_voicemail writes it in (D177).
+        /// </summary>
+        [GeneratedRegex(@"^(?:greet|busy|unavail)\.(?:wav|WAV|g722|ulaw|alaw|gsm)\z")]
+        private static partial Regex GreetingFilePattern();
 
         [GeneratedRegex(@"^7(?<slot>[1-9])\z")]
         private static partial Regex ParkingSlotPattern();

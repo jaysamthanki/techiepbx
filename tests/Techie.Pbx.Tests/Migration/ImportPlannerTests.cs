@@ -430,6 +430,38 @@ namespace Techie.Pbx.Tests.Migration
             Assert.Contains(plan.Warnings, w => w.What.Contains("mailbox 103") && w.Why.Contains("was not imported"));
         }
 
+        /// <summary>
+        /// A greeting the user recorded sits in the mailbox's own directory, next to INBOX —
+        /// not inside it. The export stages it beside the folders and the import carries it
+        /// into the mailbox root, so the user keeps their own voice (D177).
+        /// </summary>
+        [Fact]
+        public void A_recorded_greeting_is_carried_next_to_the_messages()
+        {
+            this.WriteFile("files/voicemail/101/greet.wav");
+            this.WriteFile("files/voicemail/101/busy.wav");
+            this.WriteFile("files/voicemail/101/unavail.WAV");
+            this.WriteFile("files/voicemail/101/INBOX/msg0000.txt");
+            this.WriteFile("files/voicemail/101/tmp/temp.wav");
+
+            var manifest = Manifest();
+            manifest.Extensions!.Add(Ext("101"));
+
+            var plan = this.Plan(manifest, new ExistingConfig());
+
+            // The three greetings land beside the message; the tmp scratch folder does not.
+            Assert.Equal(new[] { "INBOX/msg0000.txt", "busy.wav", "greet.wav", "unavail.WAV" }, plan.Mailboxes[0].Files);
+            Assert.Equal(1, plan.Mailboxes[0].Messages);
+
+            // A mailbox with nothing but a greeting is still worth carrying: greet-only boxes
+            // exist (every user who records a greeting before their first message).
+            this.WriteFile("files/voicemail/102/greet.wav");
+            manifest.Extensions.Add(Ext("102"));
+
+            plan = this.Plan(manifest, new ExistingConfig());
+            Assert.Contains(plan.Mailboxes, m => m.Mailbox == "102" && m.Files.SequenceEqual(new[] { "greet.wav" }));
+        }
+
         [Fact]
         public void Sounds_are_one_announcement_per_recording_preferring_the_wav()
         {

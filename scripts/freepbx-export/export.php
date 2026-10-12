@@ -286,7 +286,10 @@ foreach (q($db, 'SELECT id, name, mac, model, version, lastip FROM polycom_devic
     ];
 }
 
-// Voicemail spool: INBOX + Old WAV/msg envelopes per extension, staged into the tarball.
+// Voicemail spool: greetings (greet/busy/unavail/name — anything the user recorded) plus the
+// INBOX + Old WAV/msg envelopes per extension, staged into the tarball. A mailbox with a
+// recorded greeting and no messages still needs its greeting carried: the glob must not be
+// msg*-only (found migrating pbx.sohm.com, which happened to have no recorded greetings).
 $spool = '/var/spool/asterisk/voicemail';
 $vmCount = 0;
 foreach ($manifest['extensions'] as $i => $e) {
@@ -299,6 +302,9 @@ foreach ($manifest['extensions'] as $i => $e) {
             $staged['files/voicemail/' . $e['number'] . '/' . $box . '/' . basename($f)] = $f;
             if (stripos(basename($f), '.txt') !== false) $n++;
         }
+    }
+    foreach (glob($dir . '/{greet,busy,unavail,vm-temp,intro}*.{wav,WAV,g722,ulaw,alaw,gsm}', GLOB_BRACE) ?: [] as $f) {
+        $staged['files/voicemail/' . $e['number'] . '/' . basename($f)] = $f;
     }
     $manifest['extensions'][$i]['voicemailMessages'] = $n;
     $vmCount += $n;
