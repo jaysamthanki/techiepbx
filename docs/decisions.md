@@ -3878,11 +3878,15 @@ The /phone softphone showed an incoming call only in the page itself — status 
 button turning into Answer — which a background tab never surfaces. Two additions in phone.js and
 the page:
 
-- A looped `<audio id="phone-ring">` playing a shipped local asset, `wwwroot/audio/ring.wav`
-  (8kHz mono, the US ring pair 440+480 Hz, 2s tone + 4s silence per loop), started on a remote
-  `newRTCSession` and stopped on accepted/ended/failed, on a dropdown switch (disconnect) and on
-  a second incoming call (which is still answered 486 busy per D161's one-call model). It runs
-  on the page's own origin, not the media stream, so it needs no track and no answer to sound.
+- A looped `<audio id="phone-ring">` playing a shipped local asset, `wwwroot/audio/ring.mp3`
+  (one full ring cycle of a mechanical-bell recording, 3.8s, mastered to -0.5 dB peak — the
+  first cut was a quiet synthesized 440+480 Hz tone and read as "not a real ring" on the lab),
+  started on a remote `newRTCSession` and stopped on accepted/ended/failed, on a dropdown
+  switch (disconnect) and on a second incoming call (which is still answered 486 busy per
+  D161's one-call model). It runs on the page's own origin, not the media stream, so it needs
+  no track and no answer to sound. The asset is Pixabay Content License (free, no attribution,
+  modification allowed; not resold standalone) — embedded as product default; if that license
+  posture ever needs revisiting, swap the file, nothing else references it.
 - The tab title alternates between the page title and "Incoming call — \<peer\>" twice a second
   while ringing, restored on stop. This is the half that works with no user gesture at all:
   browsers block audio on a page that has never been touched, and the ring is subject to the

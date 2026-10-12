@@ -95,9 +95,10 @@ else
            on user gestures for the ones that block autoplayed audio until one. *@
         <audio id="phone-audio" autoplay></audio>
 
-        @* The ring for an inbound call (D178): a six-second local loop, 2s tone + 4s silence,
-           started and stopped by phone.js with the same gesture rule as the call audio. *@
-        <audio id="phone-ring" src="~/audio/ring.wav" loop preload="auto"></audio>
+        @* The ring for an inbound call (D178): a 3.8s local loop — one full ring cycle from
+           the shipped asset, loud by design — started and stopped by phone.js with the same
+           gesture rule as the call audio. *@
+        <audio id="phone-ring" src="~/audio/ring.mp3" loop preload="auto"></audio>
     </div>
 }
 
