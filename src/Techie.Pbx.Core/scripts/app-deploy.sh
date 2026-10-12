@@ -102,7 +102,9 @@ if [[ ! -e "${APP_HOME}/appsettings.json" ]]; then
 fi
 
 KEEP_DIR=$(mktemp -d)
-for kept in appsettings.json Data bin Config whisper; do
+# backups/ holds the helper's tnpbx-backup tarballs (D171) and operator snapshots — a
+# deploy must never destroy them.
+for kept in appsettings.json Data bin Config whisper backups; do
     if [[ -e "${APP_HOME}/${kept}" ]]; then
         cp -a "${APP_HOME}/${kept}" "${KEEP_DIR}/"
     fi
@@ -111,7 +113,7 @@ done
 find "${APP_HOME}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xzf "$TARBALL" -C "$APP_HOME"
 
-for kept in appsettings.json Data bin Config whisper; do
+for kept in appsettings.json Data bin Config whisper backups; do
     if [[ -e "${KEEP_DIR}/${kept}" ]]; then
         rm -rf "${APP_HOME:?}/${kept}"
         cp -a "${KEEP_DIR}/${kept}" "${APP_HOME}/"
