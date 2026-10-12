@@ -123,8 +123,6 @@ namespace Techie.Pbx.Core.Data
 
                 if (trunk == null)
                     errors.Add("That trunk no longer exists.");
-                else if (!trunk.Enabled && !allowDisabledTrunk)
-                    errors.Add($"The {trunk.Name} trunk is disabled, so no calls would arrive on it.");
             }
 
             if (errors.Count == 0)

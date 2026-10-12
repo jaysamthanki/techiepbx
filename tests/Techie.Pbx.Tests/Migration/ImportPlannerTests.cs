@@ -379,7 +379,7 @@ namespace Techie.Pbx.Tests.Migration
         }
 
         [Fact]
-        public void An_existing_mac_is_cleared_and_a_second_phone_on_one_line_gets_no_keys()
+        public void An_existing_mac_is_cleared_and_every_phone_on_one_line_gets_keys()
         {
             var manifest = Manifest();
             manifest.Extensions!.Add(Ext("104"));
@@ -392,14 +392,13 @@ namespace Techie.Pbx.Tests.Migration
 
             var plan = this.Plan(manifest, existing);
 
-            // All three land (the existing one is cleared first, D174); the first to claim line 104 keeps it.
+            // All three land (the existing one is cleared first, D174); every phone may carry
+            // the same line (D175) — a desk phone and a remote phone both ring.
             Assert.Equal(new[] { "0004f2000001", "0004f2000002", "0004f2000003" }, plan.Phones.Select(p => p.Phone.Mac));
             Assert.Contains("0004f2000001", plan.Cleared.PhoneMacs);
-            Assert.Single(plan.Phones[0].Buttons);
-            Assert.Empty(plan.Phones[1].Buttons);
-            Assert.Empty(plan.Phones[2].Buttons);
-            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000002 was imported without keys.");
-            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000003 was imported without keys.");
+            Assert.All(plan.Phones, p => Assert.Single(p.Buttons));
+            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000002 was imported with the same line as another phone (104).");
+            Assert.Contains(plan.Warnings, w => w.What == "Phone 0004f2000003 was imported with the same line as another phone (104).");
         }
 
         [Fact]

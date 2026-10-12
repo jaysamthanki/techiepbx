@@ -707,9 +707,20 @@ namespace Techie.Pbx.Core.Migration
                 }
                 else if (claimed.Contains(line))
                 {
-                    this.Warn(MigrationSection.Phones, $"{label} was imported without keys.",
-                        $"Another phone already registers as extension {line}, and two phones cannot register as one (schema 020).",
-                        "Decide which phone is the user's and assign keys on the Phones page.");
+                    // D175: a user with a desk phone and a remote phone is normal, so a second
+                    // phone MAY take the same line. Its keys land like the first one's.
+                    buttons.Add(new PhoneButton { Position = PhoneButton.FirstPosition, TargetType = PhoneButtonTarget.Line, TargetValue = line });
+
+                    foreach (var key in keys)
+                    {
+                        var button = this.PhoneKey(label, key, ref parkingMapped);
+                        if (button != null)
+                            buttons.Add(button);
+                    }
+
+                    this.Warn(MigrationSection.Phones, $"{label} was imported with the same line as another phone ({line}).",
+                        "Two phones may register as one extension (D175): every handset signed in as the extension rings.",
+                        "Nothing, unless the extra phone is a leftover nobody uses.");
                 }
                 else
                 {

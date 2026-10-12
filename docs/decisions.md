@@ -3841,3 +3841,23 @@ full backup (1,147 entries, 150 MB), delete an announcement + a phone by hand, r
 back, web restarted and healthy, the replaced DB kept as `tnpbx.db.pre-restore`. Note: the
 binary transitively carries ImageSharp (D173) through Techie.Pbx.Asterisk's sounds-path reuse —
 same posture, unused decode paths, unchanged decision.
+
+### D175. Two phones may register as one extension (2026-10-11, phones)
+
+A user with a desk phone and a remote phone is normal, so the schema-020 rule ("another phone
+already registers as extension…") is dropped from `PhoneButtonRepository.ThrowIfInvalid`. The AOR
+dials every live contact, so every handset signed in as the extension rings. Found while
+importing pbx.sohm.com: extension 102's user had two Poly Edge phones, and the importer refused
+to give the second one keys. The importer's warning row stays — it says the phone was imported
+*without* keys, which is still true and still worth deciding about, but the UI no longer blocks
+a second phone from taking the same line.
+
+### D176. An inbound route may be set up against a disabled trunk (2026-10-11, inbound)
+
+Found while migrating pbx.sohm.com: the whole point of cutover prep is building routes against the
+still-disabled imported trunk, but the repository refused ("The X trunk is disabled, so no calls
+would arrive on it") and the form's trunk dropdown hid disabled trunks entirely. The trunk check in
+`InboundRouteRepository.ThrowIfInvalid` now only refuses a trunk that does not exist; the dropdown
+lists every trunk. The dialplan already leaves a route on a disabled trunk out until the trunk is
+switched on, so nothing changes in what Asterisk runs. The FreePBX import keeps its
+`allowDisabledTrunk` path (D170) — it is now the same rule as everywhere else.

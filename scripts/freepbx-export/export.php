@@ -281,7 +281,7 @@ foreach (q($db, 'SELECT id, name, mac, model, version, lastip FROM polycom_devic
         'mac' => strtolower($d['mac']),
         'model' => $d['model'],
         'lastIp' => $d['lastip'],
-        'line' => $line ? $line['deviceid'] : null,
+        'line' => $line ? (string)$line['deviceid'] : null,
         'keys' => $keys,
     ];
 }

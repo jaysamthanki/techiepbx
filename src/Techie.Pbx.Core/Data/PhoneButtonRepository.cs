@@ -107,24 +107,20 @@ namespace Techie.Pbx.Core.Data
         /// <item>A key on an extension has to name an extension that exists. The key stores the
         /// number rather than the ID, so nothing but this check stands between an admin and a lamp
         /// watching a number nobody answers.</item>
-        /// <item><b>Two phones cannot register as one extension.</b> That was the old rule about
-        /// <c>Phones.ExtensionID</c> and it follows the registration onto the key (schema 020): two
-        /// handsets signed in as 1001 both ring, and only one of them is the one anybody
-        /// expected.</item>
         /// </list>
+        ///
+        /// <para>Two phones MAY register as one extension (D175): a user with a desk phone and a
+        /// remote phone is normal, and the AOR dials every live contact anyway.</para>
         /// </summary>
         private void ThrowIfInvalid(long phoneID, List<PhoneButton> buttons)
         {
             var errors = PhoneButton.ValidateSet(buttons);
             var extensions = new ExtensionRepository(this.database).GetAll();
-            var claimed = this.GetLines().Where(line => line.PhoneID != phoneID).ToList();
 
             foreach (var button in buttons.Where(b => PhoneButtonTarget.IsExtension(b.TargetType)))
             {
                 if (!extensions.Any(e => string.Equals(e.Number, button.TargetValue, StringComparison.Ordinal)))
                     errors.Add($"Key {button.Position}: extension {button.TargetValue} is not there any more. Choose another.");
-                else if (button.IsLine && claimed.Any(line => string.Equals(line.TargetValue, button.TargetValue, StringComparison.Ordinal)))
-                    errors.Add($"Key {button.Position}: another phone already registers as extension {button.TargetValue}.");
             }
 
             // A key on a switch stores its code, so the same check for the same reason: nothing

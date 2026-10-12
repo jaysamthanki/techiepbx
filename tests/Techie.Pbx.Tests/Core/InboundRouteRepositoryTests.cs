@@ -95,14 +95,16 @@ namespace Techie.Pbx.Tests.Core
         }
 
         [Fact]
-        public void A_route_for_a_disabled_trunk_is_refused()
+        public void A_route_for_a_disabled_trunk_is_allowed()
         {
             AddExtension();
             var trunkID = AddTrunk(enabled: false);
 
-            var ex = Assert.Throws<ValidationFailedException>(() => this.inbound.Insert(Route(trunkID)));
+            this.inbound.Insert(Route(trunkID));
 
-            Assert.Contains("disabled", ex.Message);
+            // The route lands; the dialplan leaves it out until the trunk is switched on (D176).
+            var saved = this.inbound.GetAll().Single();
+            Assert.Equal(trunkID, saved.TrunkID);
         }
 
         [Fact]

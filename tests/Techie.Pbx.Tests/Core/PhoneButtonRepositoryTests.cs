@@ -190,12 +190,11 @@ namespace Techie.Pbx.Tests.Core
         }
 
         /// <summary>
-        /// Two handsets signed in as one extension both ring, and only one of them is the one
-        /// anybody expected. The rule followed the registration from Phones.ExtensionID onto the
-        /// key (schema 020).
+        /// A user with a desk phone and a remote phone is normal, so two phones MAY register as
+        /// one extension (D175). The AOR dials every live contact, so both handsets ring.
         /// </summary>
         [Fact]
-        public void Two_phones_cannot_register_as_the_same_extension()
+        public void Two_phones_may_register_as_the_same_extension()
         {
             this.AddExtension();
             var first = this.AddPhone();
@@ -203,13 +202,12 @@ namespace Techie.Pbx.Tests.Core
 
             this.buttons.Replace(first, new List<PhoneButton> { Line() });
 
-            var ex = Assert.Throws<ValidationFailedException>(() =>
-                this.buttons.Replace(second, new List<PhoneButton> { Line() }));
+            // The second phone takes the same line without complaint.
+            this.buttons.Replace(second, new List<PhoneButton> { Line() });
 
-            Assert.Contains("another phone already registers as extension 1001", ex.Message);
-
-            // And the phone that has it can be saved again without tripping over itself.
+            // And each phone can be saved again without tripping over the other.
             this.buttons.Replace(first, new List<PhoneButton> { Line() });
+            this.buttons.Replace(second, new List<PhoneButton> { Line() });
         }
 
         /// <summary>Another phone's <em>lamp</em> is not a claim on anything: everybody may watch 1001.</summary>

@@ -191,7 +191,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
         private InboundRouteForm Fill(InboundRouteForm form)
         {
             form.MohClasses = this.mohClasses.GetAll();
-            form.Trunks = this.trunks.GetAll().Where(t => t.Enabled).ToList();
+            form.Trunks = this.trunks.GetAll();
             form.DestinationChoices = new DestinationSelect
             {
                 Choices = DestinationCatalog.All(

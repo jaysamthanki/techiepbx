@@ -37,8 +37,9 @@ namespace Techie.Pbx.Web.Pages.Inbound
         public long TrunkID { get; set; }
 
         /// <summary>
-        /// The trunks that can be chosen: enabled ones only, because calls do not arrive on a
-        /// disabled trunk. Not posted back.
+        /// The trunks that can be chosen: every trunk, enabled or not — a route may be set up
+        /// against a trunk that is still switched off, and the dialplan leaves it out until the
+        /// trunk is switched on (D176).
         /// </summary>
         public List<Trunk> Trunks { get; set; } = new();
     }
