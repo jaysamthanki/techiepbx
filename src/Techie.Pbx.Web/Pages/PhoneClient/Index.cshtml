@@ -94,6 +94,10 @@ else
         @* The far end's audio. autoplay for the browsers that allow it; phone.js calls play()
            on user gestures for the ones that block autoplayed audio until one. *@
         <audio id="phone-audio" autoplay></audio>
+
+        @* The ring for an inbound call (D178): a six-second local loop, 2s tone + 4s silence,
+           started and stopped by phone.js with the same gesture rule as the call audio. *@
+        <audio id="phone-ring" src="~/audio/ring.wav" loop preload="auto"></audio>
     </div>
 }
 

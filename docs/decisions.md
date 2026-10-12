@@ -3871,3 +3871,25 @@ beside INBOX/Old, and the import planner carries them into the mailbox root — 
 only a greeting and no messages is still carried. app_voicemail greets with a user file when it
 finds one, so users keep their own voice. The `tnpbx backup --full` CLI already took the whole
 spool tree and needed no change.
+
+### D178. The web client rings audibly on an inbound call (2026-10-12, web client)
+
+The /phone softphone showed an incoming call only in the page itself — status line and the Call
+button turning into Answer — which a background tab never surfaces. Two additions in phone.js and
+the page:
+
+- A looped `<audio id="phone-ring">` playing a shipped local asset, `wwwroot/audio/ring.wav`
+  (8kHz mono, the US ring pair 440+480 Hz, 2s tone + 4s silence per loop), started on a remote
+  `newRTCSession` and stopped on accepted/ended/failed, on a dropdown switch (disconnect) and on
+  a second incoming call (which is still answered 486 busy per D161's one-call model). It runs
+  on the page's own origin, not the media stream, so it needs no track and no answer to sound.
+- The tab title alternates between the page title and "Incoming call — \<peer\>" twice a second
+  while ringing, restored on stop. This is the half that works with no user gesture at all:
+  browsers block audio on a page that has never been touched, and the ring is subject to the
+  same autoplay rule as the call audio (D161's play-on-gesture pattern). A tab that was never
+  clicked stays silent but still flashes; the first click on anything on the page lifts the
+  block and the next call rings out loud — which is the Teams-client-relevant property: the
+  desktop notification equivalent needs a gesture-independent signal, and the title flash is it.
+
+No setting, no schema: one asset, one page element, phone.js only.
+

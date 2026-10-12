@@ -12,6 +12,7 @@
     }
 
     const audio = document.getElementById('phone-audio');
+    const ringtone = document.getElementById('phone-ring');
     const callButton = document.getElementById('phone-call');
     const clearButton = document.getElementById('phone-clear');
     const display = document.getElementById('phone-display');
@@ -75,6 +76,42 @@
         }
     }
 
+    // ---- Ringing (D178): a looped local asset plus a flashing tab title, so an incoming call
+    //      is audible in the tab and visible from any other one. The same autoplay rule as the
+    //      call audio applies — a page the user has never touched stays silent, which the
+    //      title flash covers; every gesture press starts the ring too, so the common case
+    //      (signed in, tab open, something pressed at least once) rings out loud. ----
+
+    const baseTitle = document.title;
+    let ringFlash = null;
+
+    function startRinging(peer) {
+        if (!ringFlash) {
+            ringtone.currentTime = 0;
+            const attempt = ringtone.play();
+            if (attempt) {
+                attempt.catch(function () { });
+            }
+
+            // Alternate the title between the base and the caller, about twice a second.
+            ringFlash = setInterval(function () {
+                document.title = document.title === baseTitle
+                    ? 'Incoming call — ' + peer
+                    : baseTitle;
+            }, 500);
+        }
+    }
+
+    function stopRinging() {
+        if (ringFlash) {
+            clearInterval(ringFlash);
+            ringFlash = null;
+            document.title = baseTitle;
+        }
+        ringtone.pause();
+        ringtone.currentTime = 0;
+    }
+
     function hookAudio(connection) {
         connection.addEventListener('track', function (event) {
             // Firefox delivers the remote stream with the track; wrap the bare track otherwise.
@@ -93,6 +130,8 @@
     // ---- The UA: one per dropdown choice, replaced whole on a change. ----
 
     function disconnect() {
+        stopRinging();
+
         if (session) {
             try {
                 session.terminate();
@@ -194,6 +233,11 @@
         const peer = session.remote_identity.display_name || session.remote_identity.uri.user;
         setStatus(event.originator === 'remote' ? 'Incoming from ' + peer : 'Calling ' + peer + '…');
 
+        // An inbound invite rings until it is answered or goes away (D178).
+        if (event.originator === 'remote') {
+            startRinging(peer);
+        }
+
         // The audio track arrives on the peer connection, which an incoming session only gets
         // once it is answered — hence both the hook now and the event for later.
         if (session.connection) {
@@ -208,6 +252,7 @@
             // keypad sends as DTMF, which doubles as the transfer target.
             display.value = '';
             setStatus('In call with ' + peer);
+            stopRinging();
             playAudio();
             updateButtons();
         });
@@ -238,6 +283,7 @@
 
     function endSession(text) {
         session = null;
+        stopRinging();
         setStatus(registered ? text : 'Disconnected');
         updateButtons();
     }
