@@ -3947,3 +3947,31 @@ The pitfall that shaped the guard's form: the empty check must be its own `GotoI
 **never** an `ExecIf` wrapped around the Dial — `ExecIf` splits its arguments on commas, and
 the Dial's own commas would truncate it. The sample dialplan in `build-asterisk-vm.sh` teaches
 the contacts form too, so the docs don't contradict the generated config.
+
+
+### D180. Polycom phones stay awake during office hours (2026-10-14, phones)
+
+Customer request (pbx.sohm.com): the Poly Edge E phones enter power saving and the screen goes
+to sleep during the working day. The decision, same shape as D84's passwords and the `da.optIn`
+opt-out: **fixed renderer lines, no UI** — awake 08:00–17:00 every day of the week, for
+simplicity, no per-phone schedule. Every Polycom config now carries one `powerSaving` element:
+
+- `powerSaving.officeHours.startHour.<Day>` = `8` for all seven days (Monday..Sunday).
+- `powerSaving.officeHours.duration.<Day>` = `9` for all seven days, so office hours end 17:00.
+- `powerSaving.idleTimeout.officeHours` = `600` — the parameter's maximum (range 1–600 minutes,
+  default 30), so within office hours the phone effectively never enters power saving.
+- `powerSaving.Enable` and `powerSaving.idleTimeout.offHours` are **not written**: their
+  defaults (enabled, 1 minute) are what puts the screen to sleep overnight, which is wanted.
+
+Source: Poly Edge E Series Parameter Reference Guide, PVOS 8.2.1
+(<https://kaas.hpcloud.hp.com/pdf-public/pdf_10488574_en-US-1.pdf>, "Power-Saving Parameters",
+pp. 139–140) — the fleet runs PVOS 8.6.x, same parameter namespace. One trap verified against
+that PDF directly: on the Edge E the day suffix is **capitalised**
+(`powerSaving.officeHours.startHour.Monday`), where the VVX/UCS generation of the same
+parameters spells it lowercase — a wrongly-cased parameter is silently ignored and the phone
+keeps sleeping. The lines render bare (no `device.set` chain), like `da.optIn`: these are
+vendor-default-level parameters, the shape FreePBX's module writes them in, not `device.*`
+overrides.
+
+Polycom only. Yealink has its own power-saving parameter family and stays out of scope until
+somebody asks.

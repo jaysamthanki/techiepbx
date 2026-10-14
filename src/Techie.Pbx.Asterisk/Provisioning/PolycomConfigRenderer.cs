@@ -62,6 +62,27 @@ namespace Techie.Pbx.Asterisk.Provisioning
         /// </summary>
         private const int DigitMapTimeoutSeconds = 3;
 
+        /// <summary>
+        /// The days office hours are written for (D180): all seven, because the requirement is a
+        /// phone that is awake through the working day with no per-phone schedule UI. The names
+        /// are the parameter suffixes the Edge E parameter reference spells, capitalised —
+        /// <c>powerSaving.officeHours.startHour.Monday</c> — unlike the VVX's lowercase ones.
+        /// </summary>
+        private static readonly string[] OfficeDays =
+            { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+
+        /// <summary>Office hours run 08:00 to 17:00 (D180): this many hours from the start hour.</summary>
+        private const int OfficeHoursDurationHours = 9;
+
+        /// <summary>
+        /// Idle minutes before the screen sleeps within office hours: the parameter's maximum
+        /// (1-600), so in effect it never does (D180). The off-hours timeout is left at its
+        /// 1-minute default — not written — so the screen still sleeps overnight.
+        /// </summary>
+        private const int OfficeHoursIdleTimeoutMinutes = 600;
+
+        private const int OfficeHoursStartHour = 8;
+
         private const string ParkLabel = "Park";
 
         /// <summary>
@@ -155,6 +176,23 @@ namespace Techie.Pbx.Asterisk.Provisioning
             {
                 PolycomXml.Constant("da.optIn", "OptedOut"),
             });
+
+            // Keep the phone awake through the working day (D180): office hours 08:00-17:00
+            // every day of the week, with the office-hours idle timeout at its maximum so the
+            // screen never sleeps inside them. Fixed lines like da.optIn above, no UI.
+            // powerSaving.Enable and the off-hours timeout keep their defaults, so overnight
+            // the screen still sleeps.
+            var powerSaving = new List<(string Name, string Value)>();
+
+            foreach (var day in OfficeDays)
+                powerSaving.Add(PolycomXml.Constant($"powerSaving.officeHours.startHour.{day}", Number(OfficeHoursStartHour)));
+
+            foreach (var day in OfficeDays)
+                powerSaving.Add(PolycomXml.Constant($"powerSaving.officeHours.duration.{day}", Number(OfficeHoursDurationHours)));
+
+            powerSaving.Add(PolycomXml.Constant("powerSaving.idleTimeout.officeHours", Number(OfficeHoursIdleTimeoutMinutes)));
+
+            PolycomXml.Element(sb, "  ", "powerSaving", powerSaving);
 
             AppendImages(sb, config);
 

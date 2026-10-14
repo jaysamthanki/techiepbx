@@ -123,6 +123,38 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// Every phone stays awake through the working day (D180): office hours 08:00-17:00 on
+        /// all seven days, and the office-hours idle timeout at its 600-minute maximum so the
+        /// screen never sleeps inside them. Day suffixes are capitalised — that is how the Edge E
+        /// parameter reference spells them, unlike the VVX's lowercase — and a parameter the
+        /// phone does not recognise is silently ignored, which is a phone that still sleeps.
+        /// </summary>
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Every_phone_stays_awake_through_office_hours(bool unassigned)
+        {
+            var config = SampleConfig();
+            if (unassigned)
+                config.Buttons = new List<PhoneButton>();
+
+            var actual = PolycomConfigRenderer.Render(config);
+
+            foreach (var day in new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" })
+            {
+                Assert.Contains($"powerSaving.officeHours.startHour.{day}=\"8\"\n", actual);
+                Assert.Contains($"powerSaving.officeHours.duration.{day}=\"9\"\n", actual);
+            }
+
+            Assert.Contains("powerSaving.idleTimeout.officeHours=\"600\"\n", actual);
+
+            // The defaults do the right thing on their own (D180): power saving stays enabled,
+            // and the 1-minute off-hours timeout is what puts the screen to sleep overnight.
+            Assert.DoesNotContain("powerSaving.Enable", actual);
+            Assert.DoesNotContain("powerSaving.idleTimeout.offHours", actual);
+        }
+
+        /// <summary>
         /// A site with a background image (D145, D151): the same file as a phone with no image,
         /// plus the <c>bg</c> element — enabled, custom selection 1, and the gated URL.
         /// </summary>
