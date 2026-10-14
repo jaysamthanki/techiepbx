@@ -79,7 +79,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = ExtensionsConfRenderer.Render(extensions);
 
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1001,30,tTkKr)\n same => n,Hangup()\n", actual);
+            Assert.Contains("exten => 1001,1,Dial(${PJSIP_DIAL_CONTACTS(1001)},30,tTkKr)\n same => n,Hangup()\n", actual);
             Assert.DoesNotContain("Local/", actual);
             Assert.DoesNotContain("Forwarding rings", actual);
         }
@@ -96,7 +96,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = ExtensionsConfRenderer.Render(extensions);
 
-            Assert.Contains("exten => 1001,1,Dial(Local/7146085242@internal/n&PJSIP/1002,30,tTkKr)\n", actual);
+            Assert.Contains("exten => 1001,1,Dial(Local/7146085242@internal/n&${PJSIP_DIAL_CONTACTS(1002)},30,tTkKr)\n", actual);
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 new List<RingGroup>(), new List<Announcement>(), new List<Ivr>(), new List<TimeCondition>(),
                 AsteriskSettings.DefaultTimezone, new ParkingSettings(), classes);
 
-            Assert.Contains(" same => n,Dial(PJSIP/1002&Local/7146085242@internal/n,30,tTkKrU(sub-setmoh))\n", actual);
+            Assert.Contains(" same => n,Dial(${PJSIP_DIAL_CONTACTS(1002)}&Local/7146085242@internal/n,30,tTkKrU(sub-setmoh))\n", actual);
         }
 
         /// <summary>
@@ -157,7 +157,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = ExtensionsConfRenderer.Render(extensions);
 
-            Assert.Contains("exten => 1001,1,Dial(PJSIP/1002&Local/7146085242@internal/n,30,tTkKr)\n", actual);
+            Assert.Contains("exten => 1001,1,Dial(${PJSIP_DIAL_CONTACTS(1002)}&Local/7146085242@internal/n,30,tTkKr)\n", actual);
             Assert.DoesNotContain("Local/1002@", actual);
         }
 

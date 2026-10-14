@@ -102,7 +102,7 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = Render(SampleGroups()[3]);
 
-            Assert.Contains(" same => n,Dial(PJSIP/1001&PJSIP/1002,20,tTkKr)\n", actual);
+            Assert.Contains(" same => n,Dial(${PJSIP_DIAL_CONTACTS(1001)}&${PJSIP_DIAL_CONTACTS(1002)},20,tTkKr)\n", actual);
         }
 
         /// <summary>
@@ -114,7 +114,11 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = Render(SampleGroups()[0]);
 
-            Assert.Contains(" same => n,Dial(PJSIP/1002,15,tTkKr)\n same => n,Dial(PJSIP/1001,15,tTkKr)\n", actual);
+            Assert.Contains(
+                " same => n,Dial(${PJSIP_DIAL_CONTACTS(1002)},15,tTkKr)\n" +
+                " same => n(m2),GotoIf($[\"${PJSIP_DIAL_CONTACTS(1001)}\" = \"\"]?afterhunt)\n" +
+                " same => n,Dial(${PJSIP_DIAL_CONTACTS(1001)},15,tTkKr)\n",
+                actual);
             Assert.DoesNotContain("&", actual);
         }
 
@@ -189,7 +193,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var group = SampleGroups()[3];
             group.Members = "1001,1003,1002";
 
-            Assert.Contains(" same => n,Dial(PJSIP/1001&PJSIP/1002,20,tTkKr)\n", Render(group));
+            Assert.Contains(" same => n,Dial(${PJSIP_DIAL_CONTACTS(1001)}&${PJSIP_DIAL_CONTACTS(1002)},20,tTkKr)\n", Render(group));
         }
 
         [Fact]

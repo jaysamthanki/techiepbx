@@ -365,19 +365,35 @@ namespace Techie.Pbx.Asterisk.Config
                 // phone even when the calls are forwarded elsewhere: the lamp is the handset.
                 sb.Append($"exten => {number},hint,PJSIP/{number}\n");
 
-                // The hold music takes priority 1 when there is a class to name, which makes the
-                // Dial priority 2. Everything that arrives here still arrives at priority 1: a
-                // Goto from a route, a menu or another extension lands on the ExecIf and falls
-                // through to the Dial, which is why it is a priority of its own and not a label.
+                // The empty-dial guard (D179): a Dial whose whole argument expands to nothing
+                // errors and hangs the caller up instead of falling through, so when there is a
+                // mailbox to fall into, the same contact reads the Dial makes are tested first
+                // and an all-empty result jumps straight to the unavailable greeting — the same
+                // landing a dead endpoint gets. Without a mailbox there is no unavailable label
+                // to jump to, and the erroring Dial ends the call exactly as a dead endpoint
+                // always has. Its own GotoIf line, never an ExecIf around the Dial: ExecIf
+                // splits its arguments on commas and would truncate the Dial's own.
+                var guardReads = extension.VoicemailEnabled ? DialGuardReads(extension, allExtensions) : "";
+
+                // The hold music takes priority 1 when there is a class to name, with the guard
+                // and the Dial behind it. Everything that arrives here still arrives at
+                // priority 1: a Goto from a route, a menu or another extension lands on the
+                // first line and falls through to the Dial, which is why these are priorities
+                // of their own and not labels.
+                var applications = new List<string>();
+
                 if (internalMusic.Length > 0)
-                {
-                    sb.Append($"exten => {number},1,{internalMusic}\n");
-                    sb.Append($" same => n,{dial}\n");
-                }
-                else
-                {
-                    sb.Append($"exten => {number},1,{dial}\n");
-                }
+                    applications.Add(internalMusic);
+
+                if (guardReads.Length > 0)
+                    applications.Add($"GotoIf($[\"{guardReads}\" = \"\"]?unavailable)");
+
+                applications.Add(dial);
+
+                sb.Append($"exten => {number},1,{applications[0]}\n");
+
+                foreach (var application in applications.Skip(1))
+                    sb.Append($" same => n,{application}\n");
 
                 if (extension.VoicemailEnabled)
                 {
@@ -934,9 +950,19 @@ namespace Techie.Pbx.Asterisk.Config
         /// the call wherever the group says (D52). Generated Dial() rather than a queue, so there
         /// is nothing to load and nothing to keep in step.
         ///
-        /// Ring all is one Dial with the members joined by &amp;. Hunt is one Dial each, in order:
-        /// Dial only carries on to the next priority when nobody answered, so an answered call
-        /// ends where it was answered rather than ringing the next member afterwards.
+        /// Ring all is one Dial with the members' contact reads joined by &amp;: a member with no
+        /// reachable contacts expands to nothing and simply drops out of the fork, because Dial
+        /// skips empty members when it splits on &amp; (D179). The guard ahead of it tests every
+        /// member's reads concatenated, and jumps past the Dial when all of them are empty — an
+        /// all-empty Dial errors and hangs the caller up rather than falling through to the
+        /// group's own destination.
+        ///
+        /// Hunt is one Dial each, in order: Dial only carries on to the next priority when nobody
+        /// answered, so an answered call ends where it was answered rather than ringing the next
+        /// member afterwards. Each member's Dial has a guard of its own that jumps past it — to
+        /// the next member's guard, or past the last member to the afterhunt line — so a member
+        /// with no reachable contacts is skipped and a group of nothing but dead endpoints still
+        /// reaches the destination below (D179).
         /// </summary>
         /// <param name="dialOptions">
         /// The same options an extension's own Dial carries, so that a member answering a group
@@ -947,9 +973,7 @@ namespace Techie.Pbx.Asterisk.Config
         {
             var number = ConfText.Safe(group.Number, "ring group number");
             var name = ConfText.Safe(group.Name, "ring group name");
-            var members = MembersOf(group, enabledExtensions)
-                .Select(DeviceString)
-                .ToList();
+            var members = MembersOf(group, enabledExtensions);
 
             sb.Append('\n');
             sb.Append($"; {name} ({group.ToStrategy()}, {group.RingSeconds}s)\n");
@@ -965,12 +989,27 @@ namespace Techie.Pbx.Asterisk.Config
 
             if (group.ToStrategy() == RingStrategy.All)
             {
-                sb.Append($" same => n,Dial({string.Join("&", members)},{group.RingSeconds},{dialOptions})\n");
+                var guardReads = string.Concat(members.SelectMany(ContactReads));
+
+                sb.Append($" same => n,GotoIf($[\"{guardReads}\" = \"\"]?nomembers)\n");
+                sb.Append($" same => n,Dial({string.Join("&", members.Select(DeviceString))},{group.RingSeconds},{dialOptions})\n");
+                sb.Append(" same => n(nomembers),NoOp(No reachable group members)\n");
             }
             else
             {
-                foreach (var member in members)
-                    sb.Append($" same => n,Dial({member},{group.RingSeconds},{dialOptions})\n");
+                for (var index = 0; index < members.Count; index++)
+                {
+                    var guardReads = string.Concat(ContactReads(members[index]));
+                    var target = index + 1 < members.Count
+                        ? $"m{(index + 2).ToString(CultureInfo.InvariantCulture)}"
+                        : "afterhunt";
+                    var label = index == 0 ? "" : $"(m{(index + 1).ToString(CultureInfo.InvariantCulture)})";
+
+                    sb.Append($" same => n{label},GotoIf($[\"{guardReads}\" = \"\"]?{target})\n");
+                    sb.Append($" same => n,Dial({DeviceString(members[index])},{group.RingSeconds},{dialOptions})\n");
+                }
+
+                sb.Append(" same => n(afterhunt),NoOp(No hunt members left to try)\n");
             }
 
             sb.Append(DestinationDialplan.Lines(group.ToDestination()));
@@ -1243,20 +1282,68 @@ namespace Techie.Pbx.Asterisk.Config
             mohClasses.Where(c => c.IsDefault).OrderBy(c => c.MohClassID).FirstOrDefault();
 
         /// <summary>
-        /// The device string a Dial rings for one extension (D159): its own endpoint, plus the
-        /// <c>-web</c> endpoint beside it when the extension has the web client. This is the one
-        /// place that string is built, so a direct dial, a ring group member and a forwarding
-        /// target that is an extension all ring both devices — and everything after the Dial,
-        /// ring time and voicemail fallthrough included, is untouched, because it is still one
-        /// Dial. An extension without the web client is exactly the text it always was.
+        /// One <c>PJSIP_DIAL_CONTACTS</c> read per endpoint this extension registers: its own,
+        /// plus the <c>-web</c> endpoint's when it has the web client (D159). The pieces rather
+        /// than a joined string, because the two joins differ: a Dial argument joins them with
+        /// <c>&amp;</c> (<see cref="DeviceString"/>), an empty-dial guard concatenates them with
+        /// nothing between (<see cref="DialGuardReads"/>) — empty exactly when every read is,
+        /// which no <c>&amp;</c>-joined form can say.
         /// </summary>
-        private static string DeviceString(Extension extension)
+        private static List<string> ContactReads(Extension extension)
         {
             var number = ConfText.Safe(extension.Number, "number");
+            var reads = new List<string> { $"${{PJSIP_DIAL_CONTACTS({number})}}" };
 
-            return extension.WebClient
-                ? $"PJSIP/{number}&PJSIP/{number}{PjsipConfRenderer.WebClientSuffix}"
-                : $"PJSIP/{number}";
+            if (extension.WebClient)
+                reads.Add($"${{PJSIP_DIAL_CONTACTS({number}{PjsipConfRenderer.WebClientSuffix})}}");
+
+            return reads;
+        }
+
+        /// <summary>
+        /// What a Dial rings for one extension (D159, D179): the endpoint's reachable contacts,
+        /// read through the <c>PJSIP_DIAL_CONTACTS</c> function at call time, plus the
+        /// <c>-web</c> endpoint's beside it when the extension has the web client. Dialling the
+        /// bare endpoint (<c>PJSIP/101</c>) rings exactly one contact — chan_pjsip picks the
+        /// first reachable one — so an extension with two registered phones rang one of them;
+        /// the function expands to one member per reachable contact, joined by <c>&amp;</c>,
+        /// and Dial skips empty members when it splits on <c>&amp;</c>, so either read may come
+        /// back empty without harm (D179). This is the one place the string is built, so a
+        /// direct dial, a ring group member and a forwarding target that is an extension all
+        /// ring every device — and everything after the Dial, ring time and voicemail
+        /// fallthrough included, is untouched, because it is still one Dial.
+        ///
+        /// The result is only valid as a <c>Dial</c> argument. It is not a device name any
+        /// more: a hint keeps watching <c>PJSIP/101</c>, which is the endpoint's own state.
+        /// </summary>
+        private static string DeviceString(Extension extension) =>
+            string.Join("&", ContactReads(extension));
+
+        /// <summary>
+        /// What an extension's empty-dial guard tests (D179): the same
+        /// <c>PJSIP_DIAL_CONTACTS</c> reads its Dial makes, concatenated with nothing between
+        /// them, so the test is empty exactly when every read is — the one case where the Dial
+        /// errors and hangs the caller up. For a forwarded extension that is every target's
+        /// reads; but a forwarding list with any <c>Local/</c> target returns empty here, which
+        /// means no guard at all: a <c>Local/</c> channel is always dialable, so that Dial can
+        /// never be all-empty — and a guard testing only the extension targets would send the
+        /// call to voicemail without ever ringing the number the <c>Local/</c> leg is for.
+        /// </summary>
+        private static string DialGuardReads(Extension extension, List<Extension> extensions)
+        {
+            var forwarding = extension.ForwardingList();
+
+            if (forwarding.Count == 0)
+                return string.Concat(ContactReads(extension));
+
+            var targets = forwarding
+                .Select(target => extensions.FirstOrDefault(e => string.Equals(e.Number, target, StringComparison.Ordinal)))
+                .ToList();
+
+            if (targets.Any(target => target == null))
+                return "";
+
+            return string.Concat(targets.OfType<Extension>().SelectMany(ContactReads));
         }
 
         /// <summary>
@@ -1269,7 +1356,8 @@ namespace Techie.Pbx.Asterisk.Config
         /// untouched: one Dial rather than several, so every target rings at once, and the ring
         /// time and the no-answer fallthrough behind it are the extension's own.
         ///
-        /// A target that is an extension is dialled as that extension's endpoint. Anything else is
+        /// A target that is an extension is dialled as that extension's reachable contacts, through
+        /// <see cref="DeviceString"/> like every other ring (D179). Anything else is
         /// a number to dial out and goes through a <c>Local</c> channel into
         /// <see cref="InternalContext"/> — the context a phone dials from — so it meets the same
         /// outbound routes in the same order, the same caller ID lines (D125) and the same
@@ -1282,8 +1370,9 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         /// <param name="extensions">
         /// Every extension row, switched on or not. A target that is a switched-off extension is
-        /// still written as that endpoint — a phone that does not answer — rather than falling
-        /// through to the Local form and being offered to the outbound routes.
+        /// still written as that extension's contact reads — a phone that does not answer —
+        /// rather than falling through to the Local form and being offered to the outbound
+        /// routes.
         /// </param>
         private static string DialTargets(Extension extension, List<Extension> extensions)
         {

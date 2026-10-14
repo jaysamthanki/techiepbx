@@ -329,8 +329,10 @@ EOF
 
 cat > /etc/asterisk/extensions.conf <<'EOF'
 [internal]
-; Extension to extension
-exten => _1XXX,1,Dial(PJSIP/${EXTEN},30)
+; Extension to extension. PJSIP_DIAL_CONTACTS expands to every reachable contact of the
+; endpoint joined by &, so an extension with two registered phones rings both; a bare
+; Dial(PJSIP/${EXTEN}) would ring only the first reachable contact (D179).
+exten => _1XXX,1,Dial(${PJSIP_DIAL_CONTACTS(${EXTEN})},30)
  same => n,Hangup()
 
 ; Echo test

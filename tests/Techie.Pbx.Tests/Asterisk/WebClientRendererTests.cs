@@ -119,8 +119,8 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = ExtensionsConfRenderer.Render(Sample());
 
-            Assert.Contains("exten => 101,1,Dial(PJSIP/101&PJSIP/101-web,30,tTkKr)\n same => n,Hangup()\n", actual);
-            Assert.Contains("exten => 102,1,Dial(PJSIP/102,30,tTkKr)\n", actual);
+            Assert.Contains("exten => 101,1,Dial(${PJSIP_DIAL_CONTACTS(101)}&${PJSIP_DIAL_CONTACTS(101-web)},30,tTkKr)\n same => n,Hangup()\n", actual);
+            Assert.Contains("exten => 102,1,Dial(${PJSIP_DIAL_CONTACTS(102)},30,tTkKr)\n", actual);
         }
 
         /// <summary>The BLF lamp keeps watching the handset alone, as it does for forwarding (D121).</summary>
@@ -147,7 +147,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 Sample(), new List<Trunk>(), new List<OutboundRoute>(), new List<InboundRoute>(),
                 new List<RingGroup> { group });
 
-            Assert.Contains(" same => n,Dial(PJSIP/101&PJSIP/101-web&PJSIP/102,20,tTkKr)\n", actual);
+            Assert.Contains(" same => n,Dial(${PJSIP_DIAL_CONTACTS(101)}&${PJSIP_DIAL_CONTACTS(101-web)}&${PJSIP_DIAL_CONTACTS(102)},20,tTkKr)\n", actual);
         }
 
         /// <summary>
@@ -162,7 +162,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = ExtensionsConfRenderer.Render(extensions);
 
-            Assert.Contains("exten => 102,1,Dial(PJSIP/101&PJSIP/101-web,30,tTkKr)\n", actual);
+            Assert.Contains("exten => 102,1,Dial(${PJSIP_DIAL_CONTACTS(101)}&${PJSIP_DIAL_CONTACTS(101-web)},30,tTkKr)\n", actual);
         }
     }
 }

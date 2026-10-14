@@ -3897,3 +3897,53 @@ the page:
 
 No setting, no schema: one asset, one page element, phone.js only.
 
+
+### D179. Internal dials ring every registered contact, through PJSIP_DIAL_CONTACTS (2026-10-14, dialplan)
+
+Live-verified on pbx.sohm.com (Asterisk 22.11): `Dial(PJSIP/102)` does **not** ring all of an
+extension's registered contacts — chan_pjsip's `ast_sip_session_create_outgoing` picks exactly
+one (the first reachable) contact, confirmed both on the wire (an AOR with two reachable
+contacts produced exactly one outbound INVITE) and in the Asterisk 22 source on that box. So
+D175's "the AOR dials every live contact" was wrong in practice: a user with two phones had
+one of them ring.
+
+The fix is what FreePBX does: dial through the chan_pjsip function
+`PJSIP_DIAL_CONTACTS(<endpoint>)`, which expands to
+`PJSIP/<endpoint>/sip:<uri1>&PJSIP/<endpoint>/sip:<uri2>...` — one member per **reachable**
+contact, joined by `&`, trailing `&` trimmed — and to an empty string when the endpoint has no
+reachable contacts (a nonexistent endpoint logs a warning and also returns empty).
+Live-verified on the same box: `Dial(${PJSIP_DIAL_CONTACTS(102)},30,tTkKrU(sub-setmoh))` rings
+every registered device, from a direct dial and through an IVR/ring-group Goto. Every internal
+Dial target now takes this form, built in one place (`DeviceString`): direct dials, forwarding
+targets that are extensions, and ring group members; a web-client extension is the two reads
+joined by `&`. Trunk Dials are untouched — they already carry a full URI. Hints keep watching
+`PJSIP/<n>`: the device string is now only valid as a Dial argument.
+
+Two facts the generated dialplan relies on, both live-verified:
+
+- **Dial skips empty members** when it splits its destination on `&` (`app_dial.c`:
+  `if (ast_strlen_zero(cur)) continue;`), so
+  `${PJSIP_DIAL_CONTACTS(101)}&${PJSIP_DIAL_CONTACTS(101-web)}` is safe when either side is
+  empty — a member with no reachable contacts just drops out of the fork.
+- But a Dial whose **whole** argument expands to empty errors and **hangs the caller up**
+  instead of falling through to the next priority. So wherever there is somewhere better to
+  land, a guard line precedes the Dial: `GotoIf($["<reads>" = ""]?<label>)`, where `<reads>`
+  is the **same ACF reads the Dial makes, concatenated with nothing between them** — empty
+  exactly when all are empty, which no `&`-joined form can say. An extension with voicemail
+  guards to its existing `unavailable` label (a dead extension lands in the unavailable
+  greeting, as before); without voicemail there is no label to land on and no guard is
+  written — the erroring Dial ends the call, which is what a dead endpoint did before. A
+  forwarded extension whose every target is an extension guards the whole target list; a
+  list with any `Local/` target gets no guard at all, because a `Local/` channel is always
+  dialable, that Dial can never be all-empty, and a guard testing only the extension targets
+  would send the call to voicemail without ringing the number the `Local/` leg is for (this
+  tightens the spec's "Local/ targets contribute nothing"). Ring all guards the one Dial over
+  every member's reads and jumps to a `nomembers` NoOp after it, so the group's destination
+  still runs; hunt guards each member's Dial separately, jumping to the **next member's
+  guard** (the last to an `afterhunt` NoOp), so consecutive dead members are skipped rather
+  than handed an empty Dial.
+
+The pitfall that shaped the guard's form: the empty check must be its own `GotoIf` line,
+**never** an `ExecIf` wrapped around the Dial — `ExecIf` splits its arguments on commas, and
+the Dial's own commas would truncate it. The sample dialplan in `build-asterisk-vm.sh` teaches
+the contacts form too, so the docs don't contradict the generated config.
