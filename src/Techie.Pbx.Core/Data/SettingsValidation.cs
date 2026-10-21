@@ -269,6 +269,26 @@ namespace Techie.Pbx.Core.Data
                     if (!Toggles.IsKnown(text))
                         errors.Add($"The request log setting must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is on.");
                     break;
+
+                case SettingsKeys.TeamsAppClientId:
+                    if (!Guid.TryParse(text, out _))
+                        errors.Add("The Teams app client ID must be a GUID — the application (client) ID of the Entra app registration, e.g. 5e7e205d-1234-5678-abcd-001122334455.");
+                    break;
+
+                case SettingsKeys.TeamsAppManifestId:
+                    if (!Guid.TryParse(text, out _))
+                        errors.Add("The Teams app manifest ID must be a GUID — the app's own UUID, which the Developer Portal generates when the app is created there.");
+                    break;
+
+                case SettingsKeys.TeamsAppSiteUrl:
+                    if (!HostPattern().IsMatch(text))
+                        errors.Add("The Teams tab host must be a bare hostname, e.g. pbx.example.com — no http:// and no path.");
+                    break;
+
+                case SettingsKeys.TeamsAppTenantId:
+                    if (!Guid.TryParse(text, out _) && text is not ("common" or "organizations"))
+                        errors.Add("The Teams app tenant must be the Entra tenant's directory (tenant) ID as a GUID, or 'common' for any tenant.");
+                    break;
             }
 
             return errors;

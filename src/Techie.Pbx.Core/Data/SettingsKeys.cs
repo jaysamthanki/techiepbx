@@ -87,6 +87,33 @@ namespace Techie.Pbx.Core.Data
         public const string SipExternalAddress = "Sip.ExternalAddress";
 
         /// <summary>
+        /// The Entra app registration client ID that goes into the Teams app manifest's
+        /// webApplicationInfo (both its id and the api://host/id resource). Served dynamically
+        /// by the TeamsTab manifest endpoint (D182).
+        /// </summary>
+        public const string TeamsAppClientId = "TeamsApp.ClientId";
+
+        /// <summary>
+        /// The Teams app package's own UUID, the manifest's top-level id. Any GUID works while
+        /// the package is uploaded as a custom app; the Developer Portal gives one when the
+        /// app is created there (D182).
+        /// </summary>
+        public const string TeamsAppManifestId = "TeamsApp.ManifestId";
+
+        /// <summary>
+        /// The public host the Teams tab loads the dialer from, e.g. pbx.techie.gd. It fills the
+        /// manifest's contentUrl, websiteUrl, validDomains and the api:// resource (D182).
+        /// </summary>
+        public const string TeamsAppSiteUrl = "TeamsApp.SiteUrl";
+
+        /// <summary>
+        /// The Entra tenant the app registration lives in — the MSAL authority for the Teams tab's
+        /// sign-in. Not part of the manifest itself; the Teams SSO phase reads it (D182). Blank
+        /// means the sign-in uses the same multi-tenant authority it does today.
+        /// </summary>
+        public const string TeamsAppTenantId = "TeamsApp.TenantId";
+
+        /// <summary>
         /// The username a phone has to present to fetch its provisioning files. It is the user half
         /// of the user:pass in the DHCP option 160 URL, so it is deliberately restricted to
         /// characters that need no escaping in a URL (D77).
@@ -280,6 +307,10 @@ namespace Techie.Pbx.Core.Data
             SipLocalAddress,
             SipMaxContacts,
             SipExternalAddress,
+            TeamsAppClientId,
+            TeamsAppManifestId,
+            TeamsAppSiteUrl,
+            TeamsAppTenantId,
             ProvisioningUsername,
             ProvisioningPassword,
             ProvisioningAdminPassword,
@@ -367,6 +398,13 @@ namespace Techie.Pbx.Core.Data
             [ProvisioningPassword] = SettingScope.Phones,
             [ProvisioningAdminPassword] = SettingScope.Phones,
             [ProvisioningUserPassword] = SettingScope.Phones,
+
+            // The Teams tab manifest is built per download from these three; no conf file reads
+            // them and nothing needs an apply (D182).
+            [TeamsAppClientId] = SettingScope.App,
+            [TeamsAppManifestId] = SettingScope.App,
+            [TeamsAppSiteUrl] = SettingScope.App,
+            [TeamsAppTenantId] = SettingScope.App,
 
             // Ordering details, read by the certificate service and nothing else. The certificate
             // it orders is a row in Certificates, and that repository raises the marker (D101), so

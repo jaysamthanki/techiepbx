@@ -306,6 +306,30 @@ namespace Techie.Pbx.Web.Pages.Settings
                 Key = SettingsKeys.WebRequestLog,
                 Sample = Toggles.On,
             },
+            new SettingDescriptor
+            {
+                Description = "The Entra app registration's application (client) ID that goes into the Teams app manifest's webApplicationInfo. The Teams tab page builds the downloadable package from it (D182).",
+                Key = SettingsKeys.TeamsAppClientId,
+                Sample = "5e7e205d-1234-5678-abcd-001122334455",
+            },
+            new SettingDescriptor
+            {
+                Description = "The Teams app package's own UUID — the manifest's top-level id. The Developer Portal generates one when the app is created there; until then the tab page can make one up (D182).",
+                Key = SettingsKeys.TeamsAppManifestId,
+                Sample = "6f8a31c0-9876-5432-fedc-ba0987654321",
+            },
+            new SettingDescriptor
+            {
+                Description = "The public host the Teams tab loads the dialer from — the manifest's contentUrl, websiteUrl, validDomains and the api:// resource are built from it. Bare hostname, no http:// and no path (D182).",
+                Key = SettingsKeys.TeamsAppSiteUrl,
+                Sample = "pbx.example.com",
+            },
+            new SettingDescriptor
+            {
+                Description = "The Entra tenant the Teams app registration lives in — the sign-in authority the Teams tab uses. A directory (tenant) ID or 'common'. Left blank it uses the same multi-tenant authority as today (D182).",
+                Key = SettingsKeys.TeamsAppTenantId,
+                Sample = "6ec9dec4-48a6-4a86-9b3e-2c5d1f0a9e87",
+            },
         }.ToDictionary(descriptor => descriptor.Key, StringComparer.Ordinal);
 
         /// <summary>Every known key, in the order the page lists them.</summary>

@@ -5,28 +5,68 @@
 }
 
 <div class="container">
-    <h1 class="h3 mb-3">Teams app package</h1>
+    <h1 class="h3 mb-3">Teams app</h1>
 
-    @if (Model.ManifestNeedsId)
+    @if (Model.Ready)
     {
-        <div class="alert alert-warning">
-            The shipped manifest still carries the spike placeholder UUID. Replace the
-            <code>id</code> in <code>src/Techie.Pbx.Web/TeamsTab/manifest.json</code> with the
-            app registration GUID from Entra before uploading the package.
+        <div class="alert alert-success">
+            The package will carry the values below. Upload it as a custom app and pin it for users.
         </div>
     }
+    else
+    {
+        <div class="alert alert-warning">
+            Fill in all three fields from the Developer Portal and Entra before downloading — the
+            package is built from them, and a placeholder left in will make Teams reject the upload.
+        </div>
+    }
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="h5 card-title">Manifest values</h2>
+            <form method="post">
+                <div asp-validation-summary="All" class="text-danger"></div>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="ClientId">Client ID</label>
+                        <input class="form-control" asp-for="ClientId" placeholder="5e7e205d-1234-5678-abcd-001122334455" />
+                        <div class="form-text">The Entra app registration's application (client) ID.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="ManifestId">Manifest ID</label>
+                        <input class="form-control" asp-for="ManifestId" placeholder="6f8a31c0-9876-5432-fedc-ba0987654321" />
+                        <div class="form-text">The app package's own UUID — the Developer Portal generates one.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="SiteUrl">Site host</label>
+                        <input class="form-control" asp-for="SiteUrl" placeholder="pbx.example.com" />
+                        <div class="form-text">The host the dialer is served from — no http://, no path.</div>
+                    </div>
+                </div>
+                <div class="row g-3 mt-0">
+                    <div class="col-md-4">
+                        <label class="form-label" asp-for="TenantId">Tenant ID <span class="text-body-secondary">(optional)</span></label>
+                        <input class="form-control" asp-for="TenantId" placeholder="6ec9dec4-48a6-4a86-9b3e-2c5d1f0a9e87" />
+                        <div class="form-text">The Entra tenant the app registration lives in — the sign-in authority. Leave blank for any tenant.</div>
+                    </div>
+                </div>
+                <button class="btn btn-primary mt-3" type="submit">Save</button>
+            </form>
+        </div>
+    </div>
 
     <ol class="list-group list-group-numbered">
         <li class="list-group-item">
             In the <a href="https://dev.teams.microsoft.com/apps" target="_blank" rel="noopener">Teams Developer Portal</a>,
-            create a new app under the target tenant.
+            create a new app under the target tenant. Note the manifest ID it generates.
         </li>
         <li class="list-group-item">
-            Register the app in the target tenant's Entra ID and copy the client ID into the manifest.
+            Register (or pick) the app's Entra app registration and copy its client ID. Enter all
+            three values above and press Save.
         </li>
         <li class="list-group-item">
             <a class="btn btn-sm btn-primary" asp-page-handler="Package">Download package</a>
-            <span class="ms-2 text-body-secondary">manifest.json + icons, ready to upload.</span>
+            <span class="ms-2 text-body-secondary">manifest.json + icons, built from the saved values.</span>
         </li>
         <li class="list-group-item">
             In the Developer Portal, upload the downloaded zip as a custom app, then pin it to the
@@ -34,3 +74,12 @@
         </li>
     </ol>
 </div>
+
+@section Scripts {
+    @if (HttpContext.Request.Query.ContainsKey("saved"))
+    {
+        <script>
+            Swal.fire({ icon: 'success', title: 'Saved', showConfirmButton: false, timer: 1500 });
+        </script>
+    }
+}

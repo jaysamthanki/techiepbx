@@ -132,6 +132,10 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.MailSmtpUsername,
                     SettingsKeys.MailTransport,
                     SettingsKeys.MailVoicemailCallbackToken,
+                    SettingsKeys.TeamsAppClientId,
+                    SettingsKeys.TeamsAppManifestId,
+                    SettingsKeys.TeamsAppSiteUrl,
+                    SettingsKeys.TeamsAppTenantId,
                     SettingsKeys.WebRequestLog,
                 },
                 KeysIn(SettingScope.App));
@@ -141,6 +145,10 @@ namespace Techie.Pbx.Tests.Core
         /// The examples worth spelling out, because they are the ones a prefix would get wrong.
         /// </summary>
         [Theory]
+        [InlineData(SettingsKeys.TeamsAppClientId, SettingScope.App)]
+        [InlineData(SettingsKeys.TeamsAppManifestId, SettingScope.App)]
+        [InlineData(SettingsKeys.TeamsAppSiteUrl, SettingScope.App)]
+        [InlineData(SettingsKeys.TeamsAppTenantId, SettingScope.App)]
         [InlineData(SettingsKeys.ProvisioningUsername, SettingScope.Phones)]
         [InlineData(SettingsKeys.ProvisioningPassword, SettingScope.Phones)]
         [InlineData(SettingsKeys.ProvisioningAdminPassword, SettingScope.Phones)]
