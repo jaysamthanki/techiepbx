@@ -4001,3 +4001,36 @@ caller ID line.
 
 Live fix on the box (removing the line + reload) confirmed correct inbound caller ID with a
 real call before this was coded.
+
+## D182: The webphone ships as a Teams tab app, not a Teams Phone integration (2026-10-21, webphone)
+
+Jaysam's framing (2026-10-21): "we create an app that goes into a m365 tenant, which basically
+shows the pbx phone dialer" — users make and receive PBX calls from inside the Teams client,
+not from a separate browser tab. Researched against the current (2026) Microsoft surface:
+
+- **Teams Phone Extensibility (ACS/TPE)** rejected — that is a full call-platform swap with
+  ACS resources, consent scopes and per-user licensing, far past what we need.
+- **Teams SIP Gateway** rejected — certified desk phones only, explicitly no web/softphone.
+- **Direct Routing / SBC** rejected for this — needs a patched Asterisk, a public 5061 FQDN
+  and M365 trunk plumbing to give *native* Teams calling; the ask is not native calling, it is
+  our dialer wearing a Teams shell.
+- **Chosen: a personal tab app.** `src/Techie.Pbx.Web/TeamsTab/manifest.json` (v0.1 spike)
+  hosts `https://pbx.techie.gd/phone` as a staticTab with scopes `personal` and contexts
+  `personalTab` + `meetingSidePanel`; validDomains `pbx.techie.gd`; webApplicationInfo points
+  at the existing TNPBX sign-in app registration (5e7e205d, D163) so Teams SSO can piggyback
+  on the same app id later.
+
+Microsoft's "Build tabs for calling" surface (desktop/web clients only — no mobile) is the
+in-call integration Jaysam remembered seeing: once an admin pins the app via app setup policy
+→ Calling extensions, the tab appears in the call side panel and can read caller ID via the
+TeamsJS SDK `getMeetingDetailsVerbose` with RSC permissions
+`OnlineMeetingParticipant.Read.Chat` and `OnlineMeeting.ReadBasic.Chat`. Those RSC entries are
+NOT in the v0.1 spike manifest yet — they belong to the calling-extension phase, added when we
+wire the side-panel caller lookup.
+
+Reality check recorded for the roadmap: this is the PBX dialer rendered inside Teams — calls
+still flow through Asterisk exactly as on the browser page. It does not intercept or ring on
+Teams-native calls, and there is no native Teams incoming-call notification for our own PBX
+calls; in-call side-panel presence is the extent of the "notification integration". Spike
+placeholders: manifest id and webApplicationInfo id carry zero-filled UUID segments to be
+replaced at first tenant upload; icons are generated TP placeholder art.

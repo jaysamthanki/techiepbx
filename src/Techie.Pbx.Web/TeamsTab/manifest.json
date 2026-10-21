@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "packageName": "com.techienetworks.pbx.webphone",
+  "version": "0.1.0",
+  "developer": {
+    "name": "Techie Networks",
+    "websiteUrl": "https://techienetworks.com",
+    "privacyUrl": "https://techienetworks.com/privacy",
+    "termsOfUseUrl": "https://techienetworks.com/terms"
+  },
+  "name": {
+    "short": "Techie PBX",
+    "full": "Techie PBX Web Phone"
+  },
+  "description": {
+    "short": "Techie Networks PBX dialer inside Teams.",
+    "full": "Make and receive calls through the Techie Networks PBX directly inside the Teams client. Uses the PBX webphone; no Teams Phone license required."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#0d6efd",
+  "staticTabs": [
+    {
+      "entityId": "techienetworks.pbx.webphone",
+      "name": "Techie PBX",
+      "contentUrl": "https://pbx.techie.gd/phone",
+      "websiteUrl": "https://pbx.techie.gd/phone",
+      "scopes": ["personal"],
+      "context": ["personalTab", "meetingSidePanel"]
+    }
+  ],
+  "validDomains": ["pbx.techie.gd"],
+  "webApplicationInfo": {
+    "id": "5e7e205d-0000-0000-0000-000000000000",
+    "resource": "api://pbx.techie.gd/5e7e205d-0000-0000-0000-000000000000"
+  },
+  "showLoadingIndicator": true
+}
