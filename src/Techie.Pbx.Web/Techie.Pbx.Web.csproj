@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Content Update="log4net.config" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="TeamsTab\**" CopyToOutputDirectory="PreserveNewest" />
 
     <!--
       The program Asterisk's voicemail mailcmd runs (D126). It travels in the publish so that

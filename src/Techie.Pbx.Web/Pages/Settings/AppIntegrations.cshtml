@@ -1,0 +1,36 @@
+@page
+@model Techie.Pbx.Web.Pages.Settings.AppIntegrationsModel
+@{
+    ViewData["Title"] = "Teams app";
+}
+
+<div class="container">
+    <h1 class="h3 mb-3">Teams app package</h1>
+
+    @if (Model.ManifestNeedsId)
+    {
+        <div class="alert alert-warning">
+            The shipped manifest still carries the spike placeholder UUID. Replace the
+            <code>id</code> in <code>src/Techie.Pbx.Web/TeamsTab/manifest.json</code> with the
+            app registration GUID from Entra before uploading the package.
+        </div>
+    }
+
+    <ol class="list-group list-group-numbered">
+        <li class="list-group-item">
+            In the <a href="https://dev.teams.microsoft.com/apps" target="_blank" rel="noopener">Teams Developer Portal</a>,
+            create a new app under the target tenant.
+        </li>
+        <li class="list-group-item">
+            Register the app in the target tenant's Entra ID and copy the client ID into the manifest.
+        </li>
+        <li class="list-group-item">
+            <a class="btn btn-sm btn-primary" asp-page-handler="Package">Download package</a>
+            <span class="ms-2 text-body-secondary">manifest.json + icons, ready to upload.</span>
+        </li>
+        <li class="list-group-item">
+            In the Developer Portal, upload the downloaded zip as a custom app, then pin it to the
+            sidebar for users.
+        </li>
+    </ol>
+</div>
