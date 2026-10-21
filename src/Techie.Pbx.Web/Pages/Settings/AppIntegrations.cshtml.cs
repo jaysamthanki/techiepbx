@@ -80,7 +80,10 @@ public partial class AppIntegrationsModel : PageModel
         }
     }
 
-    public void OnGet()
+    public void OnGet() => this.Load();
+
+    /// <summary>Reads the stored TeamsApp.* values into the fields and the Loaded* copies.</summary>
+    private void Load()
     {
         var stored = this.settings.GetAll();
         this.LoadedClientId = this.ClientId = stored.GetValueOrDefault(SettingsKeys.TeamsAppClientId);
@@ -141,6 +144,8 @@ public partial class AppIntegrationsModel : PageModel
             return this.NotFound();
         }
 
+        // A named handler does not run OnGet, so the stored values must be loaded here too.
+        this.Load();
         var manifest = this.Manifest;
 
         using var zipStream = new MemoryStream();
