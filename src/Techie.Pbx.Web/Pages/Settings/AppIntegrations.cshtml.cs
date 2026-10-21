@@ -72,7 +72,7 @@ public partial class AppIntegrationsModel : PageModel
 
             var tab = node["staticTabs"]![0]!;
             tab["contentUrl"] = $"https://{this.LoadedSiteUrl ?? HostFromTemplate(tab)}/phone";
-            tab["websiteUrl"] = tab["contentUrl"];
+            tab["websiteUrl"] = tab["contentUrl"]!.ToString();
 
             node["validDomains"] = new JsonArray(this.LoadedSiteUrl ?? HostFromTemplate(tab));
 
