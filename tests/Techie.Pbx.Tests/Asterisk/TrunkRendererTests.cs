@@ -181,7 +181,9 @@ namespace Techie.Pbx.Tests.Asterisk
         public void Caller_id_is_only_written_when_there_is_a_number_to_write()
         {
             var trunk = SampleTrunks().Single(t => t.Name == "callcentric");
-            Assert.Contains("callerid = \"Techie Networks\" <17771234567>\n", Pjsip(trunk));
+            // D181: the trunk endpoint carries NO callerid at all — a static one is what Asterisk
+            // presents for INBOUND calls instead of the provider's From header.
+            Assert.DoesNotContain("callerid", Pjsip(trunk));
 
             trunk.CallerIDNumber = "";
             Assert.DoesNotContain("callerid", Pjsip(trunk));

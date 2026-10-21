@@ -322,12 +322,14 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append($"from_domain = {host}\n");
             if (username.Length > 0)
                 sb.Append($"from_user = {username}\n");
-            if (trunk.CallerIDNumber.Length > 0)
-            {
-                var callerIDName = ConfText.Safe(trunk.CallerIDName, "caller ID name");
-                var callerIDNumber = ConfText.Safe(trunk.CallerIDNumber, "caller ID number");
-                sb.Append($"callerid = \"{callerIDName}\" <{callerIDNumber}>\n");
-            }
+            // The trunk's caller ID is deliberately NOT here (D181). A static endpoint callerid
+            // is what Asterisk falls back to on an INBOUND call: with trust_id_inbound at its
+            // default off, ast_sip_set_id_from_invite never reads the provider's From header at
+            // all when the endpoint has a number configured — verified in res_pjsip.c and on the
+            // wire, where every inbound call presented the trunk's own DID instead of the caller.
+            // What the provider sent is untouched, and outbound presentation is the dialplan's
+            // job: the extension claim and the route fallback (D125), with the trunk's caller ID
+            // as the last fallback in the outbound route contexts (D181).
 
             sb.Append("direct_media = no\n");
             sb.Append("rtp_symmetric = yes\n");

@@ -50,6 +50,8 @@ namespace Techie.Pbx.Tests.Asterisk
                 Username = "17771234567",
                 Password = "not-a-real-password",
                 Register = true,
+                CallerIDName = "Techie Networks",
+                CallerIDNumber = "17771234567",
             },
         };
 
@@ -240,10 +242,17 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var context = Context(Render(plain, routes, SampleMohClasses()), "outbound-long-distance");
 
+            // The trunk has a caller ID, so the route carries its fallback even with no
+            // extension claims on the system (D181).
             Assert.Equal(
                 "[outbound-long-distance]\n" +
                 "; long-distance (20) out over callcentric\n" +
-                "exten => _1NXXXXXXXXX,1,Dial(PJSIP/callcentric/sip:${EXTEN}@callcentric.com,60,tTkK)\n" +
+                "; Caller ID: whatever the extension that dialled claimed, if it claimed anything.\n" +
+                "; This route names none, so everyone else goes out as the trunk's caller ID\n" +
+                "; (D125, D181): the trunk's own endpoint carries none, because a static callerid\n" +
+                "; there is what Asterisk shows for INBOUND calls instead of who called.\n" +
+                "exten => _1NXXXXXXXXX,1,ExecIf($[\"${TNPBX_CID}\" = \"\"]?Set(CALLERID(all)=\"Techie Networks\" <17771234567>))\n" +
+                " same => n,Dial(PJSIP/callcentric/sip:${EXTEN}@callcentric.com,60,tTkK)\n" +
                 " same => n,Hangup()\n",
                 context);
         }

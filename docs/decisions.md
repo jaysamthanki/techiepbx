@@ -3975,3 +3975,29 @@ overrides.
 
 Polycom only. Yealink has its own power-saving parameter family and stays out of scope until
 somebody asks.
+
+## D181: Inbound caller ID is the provider's From header; trunk caller ID moved to the dialplan
+
+Live report on pbx.techienetworks.com (2026-10-14): every inbound call presented the trunk's
+own DID instead of the caller. Root cause found on the wire with pjsip set logger: Callcentric
+delivers the caller's number in the From header (`From: <sip:17146085242@sip.callcentric.net>`),
+but Asterisk sent the extension an INVITE from `"Techie Networks" <19494411105>` — the trunk
+endpoint's static `callerid`.
+
+Mechanism, from `ast_sip_set_id_from_invite` (res_pjsip.c, read on the box): on an inbound
+INVITE, when `trust_id_inbound` is on Asterisk reads ONLY P-Asserted-Identity /
+Remote-Party-ID (Callcentric sends neither); when it is off it uses the endpoint's configured
+callerid, and reads From only when the endpoint has NO number configured. So with a static
+endpoint callerid the From header can never win — no flag combination fixes it.
+
+Decision: trunk endpoints carry no `callerid` at all. The provider's From flows through with
+full name+number fidelity. The trunk's Caller ID fields keep their D125 role — lowest
+precedence for OUTBOUND presentation — but now as a dialplan fallback in the outbound route
+contexts (after the extension claim, before... actually trunk < route < extension becomes
+extension claim > route > trunk): when the route names no caller ID and no extension claimed
+one, the route context sets `CALLERID(all)` from the trunk's caller ID. The fallback renders
+only when the trunk has a caller ID number, guarded by `TNPBX_CID` empty like every other
+caller ID line.
+
+Live fix on the box (removing the line + reload) confirmed correct inbound caller ID with a
+real call before this was coded.

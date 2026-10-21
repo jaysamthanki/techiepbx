@@ -1601,6 +1601,10 @@ namespace Techie.Pbx.Asterisk.Config
 
                 if (route.CallerID.Length > 0)
                     applications.Add(OutboundCallerIDFallbackLine(ConfText.CallerID(route.CallerID, "route caller ID")));
+                else if (trunk.CallerIDNumber.Length > 0)
+                    applications.Add(OutboundCallerIDFallbackLine(ConfText.CallerID(
+                        $"\"{trunk.CallerIDName}\" <{trunk.CallerIDNumber}>",
+                        "trunk caller ID")));
 
                 // Unguarded, unlike the internal backfill: an outbound caller's channel has never
                 // been through a context that could have named a class, so there is nothing here to
@@ -1619,13 +1623,14 @@ namespace Techie.Pbx.Asterisk.Config
                 if (route.CallerID.Length > 0)
                 {
                     sb.Append("; Caller ID: this route's own, and only where the extension that dialled claimed\n");
-                    sb.Append("; none of its own. Trunk < route < extension, and the trunk's callerid in\n");
-                    sb.Append("; pjsip.conf is what is left when neither named one (D125).\n");
+                    sb.Append("; none of its own (D125).\n");
                 }
-                else if (extensionsClaimCallerID)
+                else if (extensionsClaimCallerID || trunk.CallerIDNumber.Length > 0)
                 {
                     sb.Append("; Caller ID: whatever the extension that dialled claimed, if it claimed anything.\n");
-                    sb.Append("; This route names none, so everyone else goes out as the trunk's callerid (D125).\n");
+                    sb.Append("; This route names none, so everyone else goes out as the trunk's caller ID\n");
+                    sb.Append("; (D125, D181): the trunk's own endpoint carries none, because a static callerid\n");
+                    sb.Append("; there is what Asterisk shows for INBOUND calls instead of who called.\n");
                 }
 
                 sb.Append($"exten => {pattern},1,{applications[0]}\n");
