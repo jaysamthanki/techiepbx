@@ -19,6 +19,8 @@ public partial class AppIntegrationsModel : PageModel
 
     private readonly SettingsRepository settings;
 
+    private readonly IConfiguration configuration;
+
     /// <summary>The Entra app registration's application (client) ID.</summary>
     [BindProperty]
     public string? ClientId { get; set; }
@@ -35,8 +37,9 @@ public partial class AppIntegrationsModel : PageModel
     [BindProperty]
     public string? TenantId { get; set; }
 
-    public AppIntegrationsModel()
+    public AppIntegrationsModel(IConfiguration configuration)
     {
+        this.configuration = configuration;
         this.settings = new SettingsRepository(PbxDatabase.Current);
     }
 
@@ -89,7 +92,11 @@ public partial class AppIntegrationsModel : PageModel
         this.LoadedClientId = this.ClientId = stored.GetValueOrDefault(SettingsKeys.TeamsAppClientId);
         this.LoadedManifestId = this.ManifestId = stored.GetValueOrDefault(SettingsKeys.TeamsAppManifestId);
         this.LoadedSiteUrl = this.SiteUrl = stored.GetValueOrDefault(SettingsKeys.TeamsAppSiteUrl);
-        this.LoadedTenantId = this.TenantId = stored.GetValueOrDefault(SettingsKeys.TeamsAppTenantId);
+        // An unstored tenant falls back to the web admin's own Entra registration — same tenant
+        // in practice, so the field comes pre-filled from appsettings and the admin only edits
+        // it when the Teams app deliberately points elsewhere.
+        this.LoadedTenantId = this.TenantId = stored.GetValueOrDefault(SettingsKeys.TeamsAppTenantId)
+            ?? this.configuration["AzureAd:TenantId"];
     }
 
     /// <summary>Saves the values the admin typed, clearing any they blanked, then re-shows the page.</summary>

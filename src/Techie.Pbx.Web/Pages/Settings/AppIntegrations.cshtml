@@ -47,7 +47,7 @@
                     <div class="col-md-4">
                         <label class="form-label" asp-for="TenantId">Tenant ID <span class="text-body-secondary">(optional)</span></label>
                         <input class="form-control" asp-for="TenantId" placeholder="6ec9dec4-48a6-4a86-9b3e-2c5d1f0a9e87" />
-                        <div class="form-text">The Entra tenant the app registration lives in — the sign-in authority. Leave blank for any tenant.</div>
+                        <div class="form-text">The Entra tenant the app registration lives in — the sign-in authority. Pre-filled from the web admin's own Entra registration (appsettings); edit only if the Teams app points at a different tenant. Leave blank for any tenant.</div>
                     </div>
                 </div>
                 <button class="btn btn-primary mt-3" type="submit">Save</button>
