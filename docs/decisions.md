@@ -4034,3 +4034,25 @@ Teams-native calls, and there is no native Teams incoming-call notification for 
 calls; in-call side-panel presence is the extent of the "notification integration". Spike
 placeholders: manifest id and webApplicationInfo id carry zero-filled UUID segments to be
 replaced at first tenant upload; icons are generated TP placeholder art.
+
+## D183: Teams tab sign-in goes through Teams' own token, not a redirect
+
+The Teams tab's /phone page cannot run the normal Entra redirect: Microsoft's login pages
+refuse to render inside the tab's iframe, so an unsigned-in tab shows a blank screen (the
+"problem reaching this app" and blank-page symptoms came from that, plus the antiforgery
+middleware's X-Frame-Options stamp, which is suppressed in favor of an explicit framing
+middleware — CSP frame-ancestors for the Teams hosts on /phone, SAMEORIGIN elsewhere).
+
+So the page serves an anonymous SSO shell when nobody is signed in, and the shell's script
+(teams-sso.js) asks Teams for a token for this app's own API URI via TeamsJS getAuthToken —
+granted silently to the already-signed-in Teams user — and posts it to /api/teamsauth.
+TeamsSso validates the token against the tenant's OpenID Connect metadata (issuer, signature,
+audience api://host/clientId or the bare client id, lifetime), refuses any token whose tid is
+not our tenant or that lacks the access_as_user scope (so an app-only token can never sign a
+person in), then builds the principal with the claim spellings PhoneUser reads. The exchange
+signs the user in with the same session cookie the browser flow issues and the page reloads
+into the real phone. /PhoneClient/Index leaves SignedInPages for exactly this reason, and its
+handlers fail closed with 401 when unauthenticated, so nothing leaks to an anonymous caller.
+
+In a plain browser the same shell shows the ordinary sign-in link instead — TeamsJS is absent
+and the redirect the iframe cannot do is exactly what a browser tab can.

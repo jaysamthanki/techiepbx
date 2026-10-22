@@ -45,7 +45,10 @@ namespace Techie.Pbx.Web
         private static readonly HashSet<string> SignedInPages = new(StringComparer.OrdinalIgnoreCase)
         {
             "/Error",
-            "/PhoneClient/Index",
+            // /PhoneClient/Index is NOT here: inside the Teams client its iframe cannot run the
+            // normal Entra redirect (Microsoft's login pages refuse framing), so the page serves
+            // an anonymous SSO shell when nobody is signed in and the tab's script signs the user
+            // in through Teams' own token (D183). Its handlers guard themselves.
         };
 
         public static void Main(string[] args)

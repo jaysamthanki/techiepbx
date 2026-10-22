@@ -11,7 +11,25 @@
     <h1 class="h3 mb-0">Web client</h1>
 </div>
 
-@if (Model.WebExtensions.Count == 0 && !Model.IsAdmin)
+@if (Model.ShowSsoShell)
+{
+    @* The Teams tab cannot run the normal Entra redirect in its iframe — Microsoft's login pages
+       refuse to be framed — so an unsigned-in tab gets this shell instead of the phone: the
+       script asks Teams for a token for this app and posts it to the exchange endpoint, and the
+       reload that follows lands on the real phone (D183). Nothing here reveals any data. *@
+    <div id="teams-sso" class="mx-auto text-center" style="max-width: 22rem;"
+         data-auth-url="/api/teamsauth" data-resource="@Model.SsoResource">
+        <h1 class="h3">Web client</h1>
+        <p id="teams-sso-status" class="text-body-secondary" aria-live="polite">
+            Signing you in through Microsoft Teams&hellip;
+        </p>
+        <p id="teams-sso-error" class="text-danger d-none"></p>
+        <noscript>
+            <p>JavaScript is required: this page signs in through Teams.</p>
+        </noscript>
+    </div>
+}
+else if (Model.WebExtensions.Count == 0 && !Model.IsAdmin)
 {
     @* A phone user nobody has matched to an extension (D164): say so, rather than an empty page. *@
     <p>
@@ -103,7 +121,16 @@ else
 }
 
 @section Scripts {
-    @if (Model.WebExtensions.Count > 0)
+    @if (Model.ShowSsoShell)
+    {
+        @* The Teams SDK to ask for the token and the glue that posts it. Plain fetch, not
+           pbx.send: the exchange endpoint is anonymous by design, and pbx.send would treat its
+           401 as a session that ended and reload the page in a loop. The antiforgery token still
+           goes, read from the same meta tag site.js reads. *@
+        <script src="~/lib/teams-js/MicrosoftTeams.min.js"></script>
+        <script src="~/js/teams-sso.js" asp-append-version="true"></script>
+    }
+    else if (Model.WebExtensions.Count > 0)
     {
         <script src="~/lib/jssip/jssip.min.js"></script>
         <script src="~/js/phone.js" asp-append-version="true"></script>

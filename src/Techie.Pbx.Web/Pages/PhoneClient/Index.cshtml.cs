@@ -32,9 +32,28 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
 
         private readonly ExtensionRepository extensions;
         private readonly SettingsRepository settings;
+        private readonly IConfiguration configuration;
 
         /// <summary>Whether the user holds the admin role: decides what an empty page says.</summary>
         public bool IsAdmin { get; private set; }
+
+        /// <summary>
+        /// Whether the page must render the Teams SSO shell instead of the phone: nobody is signed
+        /// in, so the real page's data is not theirs to see. Inside the Teams client the shell's
+        /// script signs the user in with Teams' token (D183); in a plain browser it offers the
+        /// normal sign-in link, which an iframe cannot follow but a tab can.
+        /// </summary>
+        public bool ShowSsoShell { get; private set; }
+
+        /// <summary>The Application ID URI the Teams token is requested for (api://host/clientId).</summary>
+        public string SsoResource => $"api://{this.SiteHost}/{this.SsoClientId}";
+
+        /// <summary>
+        /// The Teams client ID and site host the SSO flow uses: the TeamsApp.* settings where they
+        /// were set for the manifest, falling back to this app's own Entra registration and host.
+        /// </summary>
+        public string SsoClientId { get; private set; } = "";
+        public string SiteHost { get; private set; } = "";
 
         /// <summary>
         /// The page's dropdown: the enabled, web-enabled extensions this user may open — all of
@@ -42,8 +61,9 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         /// </summary>
         public List<Extension> WebExtensions { get; private set; } = new();
 
-        public IndexModel()
+        public IndexModel(IConfiguration configuration)
         {
+            this.configuration = configuration;
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
@@ -51,7 +71,16 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         public void OnGet()
         {
             this.IsAdmin = AdminRole.IsAdmin(this.User);
-            this.WebExtensions = this.Allowed();
+            this.ShowSsoShell = this.User.Identity?.IsAuthenticated != true;
+
+            if (this.ShowSsoShell)
+            {
+                var stored = this.settings.GetAll();
+                this.SsoClientId = stored.GetValueOrDefault(SettingsKeys.TeamsAppClientId)
+                    ?? this.configuration["AzureAd:ClientId"] ?? "";
+                this.SiteHost = stored.GetValueOrDefault(SettingsKeys.TeamsAppSiteUrl)
+                    ?? this.Request.Host.Host;
+            }
         }
 
         /// <summary>
@@ -69,6 +98,14 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         /// </summary>
         public async Task<IActionResult> OnGetClientAsync(string? ext)
         {
+            // The page is anonymous by design (D183) so the Teams tab can sign in through its
+            // shell, but the registration details are only for somebody signed in. Fail closed:
+            // an unauthenticated caller gets the same answer as a nonexistent extension.
+            if (this.User.Identity?.IsAuthenticated != true)
+            {
+                return this.Unauthorized();
+            }
+
             // A GET, because fetching the registration details reads nothing but them — but the
             // response carries a SIP password, so it demands the same antiforgery token every
             // POST here carries (pbx.send always sends it). Razor Pages validates the token only
@@ -121,6 +158,11 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
         /// </summary>
         public IActionResult OnGetUnread()
         {
+            if (this.User.Identity?.IsAuthenticated != true)
+            {
+                return this.Unauthorized();
+            }
+
             var mailboxes = PhoneUser.Mailboxes(this.User, this.extensions.GetAll());
             if (mailboxes.Count == 0)
                 return this.NotFound();
