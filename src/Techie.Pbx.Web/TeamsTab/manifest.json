@@ -27,8 +27,8 @@
     {
       "entityId": "techienetworks.pbx.webphone",
       "name": "Techie PBX",
-      "contentUrl": "https://pbx.techie.gd/phone",
-      "websiteUrl": "https://pbx.techie.gd/phone",
+      "contentUrl": "https://pbx.techie.gd/teams-phone",
+      "websiteUrl": "https://pbx.techie.gd/teams-phone",
       "scopes": ["personal"],
       "context": ["personalTab", "meetingSidePanel"]
     }
