@@ -45,10 +45,14 @@ namespace Techie.Pbx.Web
         private static readonly HashSet<string> SignedInPages = new(StringComparer.OrdinalIgnoreCase)
         {
             "/Error",
-            // /PhoneClient/Index is NOT here: inside the Teams client its iframe cannot run the
-            // normal Entra redirect (Microsoft's login pages refuse framing), so the page serves
-            // an anonymous SSO shell when nobody is signed in and the tab's script signs the user
-            // in through Teams' own token (D183). Its handlers guard themselves.
+            "/PhoneClient/Index",
+            // /PhoneClient/Index must ALSO be reachable anonymously: inside the Teams client its
+            // iframe cannot run the normal Entra redirect (Microsoft's login pages refuse
+            // framing), so the page serves an anonymous SSO shell when nobody is signed in and
+            // the tab's script signs the user in through Teams' own token (D183). The page
+            // carries [AllowAnonymous] for that — SignedInPages then only decides that a signed-
+            // in non-admin is allowed too, which the phone-user dropdown relies on (D164).
+            // Its handlers fail closed with 401 for the anonymous caller.
         };
 
         public static void Main(string[] args)

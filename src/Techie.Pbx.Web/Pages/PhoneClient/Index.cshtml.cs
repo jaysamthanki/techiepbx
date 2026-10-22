@@ -1,5 +1,6 @@
 using log4net;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Techie.Pbx.Asterisk.Config;
@@ -17,15 +18,19 @@ namespace Techie.Pbx.Web.Pages.PhoneClient
     /// softphone, not management surface — so an admin's one entry point is the "Open web
     /// client" link in the extension edit modal.
     ///
-    /// The one page a signed-in user without the admin role may reach (D165). An admin sees
-    /// every web-enabled extension; anyone else sees only the extensions whose voicemail email
-    /// is the address they signed in with (D164). <see cref="PhoneUser"/> decides, for the
-    /// dropdown and for the handler alike.
+    /// The one page a signed-in user without the admin role may reach (D165), and the one page
+    /// an anonymous caller may reach at all: [AllowAnonymous] is what lets the Teams tab's
+    /// iframe get this far, because its sign-in cannot run the normal Entra redirect (D183).
+    /// An anonymous caller gets the SSO shell and nothing else — the handlers fail closed.
+    /// An admin sees every web-enabled extension; anyone else sees only the extensions whose
+    /// voicemail email is the address they signed in with (D164). <see cref="PhoneUser"/>
+    /// decides, for the dropdown and for the handler alike.
     ///
     /// The folder is PhoneClient rather than Phone: a <c>Techie.Pbx.Web.*.Phone</c> namespace
     /// shadows the Core <c>Phone</c> model and breaks Pages/Phones with CS0118. The URL is still
     /// /phone, via the route template on the page.
     /// </summary>
+    [AllowAnonymous]
     public class IndexModel : PageModel
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
