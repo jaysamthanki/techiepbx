@@ -165,8 +165,15 @@ namespace Techie.Pbx.Web
                 .AddMicrosoftIdentityUI();
 
             // The API is called by our own pages with the session cookie, so it needs the same
-            // antiforgery protection as a form post.
-            builder.Services.AddAntiforgery(options => options.HeaderName = AntiforgeryHeaderName);
+            // antiforgery protection as a form post. The middleware also stamps
+            // X-Frame-Options: SAMEORIGIN onto every token-bearing response, which would keep
+            // Teams from loading the dialer in its tab iframe (D182) — suppressed here, and
+            // framing is policed instead by the middleware added below.
+            builder.Services.AddAntiforgery(options =>
+            {
+                options.HeaderName = AntiforgeryHeaderName;
+                options.SuppressXFrameOptionsHeader = true;
+            });
             builder.Services.AddControllers(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
             // Renews certificates before they expire, whether or not anybody is signed in (D100).
@@ -193,6 +200,31 @@ namespace Techie.Pbx.Web
             {
                 app.UseExceptionHandler("/Error");
                 app.UseHsts();
+
+                // Framing policy. The antiforgery middleware's own X-Frame-Options stamp is
+                // suppressed above, so this is what stands between our pages and a hostile
+                // iframe: same origin everywhere except the dialer, which Teams renders inside
+                // its tab hosts (D182).
+                app.Use((context, next) =>
+                {
+                    context.Response.OnStarting(() =>
+                    {
+                        if (context.Request.Path.StartsWithSegments("/phone"))
+                        {
+                            context.Response.Headers.ContentSecurityPolicy =
+                                "frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com " +
+                                "https://teams.live.com https://*.teams.live.com https://*.cloud.microsoft";
+                        }
+                        else
+                        {
+                            context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+                        }
+
+                        return Task.CompletedTask;
+                    });
+
+                    return next(context);
+                });
             }
 
             // Everything an admin touches is HTTPS, once there is a certificate to serve it with;
