@@ -106,8 +106,22 @@ namespace Techie.Pbx.Web
             });
 
             // Cookie-based Entra ID sign-in. API controllers use the same cookie (only our Razor pages call them).
-            builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-                .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+            //
+            // The cookie is what authenticates every ordinary request; OpenIdConnect exists to
+            // challenge (send an anonymous admin to Entra) and to consume the sign-in reply. With
+            // the authenticate default left on OpenIdConnect (D195), a request that carries a
+            // perfectly good cookie but no OIDC artifacts was left anonymous — the browser flow
+            // never noticed, because its requests carry the correlation cookies an Entra
+            // roundtrip leaves behind, but the Teams tab's iframe, which only ever has the
+            // session cookie, silently looped: the exchange signed in, the reload arrived
+            // anonymous, forever. Cookie authenticates, OIDC challenges — the standard split.
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
+            }).AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
             // A Teams tab is a cross-site context: this app's pages load inside Teams' iframe,
             // so every request they make — the iframe navigation itself, the fetches the shell

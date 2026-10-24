@@ -4197,3 +4197,18 @@ document.requestStorageAccess() — the prompt Teams' embedded browser offers fo
 and only then runs the token exchange. The first visit costs one click; every later visit
 already holds the grant and signs in with nothing to press. Clients without the API skip the
 gate and behave as before.
+
+## D195: The cookie authenticates, OpenIdConnect challenges — the Teams sign-in loop's last link
+
+Three separate things had to be true for the Teams tab to loop on "Signing you in…" while the
+exchange succeeded every time. The first two were already fixed (the consented TeamsApp scope
+spelling, D194; the third-party-cookie Storage Access gate, D195 earlier). The last one was
+this: AddAuthentication(OpenIdConnectDefaults) left the DEFAULT AUTHENTICATE SCHEME on the OIDC
+handler, so an ordinary request carrying a perfectly good session cookie was authenticated by
+a handler that only understands Entra sign-in replies. The browser flow never noticed — its
+requests carry the correlation cookies an Entra roundtrip leaves behind — but the Teams
+iframe's reload carries only the session cookie, so it arrived anonymous every time, signed
+in again, reloaded, forever. The probe made it plain: AuthenticateAsync("Cookies") succeeded
+with a ticket for the user on the very request whose User was anonymous. The split is now the
+standard one: Cookies as the default/authenticate/sign-in scheme, OpenIdConnect as the
+challenge scheme. The Teams phone loop and the browser sign-in now share one path: the cookie.
