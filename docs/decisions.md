@@ -4144,3 +4144,10 @@ side was finished — scope named exactly access_as_user (a differently-named sc
 the token's scp under that other name, so the validator's check is also a name check), the
 Teams clients pre-authorized, admin consent granted, and the resource asked for is the bare
 Application ID URI.
+
+## D191: The Teams tab shows no loading indicator — nothing signals it done
+
+showLoadingIndicator made Teams hold its top-of-tab spinner until the app called the SDK's
+notifyAppSuccess, which the SSO shell never does (and the signed-in dialer page does not load
+the SDK at all) — so the spinner spun forever on a working tab. The manifest no longer declares
+it; Teams shows no loading indicator, and the tab's own content appears immediately instead.

@@ -38,6 +38,5 @@
   "webApplicationInfo": {
     "id": "5e7e205d-0000-0000-0000-000000000000",
     "resource": "api://pbx.techie.gd/5e7e205d-0000-0000-0000-000000000000"
-  },
-  "showLoadingIndicator": true
+  }
 }
