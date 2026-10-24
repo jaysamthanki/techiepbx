@@ -54,10 +54,10 @@ public class IndexModel : Pages.PhoneClient.PhoneClientModel
         // it — AuthenticateAsync surfaces the exact refusal (bad key, bad payload, no ticket)
         // that the middleware only swallows. Names and lengths only, never values.
         var schemes = this.HttpContext.RequestServices.GetRequiredService<Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider>();
-        var defaultScheme = await schemes.GetDefaultSchemeAsync();
-        var authenticateScheme = await schemes.GetDefaultAuthenticateSchemeAsync();
-        var challengeScheme = await schemes.GetDefaultChallengeSchemeAsync();
-        Log.Info($"teams-phone schemes: default={defaultScheme?.Name}, authenticate={authenticateScheme?.Name}, challenge={challengeScheme?.Name}");
+        var defaultScheme = schemes.GetDefaultAuthenticateSchemeAsync() is { } auth ? (await auth)?.Name : null;
+        var authenticateScheme = defaultScheme;
+        var challengeScheme = (await schemes.GetDefaultChallengeSchemeAsync())?.Name;
+        Log.Info($"teams-phone schemes: authenticate={authenticateScheme}, challenge={challengeScheme}");
 
         var probe = await this.HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         Log.Info($"teams-phone auth probe: {(probe.Succeeded ? "succeeded" : probe.None ? "none" : "failed")}" +
