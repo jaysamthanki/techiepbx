@@ -51,6 +51,7 @@ public class IndexModel : Pages.PhoneClient.PhoneClientModel
         // comes back on the reload. Names only, never values — cookies are credentials.
         Log.Info($"teams-phone GET: {this.Request.Cookies.Count} cookie(s) " +
                  $"[{string.Join(", ", this.Request.Cookies.Keys.OrderBy(name => name))}], " +
+                 $"auth cookie {(this.Request.Cookies.ContainsKey(".AspNetCore.Cookies") ? this.Request.Cookies[".AspNetCore.Cookies"]!.Length + " chars" : "absent")}, " +
                  $"authenticated: {this.User.Identity?.IsAuthenticated == true}");
 
         if (this.User.Identity?.IsAuthenticated == true)
