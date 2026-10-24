@@ -19,6 +19,8 @@ namespace Techie.Pbx.Web.Pages.TeamsPhone;
 [AllowAnonymous]
 public class IndexModel : Pages.PhoneClient.PhoneClientModel
 {
+    private static readonly log4net.ILog Log = log4net.LogManager.GetLogger(typeof(IndexModel));
+
     private readonly IConfiguration configuration;
 
     /// <summary>
@@ -45,6 +47,14 @@ public class IndexModel : Pages.PhoneClient.PhoneClientModel
 
     public void OnGet()
     {
+        // The Teams loop diagnosis (D195): whether the session cookie the exchange issued ever
+        // comes back on the reload. Names only, never values — cookies are credentials.
+        Log.Info($"teams-phone GET: {this.Request.Cookies.Count} cookie(s)" +
+                 (this.Request.Cookies.Keys.Where(name => name.Contains(".AspNetCore")).Any()
+                     ? ", auth cookie present"
+                     : ", no auth cookie") +
+                 $", authenticated: {this.User.Identity?.IsAuthenticated == true}");
+
         if (this.User.Identity?.IsAuthenticated == true)
         {
             this.LoadShared();

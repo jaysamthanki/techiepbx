@@ -84,6 +84,11 @@ namespace Techie.Pbx.Web.Controllers
 
             await this.HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
+            // The Teams loop diagnosis (D195): that the sign-in actually wrote a cookie. Count and
+            // total length only — the values are credentials.
+            var set = this.Response.GetTypedHeaders().SetCookie;
+            Log.Info($"Teams SSO exchange: {set.Count} Set-Cookie header(s), total {set.Sum(c => c.ToString().Length)} chars");
+
             return this.NoContent();
         }
     }
