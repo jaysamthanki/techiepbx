@@ -74,7 +74,10 @@ public partial class AppIntegrationsModel : PageModel
             webApp["resource"] = $"api://{this.LoadedSiteUrl ?? HostFromTemplate(webApp)}/{webApp["id"]}";
 
             var tab = node["staticTabs"]![0]!;
-            tab["contentUrl"] = $"https://{this.LoadedSiteUrl ?? HostFromTemplate(tab)}/phone";
+            // The Teams tab's own page, not the traditional web client: /phone redirects an
+            // anonymous caller to Entra, whose login pages refuse to render inside Teams'
+            // iframe, so a tab pointed there is a blank screen (D184, D185).
+            tab["contentUrl"] = $"https://{this.LoadedSiteUrl ?? HostFromTemplate(tab)}/teams-phone";
             tab["websiteUrl"] = tab["contentUrl"]!.ToString();
 
             node["validDomains"] = new JsonArray(this.LoadedSiteUrl ?? HostFromTemplate(tab));

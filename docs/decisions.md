@@ -4056,3 +4056,36 @@ handlers fail closed with 401 when unauthenticated, so nothing leaks to an anony
 
 In a plain browser the same shell shows the ordinary sign-in link instead — TeamsJS is absent
 and the redirect the iframe cannot do is exactly what a browser tab can.
+
+## D184: The Teams tab page is /teams-phone, /phone is the traditional web client
+
+The Teams shell and the traditional browser client want different anonymous behavior: the tab
+must answer an anonymous caller with the SSO shell, while a browser hitting /phone should get
+the ordinary Entra redirect. One page cannot do both cleanly, so the tab moved to its own page
+at /teams-phone ([AllowAnonymous], the SSO shell below the same shared PhoneClientModel) and
+/phone went back to the plain signed-in client. The manifest template followed, but the
+AppIntegrations builder and the framing CSP kept building on /phone — corrected in D185, which
+is what had left the installed tab blank.
+
+## D185: The Teams tab's three cross-site requirements — framing CSP on /teams-phone, SameSite=None cookies, manifest contentUrl
+
+The first live test inside Teams failed blank, for three reasons that were all in the server,
+not the Entra side:
+
+1. Framing: the CSP frame-ancestors for the Teams hosts was granted only on /phone (D182's
+   path), so /teams-phone still carried X-Frame-Options: SAMEORIGIN and Teams refused to
+   render the tab at all — the tab never even reached the SSO shell. The check now covers
+   both paths.
+2. Manifest: AppIntegrations' builder rewrote the tab's contentUrl to https://<host>/phone
+   even though the D184 template said /teams-phone, so every package downloaded from the
+   settings page pointed the tab at the redirect loop. The builder now writes /teams-phone.
+3. Cookies: a Teams tab is a cross-site context — the frame's requests arrive from Teams'
+   top-level site, so SameSite=Lax cookies are never sent on them. The exchange would keep
+   succeeding and the reload would keep landing on the anonymous shell, an infinite SSO loop.
+   The auth and antiforgery cookies are now SameSite=None, which browsers only honor with a
+   Secure flag: SecurePolicy follows the request, and a cookie policy middleware re-points
+   SameSite to Lax on plain-HTTP responses (the LAN admin bypass on 8080, D24) so the bypass
+   does not lose its cookies. HTTPS responses keep None; that is the Teams path and every
+   public page.
+
+The token exchange itself remains the one thing only a real Teams client can exercise.

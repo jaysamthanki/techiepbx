@@ -1,7 +1,9 @@
 using System.Security.Cryptography.X509Certificates;
 using log4net;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.CookiePolicy;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
@@ -107,6 +109,27 @@ namespace Techie.Pbx.Web
             builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
                 .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
 
+            // A Teams tab is a cross-site context: this app's pages load inside Teams' iframe,
+            // so every request they make — the iframe navigation itself, the fetches the shell
+            // and the dialer send — arrives cross-site even though the frame's own origin is
+            // this host. A SameSite=Lax cookie is never sent on any of them, which leaves the
+            // tab stuck on the SSO shell even after a successful token exchange: the exchange
+            // would keep succeeding on every reload and the cookie would keep never arriving
+            // (D185). The site is HTTPS-only behind a real certificate, which is what
+            // SameSite=None requires before a browser will honor the cookie at all.
+            builder.Services.Configure<CookieAuthenticationOptions>(
+                CookieAuthenticationDefaults.AuthenticationScheme, options =>
+            {
+                // SecurePolicy is left to the request: the LAN admin on plain HTTP 8080 (D24)
+                // must still get the cookie, so Always would sign the bypass out entirely.
+                // SameSite itself is re-pointed per request by the cookie policy below, because
+                // None without Secure — which is what a plain-HTTP response would carry — is a
+                // cookie browsers drop on sight.
+                options.Cookie.SameSite = SameSiteMode.None;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            });
+            builder.Services.AddHttpContextAccessor();
+
             // The auth cookie, the OIDC correlation cookies and the antiforgery tokens are all
             // encrypted with this key ring, so it must survive restarts and re-deploys: a fresh
             // key per process would sign everyone out mid-flow — and an OIDC flow that straddles
@@ -180,6 +203,14 @@ namespace Techie.Pbx.Web
             {
                 options.HeaderName = AntiforgeryHeaderName;
                 options.SuppressXFrameOptionsHeader = true;
+                // The token the Teams shell posts is checked against this cookie, so it must
+                // reach the iframe's fetch too: a SameSite=Lax antiforgery cookie is never sent
+                // from inside Teams' iframe and every exchange would die on antiforgery before
+                // the token was even looked at (D185). SameSite=None behind HTTPS, same as the
+                // auth cookie above.
+                // SecurePolicy per request, same reasoning as the auth cookie above.
+                options.Cookie.SameSite = SameSiteMode.None;
+                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             });
             builder.Services.AddControllers(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
@@ -193,6 +224,7 @@ namespace Techie.Pbx.Web
                 builder.Services.AddHttpsRedirection(options => options.HttpsPort = WebBindings.HttpsPort);
 
             var app = builder.Build();
+            var httpContextAccessor = app.Services.GetRequiredService<IHttpContextAccessor>();
 
             // First in the pipeline, so exactly one line is written for every request whatever
             // becomes of it further in: the HTTPS redirect, a 401 from Entra, an unhandled
@@ -211,12 +243,15 @@ namespace Techie.Pbx.Web
                 // Framing policy. The antiforgery middleware's own X-Frame-Options stamp is
                 // suppressed above, so this is what stands between our pages and a hostile
                 // iframe: same origin everywhere except the dialer, which Teams renders inside
-                // its tab hosts (D182).
+                // its tab hosts (D182). The Teams tab lives at /teams-phone (D184): the CSP must
+                // cover it too, or Teams refuses to render the tab at all — a /phone-only check
+                // stamps the SAMEORIGIN refusal onto the very page the tab loads.
                 app.Use((context, next) =>
                 {
                     context.Response.OnStarting(() =>
                     {
-                        if (context.Request.Path.StartsWithSegments("/phone"))
+                        if (context.Request.Path.StartsWithSegments("/phone") ||
+                            context.Request.Path.StartsWithSegments("/teams-phone"))
                         {
                             context.Response.Headers.ContentSecurityPolicy =
                                 "frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com " +
@@ -233,6 +268,18 @@ namespace Techie.Pbx.Web
                     return next(context);
                 });
             }
+
+            // The SameSite=None the Teams tab needs (D185) is re-pointed here per request:
+            // None is what the Teams iframe's cross-site requests require, but None without
+            // Secure — what a plain-HTTP 8080 response would carry — is dropped by browsers on
+            // sight, which would break the LAN admin bypass (D24). So HTTPS responses keep the
+            // None the cookie options ask for, and plain-HTTP ones fall back to Lax, where no
+            // iframe is ever the caller.
+            app.UseCookiePolicy(new CookiePolicyOptions
+            {
+                OnAppendCookie = context => DowngradeOnHttp(httpContextAccessor, context.CookieOptions),
+                OnDeleteCookie = context => DowngradeOnHttp(httpContextAccessor, context.CookieOptions),
+            });
 
             // Everything an admin touches is HTTPS, once there is a certificate to serve it with;
             // before that there is nothing to redirect to and the branch is not added at all (D99).
@@ -328,6 +375,19 @@ namespace Techie.Pbx.Web
 
             Log.Info($"TNPBX web {typeof(Program).Assembly.GetName().Version} starting on {string.Join(", ", bindings)}");
             app.Run();
+        }
+
+        /// <summary>
+        /// The per-request half of the Teams cookie policy (D185): on plain HTTP the SameSite=None
+        /// the options ask for would arrive without Secure, and browsers drop such a cookie on
+        /// sight — so it becomes Lax there, where no iframe is ever the caller. The accessor is
+        /// the cookie policy callbacks' only view of the request — AppendCookieContext carries
+        /// the cookie, not the context it is being appended within.
+        /// </summary>
+        private static void DowngradeOnHttp(IHttpContextAccessor accessor, CookieOptions options)
+        {
+            if (accessor.HttpContext?.Request.IsHttps != true)
+                options.SameSite = SameSiteMode.Lax;
         }
 
         /// <summary>
