@@ -95,6 +95,14 @@
             In the Developer Portal, upload the downloaded zip as a custom app, then pin it to the
             sidebar for users.
         </li>
+        <li class="list-group-item">
+            After installing, each user grants the microphone once: in Teams, right-click the app
+            (or <strong>More options</strong> next to it) &rarr; <strong>App permissions</strong>
+            &rarr; allow <strong>Media</strong>. Without it every call fails with
+            &ldquo;User Denied Media Access&rdquo; — the manifest's
+            <code>devicePermissions</code> only asks Teams for the microphone; the user still
+            grants it (D190).
+        </li>
     </ol>
 </div>
 

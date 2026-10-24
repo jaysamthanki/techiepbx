@@ -23,6 +23,7 @@
     "outline": "outline.png"
   },
   "accentColor": "#0d6efd",
+  "devicePermissions": ["media"],
   "staticTabs": [
     {
       "entityId": "techienetworks.pbx.webphone",

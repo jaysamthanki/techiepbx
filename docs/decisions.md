@@ -4130,3 +4130,17 @@ https://sts.windows.net/<tid>/, while the validator accepted only the v2 issuer
 (IssuersOf), and the v1 claim spellings (upn, unique_name) are mapped alongside the v2 ones so
 the principal carries what PhoneUser reads. The tid claim still ties a token to this tenant
 either way, whatever the issuer spelling.
+
+## D190: The Teams tab asks for the microphone — devicePermissions, then the user grants it
+
+The first call attempt inside the tab failed with "User Denied Media Access": getUserMedia is
+refused in the tab's iframe unless the app's manifest declares "devicePermissions": ["media"],
+which is what makes Teams put the microphone in the iframe's permissions policy. The manifest
+template now carries it, and the settings-page checklist tells the admin the other half — each
+user still grants the mic per app once, in Teams under More options → App permissions → Media.
+
+The Teams SSO itself is DONE live (2026-10-24): the first exchange completed after the Entra
+side was finished — scope named exactly access_as_user (a differently-named scope arrives in
+the token's scp under that other name, so the validator's check is also a name check), the
+Teams clients pre-authorized, admin consent granted, and the resource asked for is the bare
+Application ID URI.
