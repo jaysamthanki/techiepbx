@@ -4112,3 +4112,11 @@ data- attributes phone.js queries; the handler URLs come in through ViewData bec
 page's Client/Unread handlers live on its own route. New dialer controls are added to the
 partial and phone.js together, or the pages drift apart again — that drift is what broke both
 phones at once.
+
+## D188: The apply-status poll skips /teams-phone too
+
+The layout's htmx poll of /ConfigStatus was excluded from /phone but not from /teams-phone, and
+an anonymous caller has no session: the poll 401'd, the OIDC handler answered it with
+HX-Refresh, the browser reloaded the page — which is the SSO shell, which polls again. The tab
+spent the first live test flashing "Signing you in…" in that reload loop, faster than Teams'
+token exchange could ever finish. /teams-phone now sits beside /phone in the layout's exclusion.

@@ -11,8 +11,13 @@
     var showAdminNav = User.Identity?.IsAuthenticated != true || Techie.Pbx.Web.Security.AdminRole.IsAdmin(User);
     // The softphone is a phone, not an admin page: no status poll there either (D164 dropped it
     // for phone users; this drops it for an admin visiting /phone too — a call page does not
-    // need to know whether config is out of sync).
-    var showAdminNavOnThisPage = showAdminNav && !ViewContext.HttpContext.Request.Path.StartsWithSegments("/phone");
+    // need to know whether config is out of sync). /teams-phone needs it even more: its anonymous
+    // SSO shell has no session, so the poll would 401 and htmx would reload the shell, over and
+    // over, before Teams' token exchange could finish — the tab flashed "Signing you in…" in a
+    // reload loop the first live test showed.
+    var showAdminNavOnThisPage = showAdminNav &&
+        !ViewContext.HttpContext.Request.Path.StartsWithSegments("/phone") &&
+        !ViewContext.HttpContext.Request.Path.StartsWithSegments("/teams-phone");
 }
 <!DOCTYPE html>
 <html lang="en">
