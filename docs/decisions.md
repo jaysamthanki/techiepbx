@@ -4185,3 +4185,15 @@ still Entra-signed, tenant-checked, audience-checked and a user token, and in a 
 consent under that name Entra refuses the OBO exchange outright — the alias opens no door that
 consent does not already open. New installs should still name the scope access_as_user per the
 guide; a tenant granting the documented name gets that spelling in its tokens.
+
+## D195: The shell asks for storage access before the exchange — the new Teams blocks third-party cookies
+
+With sign-in itself solved (204 exchanges, "signed in" in the journal), the tab still looped:
+the exchange succeeded on every pass and the reload never arrived signed in, because the
+session cookie inside Teams' iframe is a third-party cookie and the new Teams client blocks
+those until the user allows them. No server change can fix that. The shell now checks
+document.hasStorageAccess() first: without the grant it shows one button, whose click calls
+document.requestStorageAccess() — the prompt Teams' embedded browser offers for exactly this —
+and only then runs the token exchange. The first visit costs one click; every later visit
+already holds the grant and signs in with nothing to press. Clients without the API skip the
+gate and behave as before.

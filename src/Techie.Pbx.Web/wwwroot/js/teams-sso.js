@@ -65,7 +65,44 @@
         show((parsed && parsed.message) || ('Sign-in failed (' + response.status + ').'));
     }
 
-    microsoftTeams.app.initialize().then(function () {
+    // Third-party cookies (D195): inside the Teams client this page is embedded, so its session
+    // cookie is a third-party one — and the new Teams client blocks those until the user allows
+    // them. Without the grant the exchange below succeeds on every loop while the reload never
+    // carries the session, an infinite "Signing you in…" that no server change can fix. The
+    // Storage Access API needs a user gesture, so the first visit shows one button; every later
+    // visit already holds the grant and runs straight through with nobody clicking anything.
+    function storageAccess() {
+        if (typeof document.hasStorageAccess !== 'function' || typeof document.requestStorageAccess !== 'function') {
+            return Promise.resolve(); // API absent: an older client that allows the cookie anyway.
+        }
+
+        return document.hasStorageAccess().then(function (has) {
+            if (has) {
+                return Promise.resolve();
+            }
+
+            return new Promise(function (resolve) {
+                const allow = document.createElement('button');
+                allow.type = 'button';
+                allow.className = 'btn btn-primary';
+                allow.textContent = 'Sign in';
+                shell.appendChild(allow);
+                status.textContent = 'Teams needs your permission to keep you signed in on this device.';
+
+                allow.addEventListener('click', function () {
+                    allow.remove();
+                    status.textContent = 'Signing you in through Microsoft Teams…';
+                    // A refusal resolves too: the exchange may still work, and the failure is
+                    // visible on the page rather than a silent loop.
+                    document.requestStorageAccess().then(resolve, resolve);
+                });
+            });
+        });
+    }
+
+    storageAccess().then(function () {
+        return microsoftTeams.app.initialize();
+    }).then(function () {
         return microsoftTeams.authentication.getAuthToken({
             resources: [shell.dataset.resource],
         });
