@@ -4120,3 +4120,13 @@ an anonymous caller has no session: the poll 401'd, the OIDC handler answered it
 HX-Refresh, the browser reloaded the page — which is the SSO shell, which polls again. The tab
 spent the first live test flashing "Signing you in…" in that reload loop, faster than Teams'
 token exchange could ever finish. /teams-phone now sits beside /phone in the layout's exclusion.
+
+## D189: Teams tokens are v1-endpoint tokens — both issuer spellings are valid
+
+The first exchange that reached the validator was refused on the issuer alone: TeamsJS
+getAuthToken hands out access tokens minted by the v1 endpoint, whose issuer is
+https://sts.windows.net/<tid>/, while the validator accepted only the v2 issuer
+(login.microsoftonline.com/<tid>/v2.0) the browser OIDC flow uses. Both spellings are now valid
+(IssuersOf), and the v1 claim spellings (upn, unique_name) are mapped alongside the v2 ones so
+the principal carries what PhoneUser reads. The tid claim still ties a token to this tenant
+either way, whatever the issuer spelling.

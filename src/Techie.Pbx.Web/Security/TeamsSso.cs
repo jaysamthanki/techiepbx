@@ -75,8 +75,17 @@ namespace Techie.Pbx.Web.Security
         public static string[] Audiences(string clientId, string siteHost) =>
             new[] { $"api://{siteHost}/{clientId}", clientId };
 
-        /// <summary>The v2 issuer for one tenant.</summary>
-        public static string IssuerOf(string tenantId) => $"https://login.microsoftonline.com/{tenantId}/v2.0";
+        /// <summary>
+        /// Both issuers a tenant's tokens can carry. TeamsJS getAuthToken hands out v1-endpoint
+        /// tokens (sts.windows.net), not the v2 ones the browser OIDC flow sees — the first live
+        /// exchange was refused on exactly that difference (D189) — so both spellings are valid
+        /// and the tid claim below is what ties a token to this tenant either way.
+        /// </summary>
+        public static string[] IssuersOf(string tenantId) =>
+        [
+            $"https://sts.windows.net/{tenantId}/",
+            $"https://login.microsoftonline.com/{tenantId}/v2.0",
+        ];
 
         /// <summary>
         /// The principal the token stands for, or null when it does not stand for one. Never
@@ -98,7 +107,7 @@ namespace Techie.Pbx.Web.Security
 
             var result = await new JsonWebTokenHandler().ValidateTokenAsync(token, new TokenValidationParameters
             {
-                ValidIssuer = IssuerOf(this.tenantId),
+                ValidIssuers = IssuersOf(this.tenantId),
                 ValidAudiences = Audiences(this.clientId, this.siteHost),
                 IssuerSigningKeys = configuration.SigningKeys,
                 ValidateIssuerSigningKey = true,
@@ -159,7 +168,10 @@ namespace Techie.Pbx.Web.Security
                 {
                     "email" => ClaimTypes.Email,
                     "preferred_username" => ClaimTypes.Upn,
+                    // The v1 spellings, for the tokens TeamsJS hands out (D189).
+                    "upn" => ClaimTypes.Upn,
                     "name" => ClaimTypes.Name,
+                    "unique_name" => ClaimTypes.Name,
                     "roles" => ClaimTypes.Role,
                     _ => claim.Key,
                 };
