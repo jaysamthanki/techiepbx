@@ -49,11 +49,9 @@ public class IndexModel : Pages.PhoneClient.PhoneClientModel
     {
         // The Teams loop diagnosis (D195): whether the session cookie the exchange issued ever
         // comes back on the reload. Names only, never values — cookies are credentials.
-        Log.Info($"teams-phone GET: {this.Request.Cookies.Count} cookie(s)" +
-                 (this.Request.Cookies.Keys.Where(name => name.Contains(".AspNetCore")).Any()
-                     ? ", auth cookie present"
-                     : ", no auth cookie") +
-                 $", authenticated: {this.User.Identity?.IsAuthenticated == true}");
+        Log.Info($"teams-phone GET: {this.Request.Cookies.Count} cookie(s) " +
+                 $"[{string.Join(", ", this.Request.Cookies.Keys.OrderBy(name => name))}], " +
+                 $"authenticated: {this.User.Identity?.IsAuthenticated == true}");
 
         if (this.User.Identity?.IsAuthenticated == true)
         {
