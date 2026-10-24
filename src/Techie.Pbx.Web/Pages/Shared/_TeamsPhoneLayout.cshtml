@@ -1,0 +1,60 @@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    // The Teams tab's chrome (D192): a phone, not an admin page. The shared layout's menus,
+    // sign-in/out and status poll are an admin's tools — inside the Teams client they are noise
+    // (and the sign-out link is a trap: the tab's iframe cannot follow it). What the dialer
+    // actually needs is the theme script, the CSS, the antiforgery token for its fetches, and
+    // site.js for pbx.send/pbx.toast (which needs sweetalert2). The footer stays: which box and
+    // which version is worth knowing even in a tab.
+    var requestToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="request-verification-token" content="@requestToken" />
+    <title>@ViewData["Title"] - TNPBX</title>
+    <script>
+        (function () {
+            var stored = localStorage.getItem('pbx-theme');
+            var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/Techie.Pbx.Web.styles.css" asp-append-version="true" />
+</head>
+<body hx-headers='{"@Techie.Pbx.Web.Program.AntiforgeryHeaderName": "@requestToken"}'>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    @{
+        var signedInAs = Techie.Pbx.Web.Security.SignedInUser.DisplayName(User);
+        var version = typeof(Techie.Pbx.Web.Program).Assembly.GetName().Version?.ToString(3);
+    }
+    <footer class="border-top footer text-body-secondary d-print-none">
+        <div class="container">
+            @(DateTime.Today.Year) (C) <a href="https://www.techienetworks.com/VoIP" class="link-secondary" target="_blank" rel="noopener">Techie Networks Inc</a> - <a href="https://github.com/jaysamthanki/techiepbx" class="link-secondary" target="_blank" rel="noopener">Techie PBX</a> v@(version)
+            @if (signedInAs.Length > 0)
+            {
+                <text>- Logged in as @signedInAs on @Environment.MachineName</text>
+            }
+            else
+            {
+                <text>- @Environment.MachineName</text>
+            }
+        </div>
+    </footer>
+
+    <script src="~/lib/sweetalert2/sweetalert2.all.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

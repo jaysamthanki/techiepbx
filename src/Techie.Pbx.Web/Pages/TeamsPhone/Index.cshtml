@@ -1,6 +1,8 @@
 @page "/teams-phone"
 @model IndexModel
 @{
+    // The Teams client's own layout (D192): no admin menus, no sign-in/out, just the phone.
+    Layout = "_TeamsPhoneLayout";
     ViewData["Title"] = "Teams phone";
 
     // This page's own handler URLs: the shared dialer partial (D187) posts to whichever page
@@ -49,7 +51,15 @@ else if (Model.WebExtensions.Count == 0)
 }
 else
 {
-    <partial name="../PhoneClient/_Dialer" model="Model" view-data="ViewData" />
+    @* Three columns (D192): the dialer lives on the left; the middle and right are claimed
+       later. The dialer partial centers its own content inside the column. *@
+    <div class="row g-3">
+        <div class="col-md-4">
+            <partial name="../PhoneClient/_Dialer" model="Model" view-data="ViewData" />
+        </div>
+        <div class="col-md-4"></div>
+        <div class="col-md-4"></div>
+    </div>
 }
 
 @section Scripts {

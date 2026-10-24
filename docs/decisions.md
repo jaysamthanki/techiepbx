@@ -4151,3 +4151,13 @@ showLoadingIndicator made Teams hold its top-of-tab spinner until the app called
 notifyAppSuccess, which the SSO shell never does (and the signed-in dialer page does not load
 the SDK at all) — so the spinner spun forever on a working tab. The manifest no longer declares
 it; Teams shows no loading indicator, and the tab's own content appears immediately instead.
+
+## D192: The Teams tab gets its own minimal layout and a three-column body
+
+The shared layout's admin menus, sign-in/out link and theme toggle are an admin's tools; inside
+the Teams client they are noise, and the sign-out link is a trap — the tab's iframe cannot
+follow the redirect. The Teams phone page now uses a layout of its own: the theme script, the
+CSS, the antiforgery token, site.js (the dialer's pbx.send/pbx.toast, with sweetalert2) and the
+footer (which box, which version — worth knowing even in a tab). Nothing else. The body is a
+three-column row with the dialer on the left; the middle and right columns are claimed by later
+features.
