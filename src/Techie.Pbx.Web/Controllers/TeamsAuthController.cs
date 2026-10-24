@@ -44,6 +44,12 @@ namespace Techie.Pbx.Web.Controllers
         [HttpPost]
         public async Task<IActionResult> Authenticate([FromBody] TeamsAuthRequest request, CancellationToken cancellationToken)
         {
+            // The 400 paths below are otherwise silent in the journal — an antiforgery rejection
+            // (the filter runs before this method) and the empty-token BadRequest both look like
+            // a bare 400 to the log reader. One line per attempt makes the next diagnosis one
+            // grep instead of one theory (D193).
+            Log.Info($"Teams SSO exchange: token length {(request?.Token?.Trim().Length ?? 0)}");
+
             var stored = this.settings.GetAll();
 
             var clientId = stored.GetValueOrDefault(SettingsKeys.TeamsAppClientId)

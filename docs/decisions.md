@@ -4161,3 +4161,13 @@ CSS, the antiforgery token, site.js (the dialer's pbx.send/pbx.toast, with sweet
 footer (which box, which version — worth knowing even in a tab). Nothing else. The body is a
 three-column row with the dialer on the left; the middle and right columns are claimed by later
 features.
+
+## D193: Every Teams SSO exchange attempt logs one line, whatever answers it
+
+The 400 paths were silent: the antiforgery filter rejects before the controller runs, and the
+empty-token BadRequest never logged, so a web-client failure showed a bare 400 in the request
+log with no journal line to say which of the two it was. The controller now logs the token
+length at the top of every attempt — a 400 in the request log with no "exchange" line is the
+antiforgery filter, with the line but length 0 is an empty token, and anything longer reached
+validation and says its own reason. A Teams-web iframe is a third-party context for the
+antiforgery cookie, so the distinction matters there.
