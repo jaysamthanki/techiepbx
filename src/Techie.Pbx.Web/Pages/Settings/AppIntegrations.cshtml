@@ -65,6 +65,29 @@
             three values above and press Save.
         </li>
         <li class="list-group-item">
+            <strong>Entra &rarr; the registration &rarr; Expose an API</strong> (the tab's sign-in
+            does not work without this, D183):
+            set the <strong>Application ID URI</strong> to
+            <code>api://<em>&lt;site host&gt;</em>/<em>&lt;client ID&gt;</em></code>
+            (e.g. <code>api://pbx.example.com/5e7e205d-&hellip;</code>), then
+            <strong>Add a scope</strong>: name <code>access_as_user</code>, admins and users may
+            consent, enabled.
+        </li>
+        <li class="list-group-item">
+            Still in <strong>Expose an API</strong>, under <strong>Authorized client
+            applications</strong>, add both Teams clients with the <code>access_as_user</code>
+            scope ticked — without this Teams' silent token omits the scope and the sign-in is
+            refused:
+            <ul class="mb-0 mt-1">
+                <li><code>1fec8e78-bce4-4aaf-ab1b-5451cc387264</code> — Teams mobile and desktop client</li>
+                <li><code>5e3ce6c0-2b1f-4285-8d4b-75ee78787346</code> — Teams web</li>
+            </ul>
+        </li>
+        <li class="list-group-item">
+            Entra &rarr; the registration &rarr; <strong>API permissions</strong> &rarr;
+            <strong>Grant admin consent</strong> for the tenant.
+        </li>
+        <li class="list-group-item">
             <a class="btn btn-sm btn-primary" asp-page-handler="Package">Download package</a>
             <span class="ms-2 text-body-secondary">manifest.json + icons, built from the saved values.</span>
         </li>
