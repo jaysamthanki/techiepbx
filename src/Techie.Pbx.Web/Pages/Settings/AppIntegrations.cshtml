@@ -88,6 +88,19 @@
             <strong>Grant admin consent</strong> for the tenant.
         </li>
         <li class="list-group-item">
+            <strong>Name the scope <code>access_as_user</code></strong> when adding it under
+            Expose an API (D194): the name an admin consents under is the name the tokens carry
+            forever, and renaming a scope afterwards never rewrites the granted consent — a
+            tenant whose consent was created under another spelling keeps that spelling in its
+            tokens (the server accepts <code>TeamsApp</code> as an alias for exactly that reason).
+        </li>
+        <li class="list-group-item">
+            On first use each user clicks <strong>Sign in</strong> once and allows the
+            <em>&ldquo;use cookies&rdquo;</em> prompt Teams shows (D195): the new Teams client
+            blocks third-party cookies until the user allows them, and without that permission
+            the tab cannot keep its session. Every visit after the first is silent.
+        </li>
+        <li class="list-group-item">
             <a class="btn btn-sm btn-primary" asp-page-handler="Package">Download package</a>
             <span class="ms-2 text-body-secondary">manifest.json + icons, built from the saved values.</span>
         </li>
