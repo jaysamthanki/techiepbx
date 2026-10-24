@@ -354,7 +354,12 @@ namespace Techie.Pbx.Web
 
             app.UseAuthorization();
 
-            app.MapStaticAssets();
+            // Static assets must be anonymous: the fallback policy would otherwise claim them
+            // too, and the Teams tab's iframe — anonymous by definition until the token exchange
+            // runs — would get a 302 to Entra for every stylesheet and script. The SDK and the
+            // SSO glue never load, the shell never starts, and the tab sits on "Signing you in…"
+            // with an unstyled page (D186). The assets themselves carry nothing private.
+            app.MapStaticAssets().AllowAnonymous();
             app.MapRazorPages()
                .WithStaticAssets();
 

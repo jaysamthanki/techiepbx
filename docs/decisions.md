@@ -4089,3 +4089,26 @@ not the Entra side:
    public page.
 
 The token exchange itself remains the one thing only a real Teams client can exercise.
+
+## D186: Static assets are anonymous — the fallback policy was 302ing the Teams tab's scripts
+
+The W3C log of the first tab that rendered showed it: the Teams iframe loaded /teams-phone
+itself fine, but every stylesheet and script under it came back 302 to the Entra login. The
+authorization fallback policy claims every endpoint without its own metadata, and static
+assets have none — so an anonymous caller (the tab's iframe, by definition, until the token
+exchange runs) never received bootstrap.css, MicrosoftTeams.min.js or teams-sso.js. The tab
+sat on "Signing you in through Microsoft Teams…" forever with an unstyled page, and no POST
+to /api/teamsauth ever happened. Static assets are now AllowAnonymous: they carry nothing
+private, and an anonymous shell page needs its own assets to run.
+
+## D187: One shared dialer partial is the markup contract with phone.js
+
+D184 rewrote each phone page's markup separately and dropped what phone.js still required —
+Hold and Xfer buttons, phone-audio/phone-ring ids, the unread-count span — leaving the script
+to die on a null addEventListener the moment it loaded, on /phone and /teams-phone alike (the
+first symptom was "the /phone doesn't work anymore either"). The dialer body is now a single
+partial (Pages/PhoneClient/_Dialer.cshtml) both pages render, carrying exactly the ids and
+data- attributes phone.js queries; the handler URLs come in through ViewData because each
+page's Client/Unread handlers live on its own route. New dialer controls are added to the
+partial and phone.js together, or the pages drift apart again — that drift is what broke both
+phones at once.

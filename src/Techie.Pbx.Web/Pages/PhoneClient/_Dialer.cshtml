@@ -1,0 +1,82 @@
+@* The dialer body both phone pages render (D187): /phone and /teams-phone share one markup
+   contract with phone.js — every id and data- attribute the script queries, and nothing else.
+   D184 had rewritten each page's markup separately and dropped the Hold/Xfer buttons and the
+   ring/audio ids the script still required, which broke the dialer on both pages with a null
+   addEventListener; one shared partial is the contract now, so the pages cannot drift apart.
+
+   The handler URLs come in through ViewData (ClientUrl/UnreadUrl) because they belong to the
+   rendering page: /phone posts to /phone?handler=Client, /teams-phone to its own. *@
+@model Techie.Pbx.Web.Pages.PhoneClient.PhoneClientModel
+@{
+    var clientUrl = (string)ViewData["ClientUrl"]!;
+    var unreadUrl = (string)ViewData["UnreadUrl"]!;
+}
+
+<div id="phone-client" class="mx-auto" style="max-width: 22rem;" data-client-url="@clientUrl"
+     data-unread-url="@unreadUrl" data-voicemail-code="@Techie.Pbx.Core.Models.SystemCodes.VoicemailMain">
+    <div class="mb-3">
+        <label class="form-label" for="phone-extension">Extension</label>
+        <select class="form-select" id="phone-extension">
+            @foreach (var extension in Model.WebExtensions)
+            {
+                <option value="@extension.Number">@extension.Number — @extension.Name</option>
+            }
+        </select>
+    </div>
+
+    <p id="phone-status" class="text-body-secondary text-center mb-2" aria-live="polite">Connecting…</p>
+
+    @* Filled from the keypad and the keyboard: the number to call, then DTMF sent and the
+       transfer target. *@
+    <input id="phone-display" class="form-control form-control-lg font-monospace text-center mb-3"
+           readonly aria-label="Number" />
+
+    <div class="row row-cols-3 g-2 mb-2">
+        @foreach (var digit in new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#" })
+        {
+            <div class="col d-grid">
+                <button type="button" class="btn btn-outline-secondary btn-lg font-monospace" data-digit="@digit">@digit</button>
+            </div>
+        }
+    </div>
+
+    <div class="row row-cols-2 g-2 mb-3">
+        <div class="col d-grid">
+            @* Dials *97, the mailbox of whichever extension is registered. The badge is the
+               unread count across the user's own mailboxes (D169), hidden at zero. *@
+            <button type="button" id="phone-voicemail" class="btn btn-outline-secondary btn-sm position-relative" disabled>
+                Voicemail
+                <span id="phone-unread" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">
+                    <span id="phone-unread-count">0</span>
+                    <span class="visually-hidden">unread messages</span>
+                </span>
+            </button>
+        </div>
+        <div class="col d-grid">
+            <button type="button" id="phone-clear" class="btn btn-outline-secondary btn-sm">Clear</button>
+        </div>
+    </div>
+
+    <div class="row row-cols-4 g-2">
+        <div class="col d-grid">
+            <button type="button" id="phone-call" class="btn btn-success" disabled>Call</button>
+        </div>
+        <div class="col d-grid">
+            <button type="button" id="phone-hangup" class="btn btn-danger" disabled>Hang up</button>
+        </div>
+        <div class="col d-grid">
+            <button type="button" id="phone-hold" class="btn btn-outline-secondary" disabled>Hold</button>
+        </div>
+        <div class="col d-grid">
+            <button type="button" id="phone-xfer" class="btn btn-outline-secondary" disabled>Xfer</button>
+        </div>
+    </div>
+
+    @* The far end's audio. autoplay for the browsers that allow it; phone.js calls play()
+       on user gestures for the ones that block autoplayed audio until one. *@
+    <audio id="phone-audio" autoplay></audio>
+
+    @* The ring for an inbound call (D178): a local loop of the shipped asset, started and
+       stopped by phone.js with the same gesture rule as the call audio. *@
+    <audio id="phone-ring" src="~/audio/ring.mp3" loop preload="auto"></audio>
+</div>
