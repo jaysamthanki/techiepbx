@@ -45,10 +45,16 @@ public class IndexModel : Pages.PhoneClient.PhoneClientModel
         this.configuration = configuration;
     }
 
-    public void OnGet()
+    public async Task OnGetAsync()
     {
         // The Teams loop diagnosis (D195): whether the session cookie the exchange issued ever
-        // comes back on the reload. Names only, never values — cookies are credentials.
+        // comes back on the reload, and when it does, what the cookie handler itself says about
+        // it — AuthenticateAsync surfaces the exact refusal (bad key, bad payload, no ticket)
+        // that the middleware only swallows. Names and lengths only, never values.
+        var probe = await this.HttpContext.AuthenticateAsync(Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme);
+        Log.Info($"teams-phone auth probe: {probe.Result}" +
+                 (probe.Failure is { } failure ? $", failure: {failure.Message}" : "") +
+                 (probe.Ticket?.Principal.Identity?.Name is { } name ? $", ticket for: {name}" : ""));
         Log.Info($"teams-phone GET: {this.Request.Cookies.Count} cookie(s) " +
                  $"[{string.Join(", ", this.Request.Cookies.Keys.OrderBy(name => name))}], " +
                  $"auth cookie {(this.Request.Cookies.ContainsKey(".AspNetCore.Cookies") ? this.Request.Cookies[".AspNetCore.Cookies"]!.Length + " chars" : "absent")}, " +
