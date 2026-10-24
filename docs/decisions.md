@@ -4171,3 +4171,17 @@ length at the top of every attempt — a 400 in the request log with no "exchang
 antiforgery filter, with the line but length 0 is an empty token, and anything longer reached
 validation and says its own reason. A Teams-web iframe is a third-party context for the
 antiforgery cookie, so the distinction matters there.
+
+## D194: The TeamsApp scope spelling is accepted as an alias for access_as_user
+
+The first live tenant's tokens kept arriving with scp: 'TeamsApp' after every Entra-side fix,
+because the tenant's consent record was created under that name (before the documented
+access_as_user naming) and a v1 token mints the consent record's stored text — renaming the
+scope on the registration never rewrites a granted consent. The stale grant itself is not
+visible in the app registration's blades (it belongs to the Teams client app) and Microsoft
+hides first-party-app grants from app-only Graph access, so it could not be deleted
+programmatically. Accepting the alias honors the tenant admin's own consent: the token is
+still Entra-signed, tenant-checked, audience-checked and a user token, and in a tenant with no
+consent under that name Entra refuses the OBO exchange outright — the alias opens no door that
+consent does not already open. New installs should still name the scope access_as_user per the
+guide; a tenant granting the documented name gets that spelling in its tokens.

@@ -30,6 +30,19 @@ namespace Techie.Pbx.Web.Security
         /// </summary>
         public const string Scope = "access_as_user";
 
+        /// <summary>
+        /// The spelling the tenant's existing consent carries (D194). The first live tenant
+        /// consented its scope under the name "TeamsApp" before the documented access_as_user
+        /// naming was applied, and a v1 token mints the consent record's stored text — renaming
+        /// the scope on the registration does not change what already-consented tokens say, and
+        /// the stale grant is invisible in the portal because it belongs to the Teams client
+        /// app, not to ours. Accepting the alias is honoring that admin's own consent: the token
+        /// is still Entra-signed, tenant-checked, audience-checked and a user token, and in any
+        /// tenant without a consent under this name Entra refuses the exchange outright, so this
+        /// adds no way in. A tenant that grants the documented name gets that one instead.
+        /// </summary>
+        public const string AliasScope = "TeamsApp";
+
         private static readonly object CacheLock = new();
         private static readonly Dictionary<(string TenantId, string ClientId, string Host), TeamsSso> Cache = new();
 
@@ -145,7 +158,9 @@ namespace Techie.Pbx.Web.Security
             }
 
             if (!scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                    .Contains(Scope, StringComparer.OrdinalIgnoreCase))
+                    .Contains(Scope, StringComparer.OrdinalIgnoreCase) &&
+                !scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Contains(AliasScope, StringComparer.OrdinalIgnoreCase))
             {
                 // aud and azp come along (D193): a token minted for the bare client id rather than
                 // the api:// URI, or one the Teams client minted for itself, reads differently
