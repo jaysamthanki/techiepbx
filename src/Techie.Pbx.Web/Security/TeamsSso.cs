@@ -147,7 +147,14 @@ namespace Techie.Pbx.Web.Security
             if (!scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                     .Contains(Scope, StringComparer.OrdinalIgnoreCase))
             {
-                Log.Warn($"Teams SSO: token refused: does not carry the {Scope} scope (scp: '{scopes}').");
+                // aud and azp come along (D193): a token minted for the bare client id rather than
+                // the api:// URI, or one the Teams client minted for itself, reads differently
+                // here, and scp alone cannot tell them apart.
+                string? Audited(string claim) =>
+                    result.Claims.TryGetValue(claim, out var v) ? v?.ToString() : null;
+                Log.Warn($"Teams SSO: token refused: does not carry the {Scope} scope " +
+                         $"(scp: '{scopes}', aud: '{Audited("aud")}', azp: '{Audited("azp")}', " +
+                         $"appid: '{Audited("appid")}').");
                 return null;
             }
 
