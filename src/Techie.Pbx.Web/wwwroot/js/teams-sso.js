@@ -101,7 +101,12 @@
     }
 
     storageAccess().then(function () {
-        return microsoftTeams.app.initialize();
+        return microsoftTeams.app.initialize().then(function () {
+            // The shell is up and interactive (sign-in is running or waiting on the user) —
+            // that is "loaded" as far as the client's tab spinner is concerned (D196).
+            microsoftTeams.app.notifySuccess();
+            return true;
+        });
     }).then(function () {
         return microsoftTeams.authentication.getAuthToken({
             resources: [shell.dataset.resource],

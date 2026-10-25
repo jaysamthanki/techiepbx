@@ -4212,3 +4212,32 @@ in again, reloaded, forever. The probe made it plain: AuthenticateAsync("Cookies
 with a ticket for the user on the very request whose User was anonymous. The split is now the
 standard one: Cookies as the default/authenticate/sign-in scheme, OpenIdConnect as the
 challenge scheme. The Teams phone loop and the browser sign-in now share one path: the cookie.
+
+## D196: The tab clears its own loading spinner, and navigating away no longer kills a live registration
+
+Two complaints from the Teams client, both about lifecycle rather than call flow. The first:
+the client's tab shows a loading spinner until the tab page calls notifySuccess(), and the
+phone page never loaded teams-js at all (only the SSO shell did, on a different page load), so
+the spinner ran to the client's own timeout on every working tab. Every state the tab can
+render now clears it: the SSO shell calls notifySuccess right after initialize (the shell is
+interactive — signing in or waiting on the storage-access button — which is loaded as far as
+the client cares), the phone page loads teams-js beside jssip and clears once it is up, and
+the two no-extension empty states load a tiny teams-js snippet that does the same.
+
+The second: navigating away to chats disconnected the phone, because pagehide stopped the JsSIP
+UA unconditionally — written when the assumption was that a navigated-away tab is dead. The
+new Teams client often parks the iframe in bfcache instead, and a parked frame resumes alive
+with its sockets intact, so stopping the UA killed a registration the page kept using. pagehide
+now stops the UA only when event.persisted is false (the frame is truly going away — a
+destroyed frame's socket dies with the tab and its registration expires on its own), and
+pageshow reconnects a resumed frame whose socket dropped while parked. The reconnect waits one
+turn before trusting ua.isConnected(): the queued WebSocket close event runs after
+reactivation, so an immediate check can still see the pre-freeze connected state and skip the
+reconnect it needed. A connect() in flight wins over the resume reconnect, and while the
+resume reconnect runs the 'connection dropped' toast is suppressed — the drop is the parked
+page being reactivated, not a fault. One honest limit remains: Teams gives third-party tabs no
+way to keep running while the user is on another tab, so a call in progress when the user
+navigates away is lost; the bfcache path only preserves registration and quick recovery, and
+the spinner fix only makes the tab's load honest. Second opinion on the diff was taken from a
+separate agent (Google Antigravity CLI), which caught the isConnected race and the empty-state
+spinner gap before this landed.

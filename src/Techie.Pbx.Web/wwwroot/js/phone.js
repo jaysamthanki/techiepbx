@@ -36,6 +36,8 @@
     let ua = null;        // The one JsSIP.UA, for whichever extension the dropdown names.
     let session = null;   // The one call in progress, incoming or outgoing.
     let registered = false;
+    let connecting = false;       // A connect() is in flight; pageshow must not race it.
+    let autoReconnecting = false; // A bfcache resume is driving a reconnect: no error toast.
 
     // ---- Status line and buttons: everything visible follows these two. ----
 
@@ -155,12 +157,14 @@
 
     async function connect(number) {
         disconnect();
+        connecting = true;
         setStatus('Connecting…');
 
         let config;
         try {
             config = await pbx.send('GET', page.dataset.clientUrl + '&ext=' + encodeURIComponent(number));
         } catch (error) {
+            connecting = false;
             setStatus('Not available');
             pbx.toast('error', 'The web client details could not be fetched: ' + error.message);
             return;
@@ -188,7 +192,11 @@
             registered = false;
             setStatus('Disconnected');
             updateButtons();
-            pbx.toast('error', 'The connection to the phone system dropped. Reload the page to reconnect.');
+            // A bfcache-driven reconnect suppresses this toast: the drop is the parked page
+            // being reactivated, and pageshow reconnects it in the next turn (D196).
+            if (!autoReconnecting) {
+                pbx.toast('error', 'The connection to the phone system dropped. Reload the page to reconnect.');
+            }
         });
 
         ua.on('registered', function () {
@@ -213,6 +221,7 @@
         ua.on('newRTCSession', newSession);
 
         ua.start();
+        connecting = false;
         updateButtons();
     }
 
@@ -425,15 +434,59 @@
         connect(extensionSelect.value);
     });
 
-    // Unregister on the way out, so Asterisk stops ringing a tab that is gone rather than
-    // waiting out the registration. pagehide rather than unload: it also fires into bfcache.
-    window.addEventListener('pagehide', function () {
-        if (ua) {
+    // The Teams client keeps its "loading" spinner over the tab until the page says it is
+    // ready (D196): initialize + notifySuccess. The SSO shell does the same on its own page
+    // now, so every state this tab can render clears the spinner. Outside Teams (a plain
+    // browser) initialize rejects; there is no spinner to clear and the failure is ignored.
+    let teamsNotified = false;
+
+    function clearTeamsSpinner() {
+        if (teamsNotified || typeof microsoftTeams === 'undefined') {
+            return;
+        }
+
+        teamsNotified = true;
+        microsoftTeams.app.initialize().then(function () {
+            microsoftTeams.app.notifySuccess();
+        }, function () {
+            // Not in a Teams frame: nothing to clear.
+        });
+    }
+
+    // Navigating away inside Teams either destroys the tab's iframe or parks it in bfcache
+    // (D196). A parked frame resumes alive with its sockets intact, so stopping the UA here
+    // would kill a registration the page keeps using; only a frame that is truly going away
+    // (persisted=false) unregisters. A destroyed frame's socket dies with the tab and its
+    // Asterisk registration simply expires.
+    window.addEventListener('pagehide', function (event) {
+        stopRinging();
+        if (!event.persisted && ua) {
             ua.stop();
         }
     });
 
+    // A frame resumed out of bfcache reconnects if its socket dropped while parked. The check
+    // waits one turn: isConnected() can still report the pre-freeze state when pageshow fires,
+    // because the queued WebSocket close event runs after reactivation (agy review, D196). A
+    // connect() in flight wins — this must not race it. While the reconnect runs the
+    // 'disconnected' toast is suppressed via autoReconnecting.
+    window.addEventListener('pageshow', function (event) {
+        if (!event.persisted) {
+            return;
+        }
+
+        autoReconnecting = true;
+        setTimeout(function () {
+            if (!connecting && (!ua || !ua.isConnected())) {
+                connect(extensionSelect.value);
+            }
+
+            autoReconnecting = false;
+        }, 0);
+    });
+
     connect(extensionSelect.value);
+    clearTeamsSpinner();
 
     refreshUnread();
     setInterval(refreshUnread, 30000);

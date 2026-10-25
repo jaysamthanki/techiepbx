@@ -73,7 +73,23 @@ else
     }
     else if (Model.WebExtensions.Count > 0)
     {
+        @* teams-js is on this page too: once the phone is up it clears the client's tab
+           loading spinner (D196). The SSO shell above loaded its own copy — that was a
+           different page load, so the phone page needs its own script here. *@
+        <script src="~/lib/teams-js/MicrosoftTeams.min.js"></script>
         <script src="~/lib/jssip/jssip.min.js"></script>
         <script src="~/js/phone.js" asp-append-version="true"></script>
+    }
+    else
+    {
+        @* The empty-state pages are loaded tabs too: without scripts they never clear the
+           client's tab loading spinner, so Teams shows "loading" over the instructions
+           until its own timeout (D196). Outside Teams initialize just rejects. *@
+        <script src="~/lib/teams-js/MicrosoftTeams.min.js"></script>
+        <script>
+            microsoftTeams.app.initialize().then(function () {
+                microsoftTeams.app.notifySuccess();
+            }, function () { /* not a Teams frame: nothing to clear */ });
+        </script>
     }
 }
