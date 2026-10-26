@@ -4001,3 +4001,21 @@ caller ID line.
 
 Live fix on the box (removing the line + reload) confirmed correct inbound caller ID with a
 real call before this was coded.
+
+## D197
+
+Teams client abandoned — a PWA replaces it.
+
+The Teams tab work (D182-D196, ~35 commits: SSO token exchange, `/teams-phone` shell, Teams
+JS SDK integration, manifest/package builder) was abandoned 2026-10-25 after live SSO finally
+worked: every step needed another tenant-side concession (storage-access for the third-party
+cookie, scope spelling aliases, v1 issuer/claim variants, per-user device permissions) and the
+resulting surface was still hostage to Teams' iframe and cookie policy. Cost outweighed the
+gain. Those commit numbers are spent and are not to be reused.
+
+Decision: no Teams client. The phone is reached as an installable PWA (manifest + service
+worker + standalone display) so it works on desktop and mobile from any browser, including
+inside Teams as an ordinary website tab that needs nothing from Entra or the Teams SDK.
+
+Reverted to v0.2.4; the abandoned work is preserved on branch `teams-client-abandoned`
+(commit a0eaf5e) for reference only. `main` no longer contains it.
