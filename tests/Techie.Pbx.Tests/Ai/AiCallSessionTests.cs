@@ -197,7 +197,7 @@ namespace Techie.Pbx.Tests.Ai
         public async Task A_transfer_speaks_the_preamble_then_closes_the_socket()
         {
             var session = this.Session(
-                Agent(transferTo: "201"),
+                Agent(transferTo: "Extension:201"),
                 _ => "Putting you through now. " + AiCallSession.TransferToken,
                 () => "Can I speak to someone?");
 
@@ -214,7 +214,7 @@ namespace Techie.Pbx.Tests.Ai
         [Fact]
         public async Task A_bare_transfer_token_closes_the_socket_without_speaking()
         {
-            var session = this.Session(Agent(transferTo: "201"), _ => AiCallSession.TransferToken, () => "A person please.");
+            var session = this.Session(Agent(transferTo: "Extension:201"), _ => AiCallSession.TransferToken, () => "A person please.");
 
             this.stream.SendAudio(Turn());
             await session.RunAsync(this.stream, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
@@ -295,8 +295,8 @@ namespace Techie.Pbx.Tests.Ai
         public void The_transfer_rule_is_only_offered_when_there_is_somewhere_to_transfer_to()
         {
             Assert.DoesNotContain(AiCallSession.TransferToken, AiCallSession.SystemPrompt(Agent()));
-            Assert.Contains(AiCallSession.TransferToken, AiCallSession.SystemPrompt(Agent(transferTo: "201")));
-            Assert.StartsWith("You are the receptionist.", AiCallSession.SystemPrompt(Agent(transferTo: "201")));
+            Assert.Contains(AiCallSession.TransferToken, AiCallSession.SystemPrompt(Agent(transferTo: "Extension:201")));
+            Assert.StartsWith("You are the receptionist.", AiCallSession.SystemPrompt(Agent(transferTo: "Extension:201")));
         }
     }
 }

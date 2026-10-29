@@ -704,8 +704,8 @@ namespace Techie.Pbx.Asterisk.Config
         /// The entry lives in the internal context like an extension, so a user can dial it and a
         /// destination can Goto it, and both get the same lines.
         ///
-        /// AudioSocket() returns when the socket closes. With a handoff extension the call carries
-        /// on to it: the media service transfers by closing the socket, so the transfer is the
+        /// AudioSocket() returns when the socket closes. With a handoff the call carries on to it,
+        /// whatever kind of destination it is (D201): the media service transfers by closing the socket, so the transfer is the
         /// dialplan's next line rather than anything the service does to the channel — a decision,
         /// not an oversight. Without one the call ends there.
         /// </summary>
@@ -722,10 +722,12 @@ namespace Techie.Pbx.Asterisk.Config
             sb.Append(" same => n,Answer()\n");
             sb.Append($" same => n,AudioSocket({uuid},{host}:{mediaPort.ToString(CultureInfo.InvariantCulture)})\n");
 
-            if (agent.TransferTo.Length > 0)
+            var handoff = agent.ToTransferDestination();
+
+            if (handoff != null)
             {
                 sb.Append("; The media service hands off by closing the socket, so the call continues here (D199)\n");
-                sb.Append($" same => n,Goto({InternalContext},{ConfText.Safe(agent.TransferTo, "AI agent transfer")},1)\n");
+                sb.Append(DestinationDialplan.Lines(handoff));
             }
             else
             {

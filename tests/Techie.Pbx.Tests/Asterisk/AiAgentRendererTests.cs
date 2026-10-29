@@ -22,7 +22,7 @@ namespace Techie.Pbx.Tests.Asterisk
                 Number = "7300",
                 Name = "Reception",
                 Prompt = "You are the receptionist.",
-                TransferTo = "1001",
+                TransferTo = "Extension:1001",
             },
             new AiAgent
             {
@@ -72,6 +72,30 @@ namespace Techie.Pbx.Tests.Asterisk
             var actual = Render(new[] { agent }, 9100);
 
             Assert.Contains($" same => n,AudioSocket({agent.ServiceUuid},127.0.0.1:9100)\n same => n,Hangup()\n", actual);
+        }
+
+        [Fact]
+        public void A_ring_group_handoff_goes_to_the_group()
+        {
+            var agent = SampleAgents()[0];
+            agent.TransferTo = "RingGroup:600";
+
+            var actual = Render(new[] { agent });
+
+            Assert.Contains(
+                $" same => n,AudioSocket({agent.ServiceUuid},127.0.0.1:9019)\n" +
+                "; The media service hands off by closing the socket, so the call continues here (D199)\n" +
+                " same => n,Goto(internal,600,1)\n",
+                actual);
+        }
+
+        [Fact]
+        public void A_voicemail_handoff_writes_the_voicemail_lines()
+        {
+            var agent = SampleAgents()[0];
+            agent.TransferTo = "Voicemail:1001";
+
+            Assert.Contains(" same => n,VoiceMail(1001@default,u)\n same => n,Hangup()\n", Render(new[] { agent }));
         }
 
         [Fact]

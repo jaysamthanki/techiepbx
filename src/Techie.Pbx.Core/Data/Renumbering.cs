@@ -71,6 +71,13 @@ namespace Techie.Pbx.Core.Data
                     new { type = from.Type.ToString(), from = from.Value, to = to.Value },
                     transaction);
             }
+
+            // An AI agent's handoff is the one destination stored as a whole key in one column
+            // rather than a type and a value in two (D201), so it is matched on the whole key.
+            connection.Execute(
+                "UPDATE AiAgents SET TransferTo = @to WHERE TransferTo = @from",
+                new { from = from.Key, to = to.Key },
+                transaction);
         }
 
         private static void PhoneButtons(SqliteConnection connection, SqliteTransaction transaction, string[] targetTypes, string from, string to)

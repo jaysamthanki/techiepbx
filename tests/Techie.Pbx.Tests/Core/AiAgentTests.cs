@@ -26,7 +26,7 @@ namespace Techie.Pbx.Tests.Core
             agent.Greeting = "Thanks for calling Example, how can I help?";
             agent.VoiceId = "voice_0123.abc-DEF";
             agent.Model = "vendor/model-name:free";
-            agent.TransferTo = "1001";
+            agent.TransferTo = "RingGroup:600";
             agent.Prompt = "Line one.\nLine two.";
 
             Assert.Empty(agent.Validate());
@@ -137,23 +137,49 @@ namespace Techie.Pbx.Tests.Core
         }
 
         [Theory]
-        [InlineData("1")]
-        [InlineData("+15551234567")]
-        public void A_transfer_that_is_not_an_extension_number_is_refused(string target)
+        [InlineData("Extension:1001")]
+        [InlineData("RingGroup:600")]
+        [InlineData("Voicemail:1001")]
+        [InlineData("Ivr:7200")]
+        [InlineData("CallFlowControl:*28")]
+        public void A_transfer_to_any_destination_is_valid(string target)
         {
             var agent = Agent();
             agent.TransferTo = target;
 
-            Assert.NotEmpty(agent.Validate());
+            Assert.Empty(agent.Validate());
+            Assert.Equal(target, agent.ToTransferDestination()!.Key);
+        }
+
+        [Theory]
+        [InlineData("1001")]
+        [InlineData("Extension:1")]
+        [InlineData("Nowhere:1001")]
+        [InlineData("+15551234567")]
+        public void A_transfer_that_is_not_a_destination_is_refused(string target)
+        {
+            var agent = Agent();
+            agent.TransferTo = target;
+
+            Assert.Contains("Transfer to must be a destination, or blank for none.", agent.Validate());
+            Assert.Null(agent.ToTransferDestination());
+        }
+
+        [Theory]
+        [InlineData("AiAgent:7300")]
+        [InlineData("AiAgent:7301")]
+        public void An_agent_cannot_transfer_to_an_agent(string target)
+        {
+            var agent = Agent();
+            agent.TransferTo = target;
+
+            Assert.Contains("An agent cannot transfer a call to an AI agent.", agent.Validate());
         }
 
         [Fact]
-        public void An_agent_cannot_transfer_to_itself()
+        public void No_transfer_has_no_transfer_destination()
         {
-            var agent = Agent();
-            agent.TransferTo = agent.Number;
-
-            Assert.Contains("An agent cannot transfer a call to itself.", agent.Validate());
+            Assert.Null(Agent().ToTransferDestination());
         }
 
         [Fact]

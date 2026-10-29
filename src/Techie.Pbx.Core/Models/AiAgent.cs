@@ -45,8 +45,9 @@ namespace Techie.Pbx.Core.Models
         public string Prompt { get; set; } = "";
 
         /// <summary>
-        /// The extension the call continues to when the agent hands off, or empty for none. The
-        /// media service hands off by closing the socket, and the dialplan carries on to here (D199).
+        /// Where the call continues when the agent hands off, as a <see cref="Destination.Key"/>
+        /// ("RingGroup:600", "Extension:1001"), or empty for none. The media service hands off by
+        /// closing the socket, and the dialplan carries on to here (D199, D201).
         /// </summary>
         public string TransferTo { get; set; } = "";
 
@@ -80,6 +81,10 @@ namespace Techie.Pbx.Core.Models
 
         /// <summary>The agent as a destination, for the catalog and the dialplan (D199).</summary>
         public Destination ToDestination() => new(DestinationType.AiAgent, this.Number);
+
+        /// <summary>The handoff as a destination, or null when there is none or it does not parse (D201).</summary>
+        public Destination? ToTransferDestination() =>
+            Destination.TryParse(this.TransferTo, out var destination) ? destination : null;
 
         /// <summary>Returns a list of problems; empty means valid.</summary>
         public List<string> Validate()
@@ -117,12 +122,16 @@ namespace Techie.Pbx.Core.Models
             if (this.Model.Length > 0 && !IsValidModel(this.Model))
                 errors.Add("Model may only contain letters, digits and . _ : / - (up to 127), or be blank for the site default.");
 
+            // Anything a call can be sent to, except another agent: an agent handing to an agent
+            // (itself included) is a loop nobody means (D201).
             if (this.TransferTo.Length > 0)
             {
-                if (!Extension.IsValidNumber(this.TransferTo))
-                    errors.Add("Transfer to must be an extension number of 2 to 6 digits, or blank for none.");
-                else if (string.Equals(this.TransferTo, this.Number, StringComparison.Ordinal))
-                    errors.Add("An agent cannot transfer a call to itself.");
+                var target = this.ToTransferDestination();
+
+                if (target == null)
+                    errors.Add("Transfer to must be a destination, or blank for none.");
+                else if (target.Type == DestinationType.AiAgent)
+                    errors.Add("An agent cannot transfer a call to an AI agent.");
             }
 
             return errors;

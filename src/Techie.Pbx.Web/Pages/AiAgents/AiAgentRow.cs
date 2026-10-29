@@ -12,7 +12,7 @@ namespace Techie.Pbx.Web.Pages.AiAgents
         public string Name { get; set; } = "";
         public string Number { get; set; } = "";
 
-        /// <summary>The handoff extension, or "none".</summary>
+        /// <summary>The handoff destination's label, or "None".</summary>
         public string TransferTo { get; set; } = "";
 
         /// <summary>The voice ID, or "site default" when the agent names none.</summary>

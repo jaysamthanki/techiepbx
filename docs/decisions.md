@@ -4129,3 +4129,35 @@ turn. It never touches ARI or AMI; every way the agent ends a call is closing th
   line and capped at 500 characters. On means caller speech is on disk — the honest cost of being
   able to see why the agent said what it said — so a site that must not record callers switches it
   off and keeps only counts and timings.
+
+### D201. AI voice agent: the handoff is a destination, still fixed per agent (2026-10-29, F11)
+
+On the first live calls an agent could only hand a caller to one extension, which is not how a
+front desk works: "please hold, I'll put you through" should land on the front-desk ring group, the
+sales IVR or a voicemail box just as easily. So the handoff is now **anything a call can be sent
+to** — the shared destination picker's list — instead of an extension number.
+
+- **Same column, new shape.** `AiAgents.TransferTo` keeps its name and holds a `Destination.Key`
+  (`"RingGroup:600"`, `"Extension:1001"`, `"Voicemail:1001"`); blank still means no handoff. No
+  schema change. `AiAgent.ToTransferDestination()` parses it.
+- **Validated like every other destination.** The model refuses a key that does not parse and any
+  `AiAgent` target (an agent handing to an agent — itself or another — is a loop nobody means); the
+  repository requires the target to resolve in `DestinationCatalog`, so only a live destination
+  saves (a disabled ring group or extension does not). The picker offers the full catalog minus AI
+  agents.
+- **Rendered by the one helper.** After `AudioSocket()` the entry writes
+  `DestinationDialplan.Lines(handoff)`, so the handoff is spelled exactly as an inbound route or a
+  ring group failover to the same place would be. The D199 rule is unchanged: the media service
+  hands off by closing the socket.
+- **Renumbering follows.** The handoff is the one destination stored as a whole key in a single
+  column, so `Renumbering.Destinations` rewrites `AiAgents.TransferTo` on an exact key match as
+  well. Deleting a target is not cascaded (D35): the handoff shows as gone and the `Goto` reaches
+  nothing.
+- **The honest limit: the target is still fixed per agent.** AudioSocket has no control channel
+  back into Asterisk — the only signal the service can send is closing the socket — so the agent
+  cannot choose *where* to send a caller at runtime ("put me through to Sam"). That needs ARI
+  external media, or a channel variable set over AMI, and is not this piece.
+- **Existing rows.** An agent saved under D199 holds a bare extension number, which no longer
+  validates: the apply refuses it until the agent is re-saved through the picker (which shows it as
+  "no longer available"). Only the lab has such rows.
+

@@ -124,8 +124,9 @@ namespace Techie.Pbx.Core.Data
         /// <summary>
         /// The model's own rules, plus the ones that need the database: the number is dialled out
         /// of the same context as everything else, so nothing else may have claimed it (D57) — the
-        /// other repositories check the same in the other direction — and a handoff extension has
-        /// to exist and be switched on, or the call would continue to a number nothing answers.
+        /// other repositories check the same in the other direction — and a handoff has to be a live
+        /// destination, the same check every other entity's destination gets, or the call would
+        /// continue to something nothing answers (D201).
         /// </summary>
         private void ThrowIfInvalid(AiAgent agent)
         {
@@ -136,42 +137,45 @@ namespace Techie.Pbx.Core.Data
             if (extensions.Any(e => string.Equals(e.Number, number, StringComparison.Ordinal)))
                 errors.Add($"Extension {number} already uses that number.");
 
-            if (new RingGroupRepository(this.database).GetAll()
-                .Any(g => string.Equals(g.Number, number, StringComparison.Ordinal)))
+            var ringGroups = new RingGroupRepository(this.database).GetAll();
+
+            if (ringGroups.Any(g => string.Equals(g.Number, number, StringComparison.Ordinal)))
                 errors.Add($"Ring group {number} already uses that number.");
 
-            var announcement = new AnnouncementRepository(this.database).GetAll()
-                .FirstOrDefault(a => string.Equals(a.PlayExtension, number, StringComparison.Ordinal));
+            var announcements = new AnnouncementRepository(this.database).GetAll();
+            var announcement = announcements.FirstOrDefault(a => string.Equals(a.PlayExtension, number, StringComparison.Ordinal));
 
             if (announcement != null)
                 errors.Add($"Announcement '{announcement.Name}' already plays on {number}.");
 
-            var ivr = new IvrRepository(this.database).GetAll()
-                .FirstOrDefault(i => string.Equals(i.PlayExtension, number, StringComparison.Ordinal));
+            var ivrs = new IvrRepository(this.database).GetAll();
+            var ivr = ivrs.FirstOrDefault(i => string.Equals(i.PlayExtension, number, StringComparison.Ordinal));
 
             if (ivr != null)
                 errors.Add($"IVR '{ivr.Name}' already plays on {number}.");
 
-            var condition = new TimeConditionRepository(this.database).GetAll()
-                .FirstOrDefault(t => string.Equals(t.PlayExtension, number, StringComparison.Ordinal));
+            var conditions = new TimeConditionRepository(this.database).GetAll();
+            var condition = conditions.FirstOrDefault(t => string.Equals(t.PlayExtension, number, StringComparison.Ordinal));
 
             if (condition != null)
                 errors.Add($"Time condition '{condition.Name}' already uses {number}.");
 
-            var clash = this.GetAll().FirstOrDefault(a =>
+            var agents = this.GetAll();
+            var clash = agents.FirstOrDefault(a =>
                 a.AiAgentID != agent.AiAgentID && string.Equals(a.Number, number, StringComparison.Ordinal));
 
             if (clash != null)
                 errors.Add($"AI agent '{clash.Name}' already uses {number}.");
 
-            if (agent.TransferTo.Length > 0 && Extension.IsValidNumber(agent.TransferTo))
-            {
-                var target = extensions.FirstOrDefault(e => string.Equals(e.Number, agent.TransferTo, StringComparison.Ordinal));
+            // A handoff that does not parse, or names an agent, is already refused by Validate.
+            var target = agent.ToTransferDestination();
 
-                if (target == null)
-                    errors.Add($"There is no extension {agent.TransferTo} to transfer to.");
-                else if (!target.Enabled)
-                    errors.Add($"Extension {agent.TransferTo} is disabled, so a transferred call would never ring.");
+            if (target != null && target.Type != DestinationType.AiAgent)
+            {
+                var controls = new CallFlowControlRepository(this.database).GetAll();
+
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, controls, agents, target) == null)
+                    errors.Add("That transfer destination is not there any more. Choose another.");
             }
 
             if (errors.Count > 0)

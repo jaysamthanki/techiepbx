@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Techie.Pbx.Core;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
+using Techie.Pbx.Web.Pages.Shared;
 
 namespace Techie.Pbx.Web.Pages.AiAgents
 {
@@ -20,12 +21,22 @@ namespace Techie.Pbx.Web.Pages.AiAgents
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
         private readonly AiAgentRepository aiAgents;
+        private readonly AnnouncementRepository announcements;
+        private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
+        private readonly IvrRepository ivrs;
+        private readonly RingGroupRepository ringGroups;
+        private readonly TimeConditionRepository timeConditions;
 
         public IndexModel()
         {
             this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
+            this.announcements = new AnnouncementRepository(PbxDatabase.Current);
+            this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
+            this.ivrs = new IvrRepository(PbxDatabase.Current);
+            this.ringGroups = new RingGroupRepository(PbxDatabase.Current);
+            this.timeConditions = new TimeConditionRepository(PbxDatabase.Current);
         }
 
         public void OnGet()
@@ -59,6 +70,8 @@ namespace Techie.Pbx.Web.Pages.AiAgents
         /// <summary>The whole table, by number.</summary>
         public PartialViewResult OnGetTable()
         {
+            var choices = this.Catalog();
+
             var rows = this.aiAgents.GetAll()
                 .Select(agent => new AiAgentRow
                 {
@@ -67,7 +80,7 @@ namespace Techie.Pbx.Web.Pages.AiAgents
                     Model = agent.Model.Length > 0 ? agent.Model : SiteDefault,
                     Name = agent.Name,
                     Number = agent.Number,
-                    TransferTo = agent.TransferTo.Length > 0 ? agent.TransferTo : "none",
+                    TransferTo = Handoff(agent, choices),
                     VoiceId = agent.VoiceId.Length > 0 ? agent.VoiceId : SiteDefault,
                 })
                 .ToList();
@@ -126,8 +139,32 @@ namespace Techie.Pbx.Web.Pages.AiAgents
             return this.Changed($"AI agent {agent.Number} saved.");
         }
 
+        /// <summary>
+        /// The handoff's label, "None" without one, or the stored key marked gone when what it
+        /// pointed at has been deleted or disabled since (D201).
+        /// </summary>
+        private static string Handoff(AiAgent agent, List<DestinationChoice> choices)
+        {
+            if (agent.TransferTo.Length == 0)
+                return "None";
+
+            var choice = choices.FirstOrDefault(c => string.Equals(c.Destination.Key, agent.TransferTo, StringComparison.Ordinal));
+            return choice?.Label ?? $"{agent.TransferTo} (gone)";
+        }
+
         /// <summary>A posted field, trimmed. A field the user left blank arrives as null.</summary>
         private static string Text(string? value) => (value ?? "").Trim();
+
+        /// <summary>
+        /// Every place a call can be sent except an AI agent, which the save refuses as a handoff:
+        /// an agent handing to an agent is a loop nobody means (D201).
+        /// </summary>
+        private List<DestinationChoice> Catalog() =>
+            DestinationCatalog.All(
+                    this.extensions.GetAll(), this.ringGroups.GetAll(), this.announcements.GetAll(), this.ivrs.GetAll(),
+                    this.timeConditions.GetAll(), this.callFlowControls.GetAll(), this.aiAgents.GetAll())
+                .Where(c => c.Destination.Type != DestinationType.AiAgent)
+                .ToList();
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.
@@ -147,10 +184,19 @@ namespace Techie.Pbx.Web.Pages.AiAgents
             return new StatusCodeResult(StatusCodes.Status204NoContent);
         }
 
-        /// <summary>The list the form cannot know for itself: the extensions a caller can be handed to.</summary>
+        /// <summary>The list the form cannot know for itself: every place a caller can be handed to.</summary>
         private AiAgentForm Fill(AiAgentForm form)
         {
-            form.Extensions = this.extensions.GetAll().Where(e => e.Enabled).ToList();
+            form.TransferChoices = new DestinationSelect
+            {
+                Choices = this.Catalog(),
+                ElementID = "agent-transfer",
+                Name = "transferTo",
+                Placeholder = "None — the call ends with the agent",
+                Required = false,
+                SelectedKey = string.IsNullOrEmpty(form.TransferTo) ? null : form.TransferTo,
+            };
+
             return form;
         }
     }

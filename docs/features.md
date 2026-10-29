@@ -283,7 +283,9 @@ it knows who it is, what the business is, and what it may do.
   always-on call monitoring.
 
 Settled in D199: an agent is its own entity (number, name, prompt, greeting, voice, model,
-optional handoff extension) and may hand a caller to a real extension.
+optional handoff) and may hand a caller on. **Widened in D201:** the handoff is any destination
+from the shared picker except another AI agent — an extension, a ring group, voicemail, an IVR,
+an announcement, a time condition or a call flow control — still fixed per agent.
 
 Settled in D200: speech-to-text is ElevenLabs Scribe on the same key; a call is turn-by-turn with
 barge-in on by default; and a provider failure is not a dead line — the service closes the socket so

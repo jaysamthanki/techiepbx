@@ -7,7 +7,7 @@ namespace Techie.Pbx.Tests.Core
 {
     /// <summary>
     /// AI agent validation that needs the database (D199): the number has to be free from either
-    /// side, a handoff has to be an extension that rings, and a renumber takes references with it.
+    /// side, a handoff has to be a live destination other than an agent, and a renumber takes references with it.
     /// </summary>
     public class AiAgentRepositoryTests : IDisposable
     {
@@ -63,7 +63,7 @@ namespace Techie.Pbx.Tests.Core
         {
             AddExtension("1001");
 
-            var agent = Agent(transferTo: "1001");
+            var agent = Agent(transferTo: "Extension:1001");
             agent.Greeting = "Hello.";
             agent.VoiceId = "voice_1";
             agent.Model = "vendor/model";
@@ -75,7 +75,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("Hello.", loaded.Greeting);
             Assert.Equal("voice_1", loaded.VoiceId);
             Assert.Equal("vendor/model", loaded.Model);
-            Assert.Equal("1001", loaded.TransferTo);
+            Assert.Equal("Extension:1001", loaded.TransferTo);
             Assert.True(loaded.Enabled);
             Assert.Equal(loaded.ServiceUuid, this.agents.GetByNumber("7300")!.ServiceUuid);
         }
@@ -150,20 +150,69 @@ namespace Techie.Pbx.Tests.Core
             Assert.NotEmpty(Refused(() => this.agents.Insert(Agent("7300"))).Errors);
         }
 
+        private const string Gone = "That transfer destination is not there any more. Choose another.";
+
+        private long AddRingGroup(string number, bool enabled = true) =>
+            new RingGroupRepository(this.database).Insert(new RingGroup
+            {
+                Number = number,
+                Name = "Front desk",
+                Members = "1001",
+                DestinationType = "Hangup",
+                Enabled = enabled,
+            });
+
+        [Fact]
+        public void The_transfer_can_be_a_ring_group()
+        {
+            AddExtension("1001");
+            AddRingGroup("600");
+
+            var id = this.agents.Insert(Agent(transferTo: "RingGroup:600"));
+
+            Assert.Equal("RingGroup:600", this.agents.GetByID(id)!.ToTransferDestination()!.Key);
+        }
+
+        [Fact]
+        public void The_transfer_cannot_be_another_agent()
+        {
+            this.agents.Insert(Agent("7301"));
+
+            Assert.Contains("An agent cannot transfer a call to an AI agent.",
+                Refused(() => this.agents.Insert(Agent(transferTo: "AiAgent:7301"))).Errors);
+        }
+
         [Fact]
         public void The_transfer_target_has_to_exist()
         {
-            Assert.Contains("There is no extension 1009 to transfer to.",
-                Refused(() => this.agents.Insert(Agent(transferTo: "1009"))).Errors);
+            Assert.Contains(Gone, Refused(() => this.agents.Insert(Agent(transferTo: "Extension:1009"))).Errors);
+            Assert.Contains(Gone, Refused(() => this.agents.Insert(Agent(transferTo: "RingGroup:609"))).Errors);
         }
 
         [Fact]
         public void The_transfer_target_has_to_be_enabled()
         {
+            AddExtension("1001");
             AddExtension("1002", enabled: false);
+            AddRingGroup("600", enabled: false);
 
-            Assert.Contains("Extension 1002 is disabled, so a transferred call would never ring.",
-                Refused(() => this.agents.Insert(Agent(transferTo: "1002"))).Errors);
+            Assert.Contains(Gone, Refused(() => this.agents.Insert(Agent(transferTo: "Extension:1002"))).Errors);
+            Assert.Contains(Gone, Refused(() => this.agents.Insert(Agent(transferTo: "RingGroup:600"))).Errors);
+        }
+
+        [Fact]
+        public void Renumbering_the_transfer_target_takes_the_handoff_with_it()
+        {
+            AddExtension("1001");
+            var groups = new RingGroupRepository(this.database);
+            var groupID = AddRingGroup("600");
+            var id = this.agents.Insert(Agent(transferTo: "RingGroup:600"));
+
+            var group = groups.GetByID(groupID)!;
+            group.Number = "610";
+            groups.Update(group);
+
+            Assert.Equal("RingGroup:610", this.agents.GetByID(id)!.TransferTo);
         }
 
         [Fact]

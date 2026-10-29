@@ -80,15 +80,7 @@
 
     <div class="mb-3">
         <label class="form-label" for="agent-transfer">Transfer to</label>
-        <select class="form-select" id="agent-transfer" name="transferTo">
-            <option value="" selected="@(string.IsNullOrEmpty(Model.TransferTo) ? "selected" : null)">None — the call ends with the agent</option>
-            @foreach (var extension in Model.Extensions)
-            {
-                <option value="@extension.Number" selected="@(Model.TransferTo == extension.Number ? "selected" : null)">
-                    @extension.Number @extension.Name
-                </option>
-            }
-        </select>
+        <partial name="_DestinationSelect" model="Model.TransferChoices" />
         <div class="form-text">Where the call continues when the agent hands the caller on.</div>
     </div>
 
