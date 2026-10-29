@@ -135,10 +135,11 @@ namespace Techie.Pbx.Core.Ai
         {
             var model = this.agent.Model.Length > 0 ? this.agent.Model : this.settings.OpenRouterModel;
             var silentTurns = 0;
+            var turn = 0;
 
             if (!string.IsNullOrWhiteSpace(this.agent.Greeting))
             {
-                if (await this.SayAsync(socket, this.agent.Greeting.Trim(), this.settings.BargeIn, cancellationToken) == Playback.CallerGone)
+                if ((await this.SayAsync(socket, this.agent.Greeting.Trim(), this.settings.BargeIn, cancellationToken)).Playback == Playback.CallerGone)
                     return AiCallOutcome.CallerHungUp;
             }
 
@@ -149,7 +150,9 @@ namespace Techie.Pbx.Core.Ai
                 if (utterance == null)
                     return AiCallOutcome.CallerHungUp;
 
+                var clock = Stopwatch.StartNew();
                 var heard = await this.transcribe(WavWriter.ToWav(utterance, Endpointer.SampleRateHz), cancellationToken);
+                var transcribeMs = clock.ElapsedMilliseconds;
 
                 if (string.IsNullOrWhiteSpace(heard))
                 {
@@ -160,12 +163,15 @@ namespace Techie.Pbx.Core.Ai
                 }
 
                 silentTurns = 0;
+                turn++;
                 this.Remember("user", heard.Trim());
 
                 var messages = new List<(string Role, string Content)> { ("system", SystemPrompt(this.agent)) };
                 messages.AddRange(this.history);
 
+                clock.Restart();
                 var reply = await this.chat(messages, model, cancellationToken);
+                var chatMs = clock.ElapsedMilliseconds;
                 var transfer = reply.Contains(TransferToken, StringComparison.Ordinal);
                 var spoken = reply.Replace(TransferToken, "", StringComparison.Ordinal).Trim();
 
@@ -174,9 +180,16 @@ namespace Techie.Pbx.Core.Ai
                     this.Remember("assistant", spoken);
 
                     // A goodbye before a transfer is played out whole: the caller is leaving either way.
-                    var playback = await this.SayAsync(socket, spoken, this.settings.BargeIn && !transfer, cancellationToken);
+                    var said = await this.SayAsync(socket, spoken, this.settings.BargeIn && !transfer, cancellationToken);
 
-                    if (playback == Playback.CallerGone)
+                    // One line per turn, measuring what the caller actually waits through: the model's
+                    // time to first speech is transcribe + chat + speak, and the playback that follows
+                    // runs at real time. Counts and milliseconds only — never the words (D200).
+                    this.log.Info(
+                        $"AI agent {this.agent.Number}: turn {turn} - heard {heard.Trim().Length} chars in {transcribeMs} ms, " +
+                        $"replied {spoken.Length} chars in {chatMs} ms, speech {said.SpeechMs} ms");
+
+                    if (said.Playback == Playback.CallerGone)
                         return AiCallOutcome.CallerHungUp;
                 }
 
@@ -333,13 +346,19 @@ namespace Techie.Pbx.Core.Ai
                 this.history.RemoveRange(0, this.history.Count - HistoryMessages);
         }
 
-        private async Task<Playback> SayAsync(Stream socket, string text, bool bargeIn, CancellationToken cancellationToken)
+        private async Task<Spoken> SayAsync(Stream socket, string text, bool bargeIn, CancellationToken cancellationToken)
         {
             var voice = this.agent.VoiceId.Length > 0 ? this.agent.VoiceId : this.settings.ElevenLabsVoiceId;
-            var audio = await this.speak(text, this.settings.ElevenLabsModel, voice, cancellationToken);
 
-            return await this.PlayAsync(socket, MuLaw.FromMuLaw(audio), bargeIn, cancellationToken);
+            var clock = Stopwatch.StartNew();
+            var audio = await this.speak(text, this.settings.ElevenLabsModel, voice, cancellationToken);
+            var speechMs = clock.ElapsedMilliseconds;
+
+            return new Spoken(await this.PlayAsync(socket, MuLaw.FromMuLaw(audio), bargeIn, cancellationToken), speechMs);
         }
+
+        /// <summary>How a line came out: how it ended, and how long the provider took to speak it.</summary>
+        private readonly record struct Spoken(Playback Playback, long SpeechMs);
 
         private enum Playback
         {
