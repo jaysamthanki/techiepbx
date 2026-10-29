@@ -261,3 +261,29 @@ web-enabled extensions, the user picks from a dropdown. Design questions open at
 phone-user vs admin separation under D139's required assignment; extensions with no
 voicemail email (cannot match, cannot sign in — acceptable?); whether a phone user ever
 sees anything beyond /phone.
+
+## F11. AI voice agent
+
+**Requested 2026-10-29.** A number a caller can dial that answers with a natural voice,
+listens to what the caller says, and replies from an LLM — an answering/receptionist
+persona that belongs to the PBX rather than to an external bot platform. The customer
+brings their own keys: an **OpenRouter** API key plus a model slug, and an **ElevenLabs**
+key plus a voice ID, entered in Settings. Each agent carries its own **system prompt**, so
+it knows who it is, what the business is, and what it may do.
+
+- **Transport**: Asterisk's AudioSocket (`AudioSocket(uuid,host:port)`), one TCP socket per
+  call, 8 kHz PCM each way — no ARI/Stasis app, no new listening port on Asterisk itself.
+- **Pipeline**: endpointing (VAD) → speech-to-text → OpenRouter chat completion with the
+  agent's system prompt → ElevenLabs text-to-speech (`ulaw_8000`) → back into the socket.
+- **Where it attaches**: as a destination (inbound route, IVR key, time condition, CFC) and
+  as a dialable play extension, the way announcements (F7) and time conditions (F8) work.
+- **Keys at rest**: encrypted with the app's data-protection ring, never in a generated conf
+  file or a log.
+- **Not on the list yet**: outbound calling, voicemail-box agents, multi-agent handoff, any
+  always-on call monitoring.
+
+Design questions open at intake: which destination shape (per-extension toggle vs its own
+agent entity); whether the agent may transfer a caller to a real extension in v1 and what it
+falls back to when the LLM or TTS fails; which vendor does speech-to-text (ElevenLabs Scribe
+on the same key, or a second provider key); and whether v1 streams turn-by-turn with barge-in
+or answers only when the caller stops talking.
