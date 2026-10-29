@@ -28,6 +28,9 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>The longest call an agent will hold; then the socket is closed and the dialplan carries on.</summary>
         public static readonly TimeSpan MaxCallDuration = TimeSpan.FromMinutes(10);
 
+        /// <summary>How much of one turn's words a transcript line carries, so one long reply cannot flood the log.</summary>
+        public const int MaxLoggedText = 500;
+
         private readonly AiAgent agent;
         private readonly Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<string>> chat;
         private readonly Endpointer endpointer = new();
@@ -35,6 +38,8 @@ namespace Techie.Pbx.Core.Ai
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
         private readonly List<(string Role, string Content)> history = new();
         private readonly ILog log;
+
+        private readonly List<string> transcript = new();
         private readonly AiSettingsSnapshot settings;
         private readonly Func<string, string, string, CancellationToken, Task<byte[]>> speak;
         private readonly Func<byte[], CancellationToken, Task<string>> transcribe;
@@ -130,12 +135,35 @@ namespace Techie.Pbx.Core.Ai
                 $"say a short goodbye and end your reply with the exact token {TransferToken} on its own.";
         }
 
+        /// <summary>
+        /// The lines this call wrote to the log about what was said (D200): the prompt, then each
+        /// turn's caller and agent words. Empty when <c>Ai.LogTranscripts</c> is off. Kept here as
+        /// well as logged so a test can read exactly what an operator would see.
+        /// </summary>
+        public IReadOnlyList<string> Transcript => this.transcript;
+
+        /// <summary>
+        /// Writes one transcript line: remembered for the caller of this class, and logged once. The
+        /// words come from the caller and the model, so they go out unchanged (flattened).
+        /// </summary>
+        private void Note(string line)
+        {
+            this.transcript.Add(line);
+            this.log.Info(line);
+        }
+
         /// <summary>The turn loop, returning how the call should end.</summary>
         private async Task<AiCallOutcome> ConverseAsync(Stream socket, CancellationToken cancellationToken)
         {
             var model = this.agent.Model.Length > 0 ? this.agent.Model : this.settings.OpenRouterModel;
             var silentTurns = 0;
             var turn = 0;
+            var systemPrompt = SystemPrompt(this.agent);
+
+            // The prompt is logged once per call: it is what the model is being asked to be, so a
+            // strange reply is read against it rather than guessed about (D200).
+            if (this.settings.LogTranscripts)
+                this.Note($"AI agent {this.agent.Number}: prompt ({systemPrompt.Length} chars): {Flat(systemPrompt)}");
 
             if (!string.IsNullOrWhiteSpace(this.agent.Greeting))
             {
@@ -166,7 +194,10 @@ namespace Techie.Pbx.Core.Ai
                 turn++;
                 this.Remember("user", heard.Trim());
 
-                var messages = new List<(string Role, string Content)> { ("system", SystemPrompt(this.agent)) };
+                if (this.settings.LogTranscripts)
+                    this.Note($"AI agent {this.agent.Number}: turn {turn} caller: {Flat(heard)}");
+
+                var messages = new List<(string Role, string Content)> { ("system", systemPrompt) };
                 messages.AddRange(this.history);
 
                 clock.Restart();
@@ -174,6 +205,9 @@ namespace Techie.Pbx.Core.Ai
                 var chatMs = clock.ElapsedMilliseconds;
                 var transfer = reply.Contains(TransferToken, StringComparison.Ordinal);
                 var spoken = reply.Replace(TransferToken, "", StringComparison.Ordinal).Trim();
+
+                if (this.settings.LogTranscripts && spoken.Length > 0)
+                    this.Note($"AI agent {this.agent.Number}: turn {turn} agent: {Flat(spoken)}{(transfer ? " [transfer]" : "")}");
 
                 if (spoken.Length > 0)
                 {
@@ -355,6 +389,17 @@ namespace Techie.Pbx.Core.Ai
             var speechMs = clock.ElapsedMilliseconds;
 
             return new Spoken(await this.PlayAsync(socket, MuLaw.FromMuLaw(audio), bargeIn, cancellationToken), speechMs);
+        }
+
+        /// <summary>
+        /// A transcript line as one string: line breaks flattened to spaces, and a cap so one long
+        /// reply cannot flood the log. The words are the caller's and the model's, not ours to tidy.
+        /// </summary>
+        private static string Flat(string text)
+        {
+            var flat = text.ReplaceLineEndings(" ").Trim();
+
+            return flat.Length <= MaxLoggedText ? flat : flat[..MaxLoggedText] + "...";
         }
 
         /// <summary>How a line came out: how it ended, and how long the provider took to speak it.</summary>

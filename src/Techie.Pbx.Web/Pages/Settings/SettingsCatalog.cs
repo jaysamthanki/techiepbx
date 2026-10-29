@@ -61,6 +61,14 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Choices = Toggles.All,
+                Default = Toggles.On,
+                Description = "Whether each turn's words go into the application log: what the caller said, the system prompt the model was given and what it replied. On makes an agent debuggable and puts caller speech on disk; off keeps only counts and timings.",
+                Key = SettingsKeys.AiLogTranscripts,
+                Sample = Toggles.On,
+            },
+            new SettingDescriptor
+            {
                 Default = Number(AiSettings.DefaultMediaPort),
                 Description = $"The loopback port Asterisk's AudioSocket() dials the media service on, {AiSettings.MinMediaPort} to 65535. Change it only if something else on this server already holds {AiSettings.DefaultMediaPort}; Asterisk dials 127.0.0.1, so nothing on this port is reachable from the network.",
                 Key = SettingsKeys.AiMediaPort,

@@ -667,6 +667,8 @@ namespace Techie.Pbx.Tests.Core
         [Theory]
         [InlineData(SettingsKeys.AiBargeIn, "on")]
         [InlineData(SettingsKeys.AiBargeIn, "off")]
+        [InlineData(SettingsKeys.AiLogTranscripts, "on")]
+        [InlineData(SettingsKeys.AiLogTranscripts, "off")]
         [InlineData(SettingsKeys.AiMediaPort, "9019")]
         [InlineData(SettingsKeys.AiMediaPort, "1024")]
         [InlineData(SettingsKeys.AiMediaPort, "65535")]
@@ -677,6 +679,7 @@ namespace Techie.Pbx.Tests.Core
 
         [Theory]
         [InlineData(SettingsKeys.AiBargeIn, "yes")]
+        [InlineData(SettingsKeys.AiLogTranscripts, "true")]
         [InlineData(SettingsKeys.AiMediaPort, "80")]
         [InlineData(SettingsKeys.AiMediaPort, "0")]
         [InlineData(SettingsKeys.AiMediaPort, "70000")]

@@ -95,6 +95,7 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("An ElevenLabs voice or model name may only contain letters, digits, dots, dashes and underscores.");
                     break;
 
+                case SettingsKeys.AiLogTranscripts:
                 case SettingsKeys.AiBargeIn:
                     if (!Toggles.IsKnown(text))
                         errors.Add($"Barge-in must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is on.");

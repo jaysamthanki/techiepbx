@@ -124,6 +124,7 @@ namespace Techie.Pbx.Tests.Core
                     SettingsKeys.AiElevenLabsApiKey,
                     SettingsKeys.AiElevenLabsModel,
                     SettingsKeys.AiElevenLabsVoiceId,
+                    SettingsKeys.AiLogTranscripts,
                     SettingsKeys.AiOpenRouterApiKey,
                     SettingsKeys.AiOpenRouterModel,
                     SettingsKeys.AiSttModel,
@@ -168,6 +169,7 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.AiMediaPort, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.AiOpenRouterApiKey, SettingScope.App)]
         [InlineData(SettingsKeys.AiBargeIn, SettingScope.App)]
+        [InlineData(SettingsKeys.AiLogTranscripts, SettingScope.App)]
         public void Keys_are_scoped_by_what_reads_them(string key, SettingScope expected)
         {
             Assert.Equal(expected, SettingsKeys.ScopeOf(key));

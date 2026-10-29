@@ -19,6 +19,9 @@ namespace Techie.Pbx.Core.Ai
 
         public string ElevenLabsVoiceId { get; init; } = "";
 
+        /// <summary>Whether the log carries the words of each turn (F11, D200).</summary>
+        public bool LogTranscripts { get; init; } = true;
+
         /// <summary>Whether both provider keys are present: without either, no call can be answered.</summary>
         public bool IsConfigured => this.ElevenLabsApiKey.Length > 0 && this.OpenRouterApiKey.Length > 0;
 
@@ -33,6 +36,7 @@ namespace Techie.Pbx.Core.Ai
         public static AiSettingsSnapshot From(IReadOnlyDictionary<string, string> settings) => new()
         {
             BargeIn = Toggles.Is(settings, SettingsKeys.AiBargeIn, whenUnset: true),
+            LogTranscripts = Toggles.Is(settings, SettingsKeys.AiLogTranscripts, whenUnset: true),
             ElevenLabsApiKey = Text(settings, SettingsKeys.AiElevenLabsApiKey, ""),
             ElevenLabsModel = Text(settings, SettingsKeys.AiElevenLabsModel, AiSettings.DefaultTtsModel),
             ElevenLabsVoiceId = Text(settings, SettingsKeys.AiElevenLabsVoiceId, ""),
@@ -49,7 +53,8 @@ namespace Techie.Pbx.Core.Ai
         public override string ToString() =>
             $"AiSettingsSnapshot {{ BargeIn = {this.BargeIn}, ElevenLabsModel = {this.ElevenLabsModel}, " +
             $"ElevenLabsVoiceId = {this.ElevenLabsVoiceId}, MediaPort = {this.MediaPort}, " +
-            $"OpenRouterModel = {this.OpenRouterModel}, SttModel = {this.SttModel}, IsConfigured = {this.IsConfigured} }}";
+            $"OpenRouterModel = {this.OpenRouterModel}, SttModel = {this.SttModel}, IsConfigured = {this.IsConfigured}, " +
+            $"LogTranscripts = {this.LogTranscripts} }}";
 
         /// <summary>The same range the Settings page accepts; outside it, the default (D199).</summary>
         private static int Port(IReadOnlyDictionary<string, string> settings) =>

@@ -4120,5 +4120,12 @@ turn. It never touches ARI or AMI; every way the agent ends a call is closing th
   failure (status, timeout of 15/20/15 s, network, unexpected JSON) is an `AiProviderException`
   whose message is a status code and the provider's error text with the key scrubbed out; it is
   logged and the socket closes, so the caller reaches the handoff extension or is hung up.
-- **What is logged.** One INFO line per call: agent number, duration, outcome. Never a transcript,
-  never a reply, never a key (`AiSettingsSnapshot.ToString` omits both keys).
+- **What is logged.** One INFO line per call: agent number, duration, outcome; and one line per
+  turn: the caller's words, the agent's reply, and the milliseconds each provider took. The system
+  prompt is logged once per call, because a strange answer is read against it. Never a key
+  (`AiSettingsSnapshot.ToString` omits both). **Amended the same day, on the user's ask:** the first
+  version logged no words at all, which made a misbehaving agent undebuggable. Words are now logged
+  behind the `Ai.LogTranscripts` toggle (App scope, **on** by default), each line flattened to one
+  line and capped at 500 characters. On means caller speech is on disk — the honest cost of being
+  able to see why the agent said what it said — so a site that must not record callers switches it
+  off and keeps only counts and timings.

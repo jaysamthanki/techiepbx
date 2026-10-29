@@ -15,6 +15,7 @@ namespace Techie.Pbx.Tests.Ai
             var snapshot = AiSettingsSnapshot.From(new Dictionary<string, string>());
 
             Assert.True(snapshot.BargeIn);
+            Assert.True(snapshot.LogTranscripts);
             Assert.Equal(AiSettings.DefaultTtsModel, snapshot.ElevenLabsModel);
             Assert.Equal(AiSettings.DefaultSttModel, snapshot.SttModel);
             Assert.Equal(AiSettings.DefaultMediaPort, snapshot.MediaPort);
@@ -28,6 +29,7 @@ namespace Techie.Pbx.Tests.Ai
             {
                 [SettingsKeys.AiBargeIn] = Toggles.Off,
                 [SettingsKeys.AiElevenLabsApiKey] = Key,
+                [SettingsKeys.AiLogTranscripts] = Toggles.Off,
                 [SettingsKeys.AiElevenLabsVoiceId] = " voice1 ",
                 [SettingsKeys.AiMediaPort] = "9100",
                 [SettingsKeys.AiOpenRouterApiKey] = Key,
@@ -35,6 +37,7 @@ namespace Techie.Pbx.Tests.Ai
             });
 
             Assert.False(snapshot.BargeIn);
+            Assert.False(snapshot.LogTranscripts);
             Assert.Equal("voice1", snapshot.ElevenLabsVoiceId);
             Assert.Equal(9100, snapshot.MediaPort);
             Assert.Equal("vendor/model", snapshot.OpenRouterModel);

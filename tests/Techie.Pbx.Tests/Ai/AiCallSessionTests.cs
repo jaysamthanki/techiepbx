@@ -52,11 +52,13 @@ namespace Techie.Pbx.Tests.Ai
             Func<string> heard,
             int replyFrames = 3,
             bool bargeIn = true,
-            Exception? transcribeFailure = null)
+            Exception? transcribeFailure = null,
+            bool logTranscripts = true)
         {
             var settings = new AiSettingsSnapshot
             {
                 BargeIn = bargeIn,
+                LogTranscripts = logTranscripts,
                 ElevenLabsApiKey = "test_key_0123456789abcdef",
                 ElevenLabsVoiceId = "voice1",
                 OpenRouterApiKey = "test_key_0123456789abcdef",
@@ -116,6 +118,41 @@ namespace Techie.Pbx.Tests.Ai
             Assert.All(frames, f => Assert.Equal(Endpointer.WindowSamples * 2, f.Payload.Length));
             Assert.Equal(AiCallOutcome.CallerHungUp, session.Outcome);
             Assert.True(this.stream.IsDisposed);
+        }
+
+        /// <summary>
+        /// The point of the transcript log (D200): the prompt once per call, then the caller's words
+        /// and the agent's reply each turn, so a strange answer can be read against what was asked.
+        /// </summary>
+        [Fact]
+        public async Task The_transcript_carries_the_prompt_the_caller_and_the_reply()
+        {
+            var session = this.Session(Agent(), _ => "We open at nine.", () => "When do you open?");
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+            await this.stream.WaitForFramesAsync(3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Contains(session.Transcript, l => l.Contains("prompt (", StringComparison.Ordinal) && l.Contains("You are the receptionist.", StringComparison.Ordinal));
+            Assert.Contains(session.Transcript, l => l.Contains("turn 1 caller: When do you open?", StringComparison.Ordinal));
+            Assert.Contains(session.Transcript, l => l.Contains("turn 1 agent: We open at nine.", StringComparison.Ordinal));
+        }
+
+        /// <summary>Switched off, the same call says nothing about what was said.</summary>
+        [Fact]
+        public async Task The_transcript_is_empty_when_the_setting_is_off()
+        {
+            var session = this.Session(Agent(), _ => "We open at nine.", () => "When do you open?", logTranscripts: false);
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+            await this.stream.WaitForFramesAsync(3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Empty(session.Transcript);
         }
 
         [Fact]

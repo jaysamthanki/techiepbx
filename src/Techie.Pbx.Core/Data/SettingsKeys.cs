@@ -56,6 +56,15 @@ namespace Techie.Pbx.Core.Data
         public const string AiSttModel = "Ai.SttModel";
 
         /// <summary>
+        /// Whether each turn's words are written to the application log (F11, D200): a
+        /// <see cref="Models.Toggles"/> value, on unless somebody turns it off. On, the log carries what
+        /// the caller said, the system prompt the model was given and what it replied — which is what
+        /// makes an agent's behaviour debuggable, and also means caller speech is on disk. Off, the log
+        /// keeps only counts and timings.
+        /// </summary>
+        public const string AiLogTranscripts = "Ai.LogTranscripts";
+
+        /// <summary>
         /// Whether the agent stops talking the moment the caller speaks (F11, D198): a <see cref="Models.Toggles"/>
         /// value, on unless somebody turns it off. Off means the agent finishes its sentence before
         /// it listens again — cheaper, and the fallback when a site's lines echo too much.
@@ -314,6 +323,7 @@ namespace Techie.Pbx.Core.Data
             AiElevenLabsApiKey,
             AiElevenLabsModel,
             AiElevenLabsVoiceId,
+            AiLogTranscripts,
             AiMediaPort,
             AiOpenRouterApiKey,
             AiOpenRouterModel,
@@ -394,6 +404,7 @@ namespace Techie.Pbx.Core.Data
             [AiElevenLabsApiKey] = SettingScope.App,
             [AiElevenLabsModel] = SettingScope.App,
             [AiElevenLabsVoiceId] = SettingScope.App,
+            [AiLogTranscripts] = SettingScope.App,
             [AiMediaPort] = SettingScope.Asterisk,
             [AiOpenRouterApiKey] = SettingScope.App,
             [AiOpenRouterModel] = SettingScope.App,
