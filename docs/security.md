@@ -79,8 +79,9 @@ startup WARNING names the allowed networks.
   (D31). A feature that needs a new module adds it in the same change, and the list is reviewed
   the same way as any other code.
 - AMI binds to `127.0.0.1` and permits only `127.0.0.1`, with `webenabled = no`, and the account
-  gets `read = system,cdr` / `write = system,config` — no `command`, no `originate` (D32;
-  `cdr` added in piece 18 for the call reports, as D32 anticipated).
+  gets `read = system,cdr` / `write = system,config,call` — no `command`, no `originate` (D32;
+  `cdr` added in piece 18 for the call reports, as D32 anticipated; `call` added in piece 52e for
+  the AI agent's `Redirect`, D202).
 - AMI binds to `127.0.0.1` only.
 
 ### Secrets

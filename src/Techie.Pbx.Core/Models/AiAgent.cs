@@ -15,11 +15,17 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public partial class AiAgent
     {
+        /// <summary>What the agent says before a transfer to a named extension when its own line is blank (D203).</summary>
+        public const string DefaultTransferLine = "One moment, putting you through.";
+
         /// <summary>The longest greeting, in characters. A sentence or two, not a speech.</summary>
         public const int MaxGreetingLength = 256;
 
         /// <summary>The longest system prompt, in characters. Every turn sends it, so it is bounded.</summary>
         public const int MaxPromptLength = 4000;
+
+        /// <summary>The longest transfer line, in characters: as short as a greeting.</summary>
+        public const int MaxTransferLineLength = 256;
 
         public long AiAgentID { get; set; }
 
@@ -43,6 +49,13 @@ namespace Techie.Pbx.Core.Models
 
         /// <summary>The system prompt: who the agent is, what the business is, what it may do.</summary>
         public string Prompt { get; set; } = "";
+
+        /// <summary>
+        /// What the agent says just before it puts a caller through to an extension the model chose
+        /// (D203). Canned rather than asked of the model, which would be a second round trip with
+        /// the caller waiting in silence. Empty for <see cref="DefaultTransferLine"/>.
+        /// </summary>
+        public string TransferLine { get; set; } = "";
 
         /// <summary>
         /// Where the call continues when the agent hands off, as a <see cref="Destination.Key"/>
@@ -115,6 +128,11 @@ namespace Techie.Pbx.Core.Models
                 errors.Add($"Greeting must be {MaxGreetingLength} characters or fewer.");
             else if (this.Greeting.Any(char.IsControl))
                 errors.Add("Greeting must be one line of plain text.");
+
+            if (this.TransferLine.Length > MaxTransferLineLength)
+                errors.Add($"Transfer line must be {MaxTransferLineLength} characters or fewer.");
+            else if (this.TransferLine.Any(char.IsControl))
+                errors.Add("Transfer line must be one line of plain text.");
 
             if (this.VoiceId.Length > 0 && !IsValidVoiceId(this.VoiceId))
                 errors.Add("Voice ID may only contain letters, digits and . _ - (up to 64), or be blank for the site default.");

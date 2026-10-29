@@ -18,13 +18,20 @@ namespace Techie.Pbx.Asterisk.Config
 
         /// <summary>
         /// Read: "system" carries the answers to PJSIPShowContacts, and "cdr" the Cdr events the
-        /// call reports are collected from (F5, anticipated by D32). Write: "system" and "config"
-        /// are between them what Action: Reload needs. No "command" permission, because we do not
-        /// use Action: Command (D17), and no "originate", because nothing here places calls.
+        /// call reports are collected from (F5, anticipated by D32). No "command" permission,
+        /// because we do not use Action: Command (D17).
         /// </summary>
         private const string ReadPermissions = "system,cdr";
 
-        private const string WritePermissions = "system,config";
+        /// <summary>
+        /// Write: "system" and "config" are between them what Action: Reload needs. "call" is what
+        /// Action: Redirect needs, and it is here only for the AI agent's transfer to a named
+        /// extension (D202): AudioSocket carries audio and nothing else, so moving the agent's
+        /// channel has to be done from outside it. "call" also covers hanging up and redirecting
+        /// any channel, which nothing else here uses. "originate" stays denied: nothing here
+        /// places calls.
+        /// </summary>
+        private const string WritePermissions = "system,config,call";
 
         public static string Render(AmiSettings ami)
         {

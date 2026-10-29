@@ -62,6 +62,7 @@ namespace Techie.Pbx.Web.Pages.AiAgents
                 Name = agent.Name,
                 Number = agent.Number,
                 Prompt = agent.Prompt,
+                TransferLine = agent.TransferLine,
                 TransferTo = agent.TransferTo,
                 VoiceId = agent.VoiceId,
             }));
@@ -117,6 +118,7 @@ namespace Techie.Pbx.Web.Pages.AiAgents
             agent.Name = Text(form.Name);
             agent.Number = Text(form.Number);
             agent.Prompt = Text(form.Prompt);
+            agent.TransferLine = Text(form.TransferLine);
             agent.TransferTo = Text(form.TransferTo);
             agent.VoiceId = Text(form.VoiceId);
 

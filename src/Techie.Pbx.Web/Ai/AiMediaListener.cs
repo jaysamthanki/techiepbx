@@ -2,8 +2,11 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using log4net;
+using Techie.Pbx.Asterisk.Ami;
+using Techie.Pbx.Asterisk.Config;
 using Techie.Pbx.Core.Ai;
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Web.Ai
 {
@@ -11,8 +14,9 @@ namespace Techie.Pbx.Web.Ai
     /// The far end of every AI agent's <c>AudioSocket()</c> (F11, D199, D200): a TCP listener on
     /// 127.0.0.1 at <c>Ai.MediaPort</c>, one <see cref="AiCallSession"/> per connection. A hosted
     /// service for the reason <c>CdrCollectorService</c> is one; everything it uses is built with
-    /// <c>new</c>, and it never talks to ARI or AMI — a call is handed back to the dialplan by
-    /// closing its socket.
+    /// <c>new</c>. A call is handed back to the dialplan by closing its socket; the one exception
+    /// is a transfer to an extension the model chose, which moves the channel by AMI Redirect
+    /// (D202, D203). It never talks to ARI.
     ///
     /// The port is read once, at start: a changed port needs an app restart, as well as the apply
     /// that writes it into the dialplan. The keys and voices are read per call, so a change on the
@@ -22,6 +26,12 @@ namespace Techie.Pbx.Web.Ai
     {
         /// <summary>Calls answered at once. One beyond it is refused, and the dialplan carries on.</summary>
         public const int MaxConcurrentCalls = 8;
+
+        /// <summary>
+        /// The most extensions offered to the model as transfer targets: enough for a small office,
+        /// and a bound on how long the tool's description and enum can grow (D203).
+        /// </summary>
+        public const int MaxTransferTargets = 50;
 
         /// <summary>How long Asterisk has to send the UUID after connecting.</summary>
         public static readonly TimeSpan FirstFrameTimeout = TimeSpan.FromSeconds(5);
@@ -149,13 +159,17 @@ namespace Techie.Pbx.Web.Ai
                         return;
                     }
 
+                    var targets = TransferTargets();
+
                     var session = new AiCallSession(
                         agent,
                         settings,
                         Log,
+                        targets,
                         (wav, ct) => AiProviders.TranscribeAsync(Http, settings, wav, ct),
-                        (messages, model, ct) => AiProviders.ChatAsync(Http, settings, model, messages, ct),
-                        (text, model, voice, ct) => AiProviders.SpeakAsync(Http, settings, model, voice, text, ct));
+                        (messages, model, ct) => AiProviders.ChatAsync(Http, settings, model, messages, targets, ct),
+                        (text, model, voice, ct) => AiProviders.SpeakAsync(Http, settings, model, voice, text, ct),
+                        (extension, ct) => TransferAsync(agent, extension, ct));
 
                     var clock = Stopwatch.StartNew();
                     await session.RunAsync(stream, stoppingToken);
@@ -176,5 +190,59 @@ namespace Techie.Pbx.Web.Ai
                 }
             }
         }
+
+        /// <summary>
+        /// Moves the agent's call to an extension (D203): finds the one channel in this agent's
+        /// <c>AudioSocket()</c> and redirects it to the extension in the internal context. No
+        /// channel, or more than one, is false: two calls to the same agent must never be crossed.
+        /// AMI is synchronous and short lived, as everywhere else in the app, so it runs off the
+        /// call's own thread.
+        /// </summary>
+        private static Task<bool> TransferAsync(AiAgent agent, string extension, CancellationToken cancellationToken)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    using var client = new AmiClient(AsteriskSettings.Ami(new SettingsRepository(PbxDatabase.Current).GetAll()));
+                    var ami = client.Connect();
+
+                    var channel = AiAgentChannel.Find(ami.ShowChannels(), agent.Number, out var matches);
+
+                    if (channel == null)
+                    {
+                        Log.Warn(matches == 0
+                            ? $"AI agent {agent.Number}: transfer to {extension} failed: no channel is in its AudioSocket."
+                            : $"AI agent {agent.Number}: transfer to {extension} failed: {matches} channels are in its AudioSocket, and which one asked cannot be told.");
+                        return false;
+                    }
+
+                    if (!ami.Redirect(channel.Channel, ExtensionsConfRenderer.InternalContext, extension))
+                    {
+                        Log.Warn($"AI agent {agent.Number}: transfer to {extension} failed: Asterisk refused the redirect.");
+                        return false;
+                    }
+
+                    return true;
+                }
+                catch (Exception ex) when (ex is AmiException or InvalidOperationException)
+                {
+                    Log.Warn($"AI agent {agent.Number}: transfer to {extension} failed: {ex.Message}");
+                    return false;
+                }
+            }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Who the model may put a caller through to: the enabled extensions, by number, up to
+        /// <see cref="MaxTransferTargets"/>. Read per call, like the settings, so a new extension is
+        /// offered from the next call on. A nameless extension is offered under its number.
+        /// </summary>
+        private static List<(string Extension, string Name)> TransferTargets() =>
+            new ExtensionRepository(PbxDatabase.Current).GetAll()
+                .Where(e => e.Enabled)
+                .Take(MaxTransferTargets)
+                .Select(e => (e.Number, e.Name.Trim().Length > 0 ? e.Name.Trim() : e.Number))
+                .ToList();
     }
 }

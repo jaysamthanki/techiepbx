@@ -84,6 +84,16 @@
         <div class="form-text">Where the call continues when the agent hands the caller on.</div>
     </div>
 
+    <div class="mb-3">
+        <label class="form-label" for="agent-transfer-line">Transfer line</label>
+        <input class="form-control" id="agent-transfer-line" name="transferLine" value="@Model.TransferLine"
+               maxlength="@AiAgent.MaxTransferLineLength" autocomplete="off" placeholder="@AiAgent.DefaultTransferLine" />
+        <div class="form-text">
+            What the agent says just before it puts a caller through to someone they asked for by
+            name. Blank uses the default.
+        </div>
+    </div>
+
     <div class="form-check mb-4">
         <input class="form-check-input" type="checkbox" id="agent-enabled" name="enabled" value="true"
                checked="@(Model.Enabled ? "checked" : null)" />

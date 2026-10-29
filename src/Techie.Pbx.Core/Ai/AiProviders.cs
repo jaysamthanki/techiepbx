@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Techie.Pbx.Core.Ai
 {
@@ -11,6 +12,9 @@ namespace Techie.Pbx.Core.Ai
     /// over the one shared <see cref="HttpClient"/>, each with its own timeout, because a caller
     /// on the line cannot wait for a provider that has stopped answering.
     ///
+    /// The chat can offer the model one tool, <see cref="TransferToolName"/>, whose only argument
+    /// is one of the extensions it was given (D203); with none given, no tool is offered at all.
+    ///
     /// Every failure — a status code, a timeout, a network error, an answer that is not what was
     /// asked for — is an <see cref="AiProviderException"/> whose message names no key.
     /// </summary>
@@ -18,6 +22,9 @@ namespace Techie.Pbx.Core.Ai
     {
         /// <summary>How long a chat completion may take. The caller is waiting in silence for it.</summary>
         public static readonly TimeSpan ChatTimeout = TimeSpan.FromSeconds(20);
+
+        /// <summary>The one tool the model can call: put the caller through to an extension (D203).</summary>
+        public const string TransferToolName = "transfer_call";
 
         /// <summary>How long one reply's speech may take.</summary>
         public static readonly TimeSpan SpeakTimeout = TimeSpan.FromSeconds(15);
@@ -38,11 +45,16 @@ namespace Techie.Pbx.Core.Ai
         private const string SpeechToTextUri = "https://api.elevenlabs.io/v1/speech-to-text";
         private const string TextToSpeechUri = "https://api.elevenlabs.io/v1/text-to-speech/";
 
-        public static async Task<string> ChatAsync(
+        /// <summary>
+        /// One chat completion. <paramref name="transferTargets"/> are the extensions the model may
+        /// put the caller through to; empty sends no tools, exactly as before D203.
+        /// </summary>
+        public static async Task<AiChatReply> ChatAsync(
             HttpClient http,
             AiSettingsSnapshot settings,
             string model,
             IReadOnlyList<(string Role, string Content)> messages,
+            IReadOnlyList<(string Extension, string Name)> transferTargets,
             CancellationToken cancellationToken)
         {
             const string provider = "OpenRouter chat";
@@ -52,24 +64,86 @@ namespace Techie.Pbx.Core.Ai
 
             using var request = new HttpRequestMessage(HttpMethod.Post, ChatUri)
             {
-                Content = JsonContent.Create(new
-                {
-                    model,
-                    // Low temperature because this is a receptionist, not a writer: the same question
-                    // should get the same answer, and invention is the failure mode that matters.
-                    temperature = 0.2,
-                    // Short replies are the point on a phone call, and the cap is what stops a model
-                    // from producing a paragraph nobody wants read aloud.
-                    max_tokens = 250,
-                    messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
-                }),
+                Content = JsonContent.Create(ChatRequest(model, messages, transferTargets)),
             };
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenRouterApiKey);
 
             var body = await SendAsync(http, request, provider, ChatTimeout, settings.OpenRouterApiKey, cancellationToken);
 
-            return ReadJson(body, provider, root =>
-                root.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString());
+            return ReadChatReply(body);
+        }
+
+        /// <summary>
+        /// The chat request body. Separate from the sending so its shape can be checked without a
+        /// network: the tool, and its enum of extensions, are only there when there are targets.
+        /// </summary>
+        public static JsonObject ChatRequest(
+            string model,
+            IReadOnlyList<(string Role, string Content)> messages,
+            IReadOnlyList<(string Extension, string Name)> transferTargets)
+        {
+            var request = new JsonObject
+            {
+                ["model"] = model,
+                // Low temperature because this is a receptionist, not a writer: the same question
+                // should get the same answer, and invention is the failure mode that matters.
+                ["temperature"] = 0.2,
+                // Short replies are the point on a phone call, and the cap is what stops a model
+                // from producing a paragraph nobody wants read aloud.
+                ["max_tokens"] = 250,
+                ["messages"] = new JsonArray(messages
+                    .Select(m => (JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content })
+                    .ToArray()),
+            };
+
+            if (transferTargets.Count > 0)
+                request["tools"] = new JsonArray(TransferTool(transferTargets));
+
+            return request;
+        }
+
+        /// <summary>
+        /// The chat answer: the first choice's words and its first tool call, either of which may
+        /// be missing. A model that answered with neither has said nothing, which is an empty
+        /// reply rather than a failure.
+        /// </summary>
+        public static AiChatReply ReadChatReply(byte[] body)
+        {
+            const string provider = "OpenRouter chat";
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var message = document.RootElement.GetProperty("choices")[0].GetProperty("message");
+
+                var content = message.TryGetProperty("content", out var text) && text.ValueKind == JsonValueKind.String
+                    ? text.GetString() ?? ""
+                    : "";
+
+                AiToolCall? toolCall = null;
+
+                if (message.TryGetProperty("tool_calls", out var calls) &&
+                    calls.ValueKind == JsonValueKind.Array &&
+                    calls.GetArrayLength() > 0)
+                {
+                    var function = calls[0].GetProperty("function");
+                    var name = function.GetProperty("name").GetString() ?? "";
+
+                    // OpenAI's shape is a JSON string holding the arguments; a provider that sends
+                    // the object itself is read the same way.
+                    var arguments = !function.TryGetProperty("arguments", out var args) ? "{}"
+                        : args.ValueKind == JsonValueKind.String ? args.GetString() ?? "{}"
+                        : args.GetRawText();
+
+                    toolCall = new AiToolCall(name, arguments);
+                }
+
+                return new AiChatReply { Content = content, ToolCall = toolCall };
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+            {
+                throw new AiProviderException($"{provider} answered with something other than the expected JSON.");
+            }
         }
 
         /// <summary>The reply's speech as μ-law 8 kHz bytes, exactly what <c>ulaw_8000</c> returns.</summary>
@@ -122,6 +196,43 @@ namespace Techie.Pbx.Core.Ai
             var body = await SendAsync(http, request, provider, TranscribeTimeout, settings.ElevenLabsApiKey, cancellationToken);
 
             return ReadJson(body, provider, root => root.GetProperty("text").GetString());
+        }
+
+        /// <summary>
+        /// The <see cref="TransferToolName"/> function. The extension is an enum, so a model that
+        /// follows the schema cannot name one it was not given, and the description carries the
+        /// names ("101 Jaysam, 102 Anishi") so it can match a name the caller says to a number.
+        /// The session checks the answer against the same list anyway (D203).
+        /// </summary>
+        public static JsonObject TransferTool(IReadOnlyList<(string Extension, string Name)> transferTargets)
+        {
+            var staff = string.Join(", ", transferTargets.Select(t => $"{t.Extension} {t.Name}"));
+
+            return new JsonObject
+            {
+                ["type"] = "function",
+                ["function"] = new JsonObject
+                {
+                    ["name"] = TransferToolName,
+                    ["description"] =
+                        "Transfer the caller to a member of staff by extension. Use this only when the caller asks to " +
+                        $"speak to a person. Staff: {staff}.",
+                    ["parameters"] = new JsonObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JsonObject
+                        {
+                            ["extension"] = new JsonObject
+                            {
+                                ["type"] = "string",
+                                ["enum"] = new JsonArray(transferTargets.Select(t => (JsonNode)JsonValue.Create(t.Extension)!).ToArray()),
+                                ["description"] = "The extension to transfer to",
+                            },
+                        },
+                        ["required"] = new JsonArray("extension"),
+                    },
+                },
+            };
         }
 
         /// <summary>

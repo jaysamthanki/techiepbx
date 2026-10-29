@@ -262,7 +262,8 @@ namespace Techie.Pbx.Tests.Asterisk
 
         /// <summary>
         /// The collector's AMI account can read call records, and the permissions stay exactly
-        /// what D32 allows plus "cdr": no command, no originate.
+        /// what D32 allows plus "cdr", and "call" for the AI agent's Redirect (D202): no command,
+        /// no originate.
         /// </summary>
         [Fact]
         public void Manager_account_reads_system_and_cdr_events_and_nothing_else()
@@ -270,7 +271,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var actual = ManagerConfRenderer.Render(SampleAmi());
 
             Assert.Contains("read = system,cdr\n", actual);
-            Assert.Contains("write = system,config\n", actual);
+            Assert.Contains("write = system,config,call\n", actual);
             Assert.DoesNotContain("command", actual);
             Assert.DoesNotContain("originate", actual);
         }
@@ -385,7 +386,7 @@ namespace Techie.Pbx.Tests.Asterisk
         {
             var actual = ManagerConfRenderer.Render(SampleAmi());
 
-            Assert.Contains("write = system,config\n", actual);
+            Assert.Contains("write = system,config,call\n", actual);
             Assert.DoesNotContain("command", actual);
             Assert.DoesNotContain("originate", actual);
         }

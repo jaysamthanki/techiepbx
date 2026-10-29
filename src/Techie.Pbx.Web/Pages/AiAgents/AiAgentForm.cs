@@ -20,6 +20,9 @@ namespace Techie.Pbx.Web.Pages.AiAgents
         public string? Number { get; set; } = "";
         public string? Prompt { get; set; } = "";
 
+        /// <summary>What the agent says before a transfer to a named extension; blank for the default (D203).</summary>
+        public string? TransferLine { get; set; } = "";
+
         /// <summary>Everywhere the agent could hand a caller to, AI agents excepted. Not posted back.</summary>
         public DestinationSelect TransferChoices { get; set; } = new();
 

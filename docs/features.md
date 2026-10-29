@@ -285,7 +285,10 @@ it knows who it is, what the business is, and what it may do.
 Settled in D199: an agent is its own entity (number, name, prompt, greeting, voice, model,
 optional handoff) and may hand a caller on. **Widened in D201:** the handoff is any destination
 from the shared picker except another AI agent — an extension, a ring group, voicemail, an IVR,
-an announcement, a time condition or a call flow control — still fixed per agent.
+an announcement, a time condition or a call flow control — still fixed per agent. **Widened in
+D202/D203:** the caller can also ask for a person by name ("can I speak to Anishi?") and the model
+transfers them to that extension, chosen at runtime from the enabled extensions, by AMI `Redirect`;
+the fixed handoff stays the fallback for every other way a call ends.
 
 Settled in D200: speech-to-text is ElevenLabs Scribe on the same key; a call is turn-by-turn with
 barge-in on by default; and a provider failure is not a dead line — the service closes the socket so

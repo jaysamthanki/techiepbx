@@ -119,7 +119,7 @@ namespace Techie.Pbx.Tests.Core
                 connection.Execute("ALTER TABLE Ivrs DROP COLUMN ReturnAfterAnnouncement");
                 connection.Execute("ALTER TABLE Extensions DROP COLUMN WebClient");
                 connection.Execute("ALTER TABLE Extensions DROP COLUMN UserEmail");
-                connection.Execute("DROP TABLE AiAgents");
+                connection.Execute("DROP TABLE AiAgents"); // 031, and 032's TransferLine with it
                 connection.Execute(
                     "INSERT INTO Cdrs (UniqueID, Sequence, Src, Dst, Channel, Disposition, StartUtc) " +
                     "VALUES ('1.1', 1, '15551234567', '17771234567', 'PJSIP/voipms-00000001', 'ANSWERED', '2026-09-20T10:00:00Z')");
@@ -133,7 +133,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Null(stored.Did);
 
             using var check = this.database.Open();
-            Assert.Equal(31, check.ExecuteScalar<long>("PRAGMA user_version"));
+            Assert.Equal(32, check.ExecuteScalar<long>("PRAGMA user_version"));
         }
 
         [Fact]

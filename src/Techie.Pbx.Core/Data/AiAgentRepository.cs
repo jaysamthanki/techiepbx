@@ -7,7 +7,7 @@ namespace Techie.Pbx.Core.Data
     public class AiAgentRepository
     {
         private const string Columns =
-            "AiAgentID, Number, Name, Prompt, Greeting, VoiceId, Model, TransferTo, Enabled";
+            "AiAgentID, Number, Name, Prompt, Greeting, VoiceId, Model, TransferTo, TransferLine, Enabled";
 
         private const int SqliteConstraintError = 19;
 
@@ -65,8 +65,8 @@ namespace Techie.Pbx.Core.Data
             try
             {
                 agent.AiAgentID = connection.ExecuteScalar<long>(
-                    "INSERT INTO AiAgents (Number, Name, Prompt, Greeting, VoiceId, Model, TransferTo, Enabled) " +
-                    "VALUES (@Number, @Name, @Prompt, @Greeting, @VoiceId, @Model, @TransferTo, @Enabled); " +
+                    "INSERT INTO AiAgents (Number, Name, Prompt, Greeting, VoiceId, Model, TransferTo, TransferLine, Enabled) " +
+                    "VALUES (@Number, @Name, @Prompt, @Greeting, @VoiceId, @Model, @TransferTo, @TransferLine, @Enabled); " +
                     "SELECT last_insert_rowid();",
                     agent);
 
@@ -106,7 +106,7 @@ namespace Techie.Pbx.Core.Data
 
                 var rows = connection.Execute(
                     "UPDATE AiAgents SET Number = @Number, Name = @Name, Prompt = @Prompt, Greeting = @Greeting, " +
-                    "VoiceId = @VoiceId, Model = @Model, TransferTo = @TransferTo, Enabled = @Enabled " +
+                    "VoiceId = @VoiceId, Model = @Model, TransferTo = @TransferTo, TransferLine = @TransferLine, Enabled = @Enabled " +
                     "WHERE AiAgentID = @AiAgentID",
                     agent, transaction);
                 if (rows == 0)

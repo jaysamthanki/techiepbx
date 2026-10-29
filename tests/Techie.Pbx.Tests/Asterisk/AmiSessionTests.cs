@@ -256,6 +256,44 @@ namespace Techie.Pbx.Tests.Asterisk
         }
 
         /// <summary>
+        /// The AI agent's transfer (D202): a typed Redirect to priority 1, with the response
+        /// matched by ActionID even when an event for someone else arrives first.
+        /// </summary>
+        [Fact]
+        public void Redirect_sends_a_typed_action_and_reports_success()
+        {
+            var session = LoggedIn(
+                "Event: Newexten\r\nChannel: PJSIP/1001-00000001\r\n\r\n" +
+                "Response: Success\r\nActionID: 2\r\nMessage: Redirect successful\r\n\r\n");
+
+            Assert.True(session.Redirect("PJSIP/callcentric-00000013", "internal", "102"));
+
+            Assert.EndsWith(
+                "Action: Redirect\r\nActionID: 2\r\nChannel: PJSIP/callcentric-00000013\r\n" +
+                "Context: internal\r\nExten: 102\r\nPriority: 1\r\n\r\n",
+                this.sent.ToString());
+        }
+
+        /// <summary>A refused redirect is false, not an exception: the caller is still on the line.</summary>
+        [Fact]
+        public void A_refused_redirect_is_false()
+        {
+            var session = LoggedIn("Response: Error\r\nActionID: 2\r\nMessage: Channel does not exist: PJSIP/gone\r\n\r\n");
+
+            Assert.False(session.Redirect("PJSIP/gone", "internal", "102"));
+        }
+
+        /// <summary>A line break in the channel name would be a second action; it is refused before anything is sent.</summary>
+        [Fact]
+        public void Redirect_refuses_an_unsafe_channel_name()
+        {
+            var session = LoggedIn("");
+
+            Assert.Throws<InvalidOperationException>(() => session.Redirect("PJSIP/x\r\nAction: Originate", "internal", "102"));
+            Assert.DoesNotContain("Redirect", this.sent.ToString());
+        }
+
+        /// <summary>
         /// The uptime tile. The startup date and time arrive as two headers and are read as UTC,
         /// because that is what the server's clock is (D74).
         /// </summary>

@@ -4161,3 +4161,58 @@ to** — the shared destination picker's list — instead of an extension number
   validates: the apply refuses it until the agent is re-saved through the picker (which shows it as
   "no longer available"). Only the lab has such rows.
 
+### D202. AMI gets `write = call`, for the AI agent's Redirect (2026-10-29, F11)
+
+An AI agent's call sits inside `AudioSocket()`, which carries audio and nothing else: the media
+service cannot tell the dialplan where to go next, only close the socket (D199, D201). Putting a
+caller through to a person the model chose at runtime therefore has to move the channel from
+outside, and the smallest tool for that is AMI `Redirect`.
+
+- **The permission.** `Redirect` is registered under the `call` write class, so `ManagerConfRenderer`
+  now writes `write = system,config,call`. Read stays `system,cdr`.
+- **What it allows.** `call` also covers `Hangup`, `Redirect` of any channel, `Atxfer`, `Setvar`
+  and similar call-control actions. The account still binds to and permits 127.0.0.1 only, and its
+  secret is generated and never logged (D32), so the reach is "anything already running as the
+  web user on this box" — which could already rewrite the dialplan via `config` + `Reload`.
+- **What it does not allow.** No `originate` — nothing here places calls, and an originate
+  permission is what toll fraud needs. No `command` (D17). The app sends exactly one `call`
+  action, `Redirect`, typed through `AmiSession.Redirect`, with the target extension taken from the
+  extension list rather than from the model's text.
+- **The alternative, rejected.** ARI external media would give the service a control channel, but
+  it means loading `res_ari*` and `res_stasis`, an HTTP/WebSocket listener on Asterisk, a Stasis app
+  and carrying RTP ourselves instead of AudioSocket's simple framing — far more surface than one
+  write class on an account that already exists.
+
+### D203. AI voice agent: transfer to a named extension by tool call (2026-10-29, F11)
+
+D201 left the handoff fixed per agent. "Can I speak to Anishi?" should reach extension 102.
+
+- **A tool, not a token.** The chat request offers one function, `transfer_call`, whose only
+  argument `extension` is an `enum` of the enabled extensions (by number, capped at 50); the tool
+  description carries the mapping ("101 Jaysam, 102 Anishi, …") so the model can match a name to a
+  number. With no extensions, no `tools` are sent at all and the request is exactly as before.
+- **Checked again.** The session accepts a tool call only for `transfer_call` with an extension in
+  the list it offered; anything else is ignored (logged, no extension echoed) and any words the
+  model sent with it are spoken as an ordinary reply.
+- **A canned line, not a second round trip.** The agent says its own `TransferLine` (new column,
+  `032_ai_agent_transfer_line.sql`; blank = "One moment, putting you through.") instead of asking
+  the model to word it, which would leave the caller in silence for a second chat. The prompt tells
+  the model to call the tool without words of its own, so the line is not said twice. The line is
+  said **before** the redirect: once a channel is redirected Asterisk ends `AudioSocket()`, so
+  anything after it would never be heard.
+- **Finding the channel; the ambiguity rule.** The socket's UUID names the agent, not the call, so
+  the listener asks `CoreShowChannels` for channels in `AudioSocket` at the agent's number in
+  `[internal]` (`AiAgentChannel.Find`, a pure function). Exactly one is redirected to
+  `internal,<ext>,1`; none or more than one is a failed transfer. Two callers talking to the same
+  agent at once cannot be told apart from here, and crossing them would be worse than not
+  transferring.
+- **On failure.** The caller hears "I couldn't reach them — can I help another way?", the model's
+  history gets a note that the transfer did not go through, and the conversation carries on. The
+  listener logs why (no channel, several, refused, AMI unreachable).
+- **The configured handoff stays the fallback.** After a successful redirect the dialplan line after
+  `AudioSocket()` is never reached — the channel runs at the new extension. Every other way a call
+  ends (provider failure, silence, the time cap) still continues to the agent's `TransferTo`. An
+  agent on a site with no extensions keeps the `[TRANSFER]` token path; on a site with extensions
+  the prompt offers the tool instead of the token.
+- **What the provider sees.** The extension numbers and names go to OpenRouter on every turn,
+  alongside the prompt the customer already sends there.

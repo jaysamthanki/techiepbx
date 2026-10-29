@@ -7,7 +7,7 @@ namespace Techie.Pbx.Tests.Ai
     /// <summary>
     /// One AI agent call's turn loop (D200) with the network replaced by fakes: greeting first,
     /// listen → transcribe → chat → speak, a transfer and a provider failure both ending the call
-    /// by closing the socket.
+    /// by closing the socket, and a transfer to a named extension moving the call (D203).
     /// </summary>
     public class AiCallSessionTests
     {
@@ -16,7 +16,13 @@ namespace Techie.Pbx.Tests.Ai
         private readonly List<IReadOnlyList<(string Role, string Content)>> chats = new();
         private readonly List<string> spoken = new();
         private readonly DuplexTestStream stream = new();
+        private readonly List<string> transfers = new();
         private int transcriptions;
+
+        private static readonly IReadOnlyList<(string Extension, string Name)> Staff = new[] { ("101", "Jaysam"), ("102", "Anishi") };
+
+        private static AiChatReply TransferCall(string extension) =>
+            new() { ToolCall = new AiToolCall(AiProviders.TransferToolName, $"{{\"extension\":\"{extension}\"}}") };
 
         private static AiAgent Agent(string greeting = "", string transferTo = "") => new()
         {
@@ -53,7 +59,10 @@ namespace Techie.Pbx.Tests.Ai
             int replyFrames = 3,
             bool bargeIn = true,
             Exception? transcribeFailure = null,
-            bool logTranscripts = true)
+            bool logTranscripts = true,
+            Func<string, AiChatReply>? answer = null,
+            IReadOnlyList<(string Extension, string Name)>? targets = null,
+            bool transferWorks = true)
         {
             var settings = new AiSettingsSnapshot
             {
@@ -69,6 +78,7 @@ namespace Techie.Pbx.Tests.Ai
                 agent,
                 settings,
                 Log,
+                targets ?? [],
                 (wav, ct) =>
                 {
                     Interlocked.Increment(ref this.transcriptions);
@@ -84,7 +94,7 @@ namespace Techie.Pbx.Tests.Ai
                     lock (this.chats)
                         this.chats.Add(messages.ToList());
 
-                    return Task.FromResult(reply(messages[^1].Content));
+                    return Task.FromResult(answer != null ? answer(messages[^1].Content) : AiChatReply.Text(reply(messages[^1].Content)));
                 },
                 (text, model, voice, ct) =>
                 {
@@ -93,6 +103,13 @@ namespace Techie.Pbx.Tests.Ai
 
                     var frames = this.spoken.Count == 1 && agent.Greeting.Length > 0 ? 5 : replyFrames;
                     return Task.FromResult(Clip(frames));
+                },
+                (extension, ct) =>
+                {
+                    lock (this.transfers)
+                        this.transfers.Add(extension);
+
+                    return Task.FromResult(transferWorks);
                 })
             {
                 PlaybackPace = TimeSpan.Zero,
@@ -297,6 +314,103 @@ namespace Techie.Pbx.Tests.Ai
             Assert.DoesNotContain(AiCallSession.TransferToken, AiCallSession.SystemPrompt(Agent()));
             Assert.Contains(AiCallSession.TransferToken, AiCallSession.SystemPrompt(Agent(transferTo: "Extension:201")));
             Assert.StartsWith("You are the receptionist.", AiCallSession.SystemPrompt(Agent(transferTo: "Extension:201")));
+        }
+
+        /// <summary>
+        /// With extensions to offer, the model is told about the tool, not the token: the token is
+        /// the fallback for an agent with nobody to name (D203).
+        /// </summary>
+        [Fact]
+        public void With_a_transfer_tool_the_prompt_names_the_tool_and_not_the_token()
+        {
+            var prompt = AiCallSession.SystemPrompt(Agent(transferTo: "Extension:201"), transferTool: true);
+
+            Assert.Contains(AiProviders.TransferToolName, prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain(AiCallSession.TransferToken, prompt, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task A_transfer_call_says_the_transfer_line_and_moves_the_call()
+        {
+            var agent = Agent();
+            agent.TransferLine = "Hold on, connecting you.";
+            var session = this.Session(agent, _ => "unused", () => "Can I speak to Anishi?", answer: _ => TransferCall("102"), targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            await session.RunAsync(this.stream, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.Transferred, session.Outcome);
+            Assert.Equal(new[] { "102" }, this.transfers);
+            Assert.Equal(new[] { "Hold on, connecting you." }, this.spoken);
+            Assert.Equal(3, this.stream.WrittenFrames.Count);
+            Assert.Contains(AiProviders.TransferToolName, Assert.Single(this.chats)[0].Content);
+        }
+
+        [Fact]
+        public async Task A_blank_transfer_line_is_the_default()
+        {
+            var session = this.Session(Agent(), _ => "unused", () => "Anishi please.", answer: _ => TransferCall("102"), targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            await session.RunAsync(this.stream, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(new[] { AiAgent.DefaultTransferLine }, this.spoken);
+        }
+
+        /// <summary>
+        /// A redirect that did not happen leaves the caller with the agent: told so in one line,
+        /// with the model told too, and the conversation carries on to the next turn.
+        /// </summary>
+        [Fact]
+        public async Task A_failed_transfer_says_so_and_the_conversation_carries_on()
+        {
+            var turns = 0;
+            var session = this.Session(
+                Agent(),
+                _ => "unused",
+                () => "Anishi please.",
+                answer: _ => ++turns == 1 ? TransferCall("102") : AiChatReply.Text("Of course."),
+                targets: Staff,
+                transferWorks: false);
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+
+            // The second turn is sent once both lines are out: audio that arrives while the agent
+            // is about to speak is thrown away, as it is on a real call.
+            await this.stream.WaitForFramesAsync(6);
+            this.stream.SendAudio(Turn());
+            await WaitUntil(() => this.chats.Count == 2 && this.spoken.Count == 3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.CallerHungUp, session.Outcome);
+            Assert.Equal(new[] { "102" }, this.transfers);
+            Assert.Equal(new[] { AiAgent.DefaultTransferLine, AiCallSession.TransferFailedLine, "Of course." }, this.spoken);
+            Assert.Contains(this.chats[1], m => m.Role == "system" && m.Content.Contains("did not go through", StringComparison.Ordinal));
+            Assert.Contains(this.chats[1], m => m == ("assistant", AiCallSession.TransferFailedLine));
+        }
+
+        /// <summary>The enum should prevent it, but a model naming an extension it was not offered is ignored.</summary>
+        [Fact]
+        public async Task A_transfer_to_an_extension_not_offered_is_ignored()
+        {
+            var session = this.Session(
+                Agent(),
+                _ => "unused",
+                () => "Put me through to 999.",
+                answer: _ => TransferCall("999") with { Content = "I can't do that." },
+                targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+            await this.stream.WaitForFramesAsync(3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Empty(this.transfers);
+            Assert.Equal(new[] { "I can't do that." }, this.spoken);
+            Assert.Equal(AiCallOutcome.CallerHungUp, session.Outcome);
         }
     }
 }

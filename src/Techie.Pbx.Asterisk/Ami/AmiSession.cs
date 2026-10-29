@@ -136,6 +136,36 @@ namespace Techie.Pbx.Asterisk.Ami
         }
 
         /// <summary>
+        /// Moves a channel to priority 1 of an extension in a context — how the AI agent puts a
+        /// caller through to a named extension (D202, D203). The agent's channel is inside
+        /// <c>AudioSocket()</c>, which has no way back to the dialplan, so it is moved from outside.
+        ///
+        /// Needs the account's "write = call" permission, which <c>ManagerConfRenderer</c> grants
+        /// for this alone. A refused redirect (the channel has gone, the target does not exist) is
+        /// false and a log line, never an exception: the caller is still on the line and the agent
+        /// carries on. A broken connection still throws, as for every other action.
+        /// </summary>
+        public bool Redirect(string channel, string context, string extension)
+        {
+            var action = new AmiAction("Redirect")
+                .Add("Channel", channel)
+                .Add("Context", context)
+                .Add("Exten", extension)
+                .Add("Priority", "1");
+
+            var (_, response) = this.Exchange(action);
+
+            if (!response.IsSuccess)
+            {
+                Log.Warn($"AMI refused to redirect '{channel}' to {extension}@{context}: {response.Message}");
+                return false;
+            }
+
+            Log.Info($"Redirected '{channel}' to {extension}@{context}");
+            return true;
+        }
+
+        /// <summary>
         /// Reloads one Asterisk module: res_pjsip for pjsip.conf, pbx_config for extensions.conf.
         /// A typed action rather than a CLI command, so the AMI user doesn't need "command"
         /// permission.
@@ -250,7 +280,11 @@ namespace Techie.Pbx.Asterisk.Ami
             }
         }
 
-        private (string ActionID, AmiMessage Response) SendAndWait(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null)
+        /// <summary>
+        /// Sends an action and returns its response, success or not, skipping any events that
+        /// arrive first.
+        /// </summary>
+        private (string ActionID, AmiMessage Response) Exchange(AmiAction action)
         {
             var actionID = this.Write(action);
 
@@ -269,19 +303,26 @@ namespace Techie.Pbx.Asterisk.Ami
                 if (message.ActionID != null && !string.Equals(message.ActionID, actionID, StringComparison.Ordinal))
                     continue;
 
-                if (!message.IsSuccess)
-                {
-                    var tolerated = toleratedErrors != null && message.Message != null &&
-                        toleratedErrors.Contains(message.Message, StringComparer.OrdinalIgnoreCase);
-
-                    if (!tolerated)
-                        throw new AmiException($"AMI action '{action.Name}' failed: {message.Response} {message.Message}".TrimEnd());
-
-                    Log.Debug($"AMI action '{action.Name}' answered '{message.Message}', treating it as an empty list");
-                }
-
                 return (actionID, message);
             }
+        }
+
+        private (string ActionID, AmiMessage Response) SendAndWait(AmiAction action, IReadOnlyCollection<string>? toleratedErrors = null)
+        {
+            var (actionID, message) = this.Exchange(action);
+
+            if (!message.IsSuccess)
+            {
+                var tolerated = toleratedErrors != null && message.Message != null &&
+                    toleratedErrors.Contains(message.Message, StringComparer.OrdinalIgnoreCase);
+
+                if (!tolerated)
+                    throw new AmiException($"AMI action '{action.Name}' failed: {message.Response} {message.Message}".TrimEnd());
+
+                Log.Debug($"AMI action '{action.Name}' answered '{message.Message}', treating it as an empty list");
+            }
+
+            return (actionID, message);
         }
 
         private string Write(AmiAction action)

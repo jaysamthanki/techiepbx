@@ -11,8 +11,12 @@ namespace Techie.Pbx.Core.Ai
     /// the agent ends a call is the same act — it closes the socket — and the dialplan decides
     /// what follows: the agent's handoff extension if it has one, otherwise a hangup (D199).
     ///
-    /// The network is three delegates, so the whole turn loop is testable with fakes. Nothing the
-    /// caller says and nothing the model replies is ever logged.
+    /// The one exception is a transfer to a named extension (D203): the model calls
+    /// <see cref="AiProviders.TransferToolName"/>, and the channel is moved from outside, by AMI,
+    /// because the socket has no way to tell the dialplan where to go.
+    ///
+    /// The network is five delegates, so the whole turn loop is testable with fakes. What the caller
+    /// says and what the model replies is logged only when <c>Ai.LogTranscripts</c> is on (D200).
     /// </summary>
     public class AiCallSession
     {
@@ -22,7 +26,13 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>Turns in a row with nothing transcribed before the agent gives up on the call.</summary>
         public const int MaxSilentTurns = 3;
 
-        /// <summary>The token the model writes to ask for a person. Stripped before the reply is spoken.</summary>
+        /// <summary>What the agent says when a transfer to an extension did not happen (D203).</summary>
+        public const string TransferFailedLine = "I couldn't reach them — can I help another way?";
+
+        /// <summary>
+        /// The token the model writes to ask for the configured handoff. Stripped before the reply
+        /// is spoken. Offered only to an agent with no extensions to transfer to (D203).
+        /// </summary>
         public const string TransferToken = "[TRANSFER]";
 
         /// <summary>The longest call an agent will hold; then the socket is closed and the dialplan carries on.</summary>
@@ -32,7 +42,7 @@ namespace Techie.Pbx.Core.Ai
         public const int MaxLoggedText = 500;
 
         private readonly AiAgent agent;
-        private readonly Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<string>> chat;
+        private readonly Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<AiChatReply>> chat;
         private readonly Endpointer endpointer = new();
         private readonly Channel<AudioSocketFrame> frames = Channel.CreateUnbounded<AudioSocketFrame>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
@@ -43,6 +53,8 @@ namespace Techie.Pbx.Core.Ai
         private readonly AiSettingsSnapshot settings;
         private readonly Func<string, string, string, CancellationToken, Task<byte[]>> speak;
         private readonly Func<byte[], CancellationToken, Task<string>> transcribe;
+        private readonly Func<string, CancellationToken, Task<bool>> transfer;
+        private readonly IReadOnlyList<(string Extension, string Name)> transferTargets;
 
         /// <summary>How the call ended; meaningful once <see cref="RunAsync"/> has returned.</summary>
         public AiCallOutcome Outcome { get; private set; } = AiCallOutcome.CallerHungUp;
@@ -56,15 +68,20 @@ namespace Techie.Pbx.Core.Ai
 
         /// <summary>
         /// <paramref name="speak"/> takes the text, the TTS model and the voice ID, and returns
-        /// μ-law 8 kHz bytes; <paramref name="chat"/> takes the messages and the model slug.
+        /// μ-law 8 kHz bytes; <paramref name="chat"/> takes the messages and the model slug, and
+        /// offers the model <paramref name="transferTargets"/> as its transfer tool.
+        /// <paramref name="transfer"/> takes one of those extensions and says whether the call was
+        /// moved there (D203); with no targets it is never called.
         /// </summary>
         public AiCallSession(
             AiAgent agent,
             AiSettingsSnapshot settings,
             ILog log,
+            IReadOnlyList<(string Extension, string Name)> transferTargets,
             Func<byte[], CancellationToken, Task<string>> transcribe,
-            Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<string>> chat,
-            Func<string, string, string, CancellationToken, Task<byte[]>> speak)
+            Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<AiChatReply>> chat,
+            Func<string, string, string, CancellationToken, Task<byte[]>> speak,
+            Func<string, CancellationToken, Task<bool>> transfer)
         {
             this.agent = agent;
             this.chat = chat;
@@ -72,6 +89,8 @@ namespace Techie.Pbx.Core.Ai
             this.settings = settings;
             this.speak = speak;
             this.transcribe = transcribe;
+            this.transfer = transfer;
+            this.transferTargets = transferTargets;
         }
 
         /// <summary>
@@ -122,10 +141,11 @@ namespace Techie.Pbx.Core.Ai
         }
 
         /// <summary>
-        /// The system prompt the model sees: the agent's own, and — only when the agent has
-        /// somewhere to hand a caller — the rule for asking for that.
+        /// The system prompt the model sees: the agent's own, and the rule for handing a caller on.
+        /// With a transfer tool that is the tool (D203); without one, and only when the agent has
+        /// somewhere to hand a caller, it is the <see cref="TransferToken"/>.
         /// </summary>
-        public static string SystemPrompt(AiAgent agent)
+        public static string SystemPrompt(AiAgent agent, bool transferTool = false)
         {
             // The rule that answers the failure the first live calls showed: asked where the office
             // is, a model with no facts invents an address. A receptionist that says it does not know
@@ -134,6 +154,15 @@ namespace Techie.Pbx.Core.Ai
                 "\n\nRules: never invent facts about this business — no address, opening hours, prices, " +
                 "policies or names you were not given above. If you do not know something, say so in one " +
                 "short sentence. Keep every reply to one or two short spoken sentences.";
+
+            // The words before a transfer are the agent's canned line, so the model is asked for
+            // none of its own: a model that also said "putting you through" would say it twice.
+            if (transferTool)
+            {
+                return agent.Prompt.TrimEnd() + Rules +
+                    $"\n\nIf the caller asks to speak to a particular person, call the {AiProviders.TransferToolName} " +
+                    "tool with their extension, without any words of your own. Do not transfer for a question you can answer.";
+            }
 
             if (agent.TransferTo.Length == 0)
                 return agent.Prompt.TrimEnd() + Rules;
@@ -167,7 +196,7 @@ namespace Techie.Pbx.Core.Ai
             var model = this.agent.Model.Length > 0 ? this.agent.Model : this.settings.OpenRouterModel;
             var silentTurns = 0;
             var turn = 0;
-            var systemPrompt = SystemPrompt(this.agent);
+            var systemPrompt = SystemPrompt(this.agent, this.transferTargets.Count > 0);
 
             // The prompt is logged once per call: it is what the model is being asked to be, so a
             // strange reply is read against it rather than guessed about (D200).
@@ -210,8 +239,25 @@ namespace Techie.Pbx.Core.Ai
                 messages.AddRange(this.history);
 
                 clock.Restart();
-                var reply = await this.chat(messages, model, cancellationToken);
+                var answer = await this.chat(messages, model, cancellationToken);
                 var chatMs = clock.ElapsedMilliseconds;
+
+                if (answer.ToolCall != null)
+                {
+                    var target = this.TransferTarget(answer.ToolCall);
+
+                    if (target != null)
+                    {
+                        var ended = await this.TransferAsync(socket, target.Value, turn, cancellationToken);
+
+                        if (ended != null)
+                            return ended.Value;
+
+                        continue;
+                    }
+                }
+
+                var reply = answer.Content;
                 var transfer = reply.Contains(TransferToken, StringComparison.Ordinal);
                 var spoken = reply.Replace(TransferToken, "", StringComparison.Ordinal).Trim();
 
@@ -398,6 +444,72 @@ namespace Techie.Pbx.Core.Ai
             var speechMs = clock.ElapsedMilliseconds;
 
             return new Spoken(await this.PlayAsync(socket, MuLaw.FromMuLaw(audio), bargeIn, cancellationToken), speechMs);
+        }
+
+        /// <summary>
+        /// Puts the caller through to an extension the model chose (D203). The line is said first:
+        /// once the channel is redirected Asterisk ends <c>AudioSocket()</c>, so anything said
+        /// after it would never reach the caller. Returns the call's outcome when it is over, or
+        /// null when the transfer failed and the conversation carries on.
+        ///
+        /// On success the call has already left this agent's extension: closing the socket ends
+        /// nothing, and the dialplan line after <c>AudioSocket()</c> — the configured handoff — is
+        /// never reached, because the channel is running at the new extension instead.
+        /// </summary>
+        private async Task<AiCallOutcome?> TransferAsync(
+            Stream socket,
+            (string Extension, string Name) target,
+            int turn,
+            CancellationToken cancellationToken)
+        {
+            this.log.Info($"AI agent {this.agent.Number}: transfer to {target.Extension} ({target.Name}) requested");
+
+            var line = this.agent.TransferLine.Trim().Length > 0 ? this.agent.TransferLine.Trim() : AiAgent.DefaultTransferLine;
+
+            if (this.settings.LogTranscripts)
+                this.Note($"AI agent {this.agent.Number}: turn {turn} agent: {Flat(line)} [transfer to {target.Extension}]");
+
+            // Played out whole: the caller is about to leave either way.
+            if ((await this.SayAsync(socket, line, bargeIn: false, cancellationToken)).Playback == Playback.CallerGone)
+                return AiCallOutcome.CallerHungUp;
+
+            if (await this.transfer(target.Extension, cancellationToken))
+                return AiCallOutcome.Transferred;
+
+            // Why it failed is the listener's to log: it is the one that looked at the channels.
+            this.log.Info($"AI agent {this.agent.Number}: transfer to {target.Extension} ({target.Name}) did not happen; the conversation carries on.");
+
+            // For the model only: the caller hears the failure line, never this.
+            this.Remember("system", $"The transfer to {target.Extension} ({target.Name}) did not go through. The caller has been told.");
+            this.Remember("assistant", TransferFailedLine);
+
+            if (this.settings.LogTranscripts)
+                this.Note($"AI agent {this.agent.Number}: turn {turn} agent: {TransferFailedLine}");
+
+            var said = await this.SayAsync(socket, TransferFailedLine, this.settings.BargeIn, cancellationToken);
+
+            return said.Playback == Playback.CallerGone ? AiCallOutcome.CallerHungUp : null;
+        }
+
+        /// <summary>
+        /// The extension a tool call asks for, when it is the transfer tool and the extension is one
+        /// the agent was offered; otherwise null, and the call is ignored. The enum should make an
+        /// unknown extension impossible, but the model's output is not trusted to follow it.
+        /// </summary>
+        private (string Extension, string Name)? TransferTarget(AiToolCall call)
+        {
+            var extension = string.Equals(call.Name, AiProviders.TransferToolName, StringComparison.Ordinal)
+                ? call.Argument("extension")
+                : null;
+
+            foreach (var target in this.transferTargets)
+            {
+                if (string.Equals(target.Extension, extension, StringComparison.Ordinal))
+                    return target;
+            }
+
+            this.log.Info($"AI agent {this.agent.Number}: ignored a call to tool '{Flat(call.Name)}' for an extension it was not offered.");
+            return null;
         }
 
         /// <summary>
