@@ -77,6 +77,34 @@ namespace Techie.Pbx.Core.Data
 
             switch (key)
             {
+                case SettingsKeys.AiOpenRouterApiKey:
+                case SettingsKeys.AiElevenLabsApiKey:
+                    if (!ApiKeyPattern().IsMatch(text))
+                        errors.Add("An API key may only contain letters, digits, dots, dashes and underscores. Paste the key the provider issued, with no spaces or quotes around it.");
+                    break;
+
+                case SettingsKeys.AiOpenRouterModel:
+                    if (!ModelPattern().IsMatch(text))
+                        errors.Add("The model must be an OpenRouter model slug, e.g. openai/gpt-4o-mini.");
+                    break;
+
+                case SettingsKeys.AiElevenLabsVoiceId:
+                case SettingsKeys.AiElevenLabsModel:
+                case SettingsKeys.AiSttModel:
+                    if (!AiIdentifierPattern().IsMatch(text))
+                        errors.Add("An ElevenLabs voice or model name may only contain letters, digits, dots, dashes and underscores.");
+                    break;
+
+                case SettingsKeys.AiBargeIn:
+                    if (!Toggles.IsKnown(text))
+                        errors.Add($"Barge-in must be one of: {string.Join(", ", Toggles.All)}. Leave it blank for the default, which is on.");
+                    break;
+
+                case SettingsKeys.AiMediaPort:
+                    if (!int.TryParse(text, out var aiMediaPort) || aiMediaPort is < AiSettings.MinMediaPort or > 65535)
+                        errors.Add($"The media port must be a whole number between {AiSettings.MinMediaPort} and 65535: below {AiSettings.MinMediaPort} a port needs privileges this application does not have.");
+                    break;
+
                 case SettingsKeys.AmiPort:
                     Port(errors, "AMI port", text);
                     break;
@@ -435,5 +463,22 @@ namespace Techie.Pbx.Core.Data
 
         [GeneratedRegex(@"^[A-Za-z0-9._\-]{1,64}\z")]
         private static partial Regex ProvisioningUsernamePattern();
+
+        /// <summary>
+        /// A provider API key, checked for shape only: every vendor issues its own spelling and
+        /// they all change over time, so the rule is the narrow-but-neutral one — the characters a
+        /// header value can carry without quoting, and nothing else, which is also what keeps a
+        /// pasted key from dragging a newline into an HTTP request (F11, D198).
+        /// </summary>
+        [GeneratedRegex(@"^[A-Za-z0-9._\-]{8,200}\z")]
+        private static partial Regex ApiKeyPattern();
+
+        /// <summary>An OpenRouter model slug: <c>vendor/model</c>, with the punctuation those slugs actually use.</summary>
+        [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._:\-/]{0,127}\z")]
+        private static partial Regex ModelPattern();
+
+        /// <summary>An ElevenLabs voice or model name — dots, dashes and underscores, no spaces (F11, D198).</summary>
+        [GeneratedRegex(@"^[A-Za-z0-9._\-]{1,64}\z")]
+        private static partial Regex AiIdentifierPattern();
     }
 }

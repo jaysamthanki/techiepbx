@@ -1,4 +1,5 @@
 using Techie.Pbx.Core.Data;
+using Techie.Pbx.Core.Models;
 
 namespace Techie.Pbx.Tests.Core
 {
@@ -609,6 +610,78 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.ParkingAudio, "music")]
         [InlineData(SettingsKeys.ParkingAudio, "ringing")]
         public void The_parking_word_settings_refuse_anything_else(string key, string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(key, value));
+        }
+
+        /// <summary>
+        /// The AI keys are checked for shape, never for authenticity: a key is only wrong when the
+        /// provider says so, and a save that refused a valid key would be worse than a call that
+        /// fails afterwards (F11, D198).
+        /// </summary>
+        [Theory]
+        [InlineData(SettingsKeys.AiOpenRouterApiKey, "test_key_0123456789abcdef")]
+        [InlineData(SettingsKeys.AiElevenLabsApiKey, "test_key_0123456789abcdef")]
+        [InlineData(SettingsKeys.AiOpenRouterModel, "openai/gpt-4o-mini")]
+        [InlineData(SettingsKeys.AiOpenRouterModel, "anthropic/claude-sonnet-4.5")]
+        [InlineData(SettingsKeys.AiElevenLabsVoiceId, "JBFqnCBsd6RMkjVDRZzb")]
+        [InlineData(SettingsKeys.AiElevenLabsModel, AiSettings.DefaultTtsModel)]
+        [InlineData(SettingsKeys.AiSttModel, AiSettings.DefaultSttModel)]
+        public void The_ai_settings_take_a_provider_shaped_value(string key, string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(key, value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.AiOpenRouterApiKey, "key with spaces in it")]
+        [InlineData(SettingsKeys.AiOpenRouterApiKey, "short")]
+        [InlineData(SettingsKeys.AiElevenLabsApiKey, "quoted\"key")]
+        [InlineData(SettingsKeys.AiOpenRouterModel, "not a model")]
+        [InlineData(SettingsKeys.AiOpenRouterModel, "/leading-slash")]
+        [InlineData(SettingsKeys.AiElevenLabsVoiceId, "voice id with spaces")]
+        [InlineData(SettingsKeys.AiElevenLabsModel, "eleven;flash")]
+        public void The_ai_settings_refuse_a_value_that_could_not_be_sent(string key, string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(key, value));
+        }
+
+        /// <summary>
+        /// The two AI keys are credentials, so the settings page masks them and nothing logs them
+        /// (F11, D198). The model and voice names are not secrets and must stay readable.
+        /// </summary>
+        [Theory]
+        [InlineData(SettingsKeys.AiOpenRouterApiKey, true)]
+        [InlineData(SettingsKeys.AiElevenLabsApiKey, true)]
+        [InlineData(SettingsKeys.AiOpenRouterModel, false)]
+        [InlineData(SettingsKeys.AiElevenLabsVoiceId, false)]
+        public void The_ai_credentials_are_secrets_and_the_rest_are_not(string key, bool secret)
+        {
+            Assert.Equal(secret, SettingsKeys.IsSecret(key));
+        }
+
+        /// <summary>
+        /// Barge-in is a toggle, and the media port has to be bindable by an unprivileged process —
+        /// below 1024 the listener would fail at startup and every agent call would go silent
+        /// (F11, D198).
+        /// </summary>
+        [Theory]
+        [InlineData(SettingsKeys.AiBargeIn, "on")]
+        [InlineData(SettingsKeys.AiBargeIn, "off")]
+        [InlineData(SettingsKeys.AiMediaPort, "9019")]
+        [InlineData(SettingsKeys.AiMediaPort, "1024")]
+        [InlineData(SettingsKeys.AiMediaPort, "65535")]
+        public void The_ai_toggle_and_port_take_their_values(string key, string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(key, value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.AiBargeIn, "yes")]
+        [InlineData(SettingsKeys.AiMediaPort, "80")]
+        [InlineData(SettingsKeys.AiMediaPort, "0")]
+        [InlineData(SettingsKeys.AiMediaPort, "70000")]
+        [InlineData(SettingsKeys.AiMediaPort, "port")]
+        public void The_ai_toggle_and_port_refuse_anything_else(string key, string value)
         {
             Assert.NotEmpty(SettingsValidation.Errors(key, value));
         }

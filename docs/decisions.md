@@ -4019,3 +4019,32 @@ inside Teams as an ordinary website tab that needs nothing from Entra or the Tea
 
 Reverted to v0.2.4; the abandoned work is preserved on branch `teams-client-abandoned`
 (commit a0eaf5e) for reference only. `main` no longer contains it.
+
+### D198. AI voice agent: the customer's own OpenRouter and ElevenLabs keys, in the Settings table (2026-10-29, settings)
+
+F11 needs two vendors and neither is ours: the model comes from OpenRouter and the speech from
+ElevenLabs, both on the customer's account. So the credentials are settings, not configuration:
+`Ai.OpenRouterApiKey`, `Ai.OpenRouterModel`, `Ai.ElevenLabsApiKey`, `Ai.ElevenLabsVoiceId`,
+`Ai.ElevenLabsModel`, `Ai.SttModel`, `Ai.BargeIn` and `Ai.MediaPort`, all listed in
+`SettingsKeys` and therefore visible and editable on the existing Settings page with no new UI.
+
+- **Scope: App for everything but the port.** Nothing generated reads a key, a model name or a
+  voice, so saving one applies nothing. `Ai.MediaPort` is Asterisk-scoped because the number is
+  written into the generated dialplan's `AudioSocket()` call, which does need an apply.
+- **The two API keys are secrets** (`SettingsKeys.IsSecret`): masked on the page exactly like
+  `Ami.Secret`, never logged, never rendered into a conf file. They are stored in the Settings
+  table in the clear, like every other secret this app holds — the table has no encryption story
+  yet and giving these two keys one of their own would make the next secret's story ambiguous.
+  Recorded as a known gap in security.md rather than pretended away; when a SecretStore lands it
+  covers all of them at once.
+- **Validation is shape only.** A key is checked for the characters a header value can carry
+  (8-200 of `A-Za-z0-9._-`), a model for an OpenRouter slug (`vendor/model`), a voice or
+  ElevenLabs model name for `A-Za-z0-9._-`. Whether the credentials work is the provider's answer
+  at call time; refusing a valid key at save time would be worse than a failed call.
+- **The TTS model defaults to Flash v2.5** (`eleven_flash_v2_5`) because it is the model ElevenLabs
+  tunes for telephony latency (~75 ms); the quality models add a second of silence before the
+  first word, which a live call cannot afford. The defaults live in `Models/AiSettings` so the
+  page states the same number the reader uses (D67).
+- **Barge-in is a toggle, on by default.** The agent stops speaking the moment the caller speaks;
+  a site whose lines echo badly can turn it off and get a stricter turn-taking loop instead of an
+  agent that interrupts itself.

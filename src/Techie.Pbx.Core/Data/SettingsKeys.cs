@@ -23,6 +23,53 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         public const string AsteriskLogDirectory = "Asterisk.LogDirectory";
 
+        /// <summary>
+        /// The OpenRouter API key the AI voice agents talk to (F11, D198). A secret: treat it
+        /// exactly like <see cref="AmiSecret"/> — never logged, never rendered into a conf file,
+        /// and the customer is billed for what it spends.
+        /// </summary>
+        public const string AiOpenRouterApiKey = "Ai.OpenRouterApiKey";
+
+        /// <summary>
+        /// The OpenRouter model slug an agent asks for, e.g. <c>openai/gpt-4o-mini</c> (F11, D198).
+        /// One site-wide default; an individual agent may name its own.
+        /// </summary>
+        public const string AiOpenRouterModel = "Ai.OpenRouterModel";
+
+        /// <summary>
+        /// The ElevenLabs API key that both writes the speech and reads the caller (F11, D198).
+        /// A secret, exactly like <see cref="AiOpenRouterApiKey"/>: the customer's account, the
+        /// customer's bill.
+        /// </summary>
+        public const string AiElevenLabsApiKey = "Ai.ElevenLabsApiKey";
+
+        /// <summary>The ElevenLabs voice the agents speak with, by voice ID (F11, D198).</summary>
+        public const string AiElevenLabsVoiceId = "Ai.ElevenLabsVoiceId";
+
+        /// <summary>
+        /// The ElevenLabs text-to-speech model, defaulting to <see cref="Models.AiSettings.DefaultTtsModel"/>
+        /// (F11, D198). Only the flash models are fast enough for a live call.
+        /// </summary>
+        public const string AiElevenLabsModel = "Ai.ElevenLabsModel";
+
+        /// <summary>Which ElevenLabs speech-to-text model transcribes the caller, blank for the provider's own default (F11, D198).</summary>
+        public const string AiSttModel = "Ai.SttModel";
+
+        /// <summary>
+        /// Whether the agent stops talking the moment the caller speaks (F11, D198): a <see cref="Models.Toggles"/>
+        /// value, on unless somebody turns it off. Off means the agent finishes its sentence before
+        /// it listens again — cheaper, and the fallback when a site's lines echo too much.
+        /// </summary>
+        public const string AiBargeIn = "Ai.BargeIn";
+
+        /// <summary>
+        /// The loopback port Asterisk's <c>AudioSocket()</c> dials the media listener on, defaulting
+        /// to <see cref="Models.AiSettings.DefaultMediaPort"/> (F11, D198). Asterisk-scoped because
+        /// the number is written into the generated dialplan; the listener itself binds the same port
+        /// on 127.0.0.1 and nothing else.
+        /// </summary>
+        public const string AiMediaPort = "Ai.MediaPort";
+
         public const string AmiHost = "Ami.Host";
         public const string AmiPort = "Ami.Port";
         public const string AmiUsername = "Ami.Username";
@@ -263,6 +310,14 @@ namespace Techie.Pbx.Core.Data
 
         private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
         {
+            AiBargeIn,
+            AiElevenLabsApiKey,
+            AiElevenLabsModel,
+            AiElevenLabsVoiceId,
+            AiMediaPort,
+            AiOpenRouterApiKey,
+            AiOpenRouterModel,
+            AiSttModel,
             AsteriskConfDirectory,
             AsteriskLogDirectory,
             AmiHost,
@@ -309,6 +364,8 @@ namespace Techie.Pbx.Core.Data
 
         private static readonly HashSet<string> SecretKeys = new(StringComparer.Ordinal)
         {
+            AiElevenLabsApiKey,
+            AiOpenRouterApiKey,
             AmiSecret,
             ProvisioningPassword,
             ProvisioningAdminPassword,
@@ -330,6 +387,18 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         private static readonly Dictionary<string, SettingScope> Scopes = new(StringComparer.Ordinal)
         {
+            // The AI keys are credentials and model names this application sends to OpenRouter and
+            // ElevenLabs; no conf file carries them, so saving one applies nothing (F11, D198). The
+            // media port is the exception: the generated dialplan names it in AudioSocket().
+            [AiBargeIn] = SettingScope.App,
+            [AiElevenLabsApiKey] = SettingScope.App,
+            [AiElevenLabsModel] = SettingScope.App,
+            [AiElevenLabsVoiceId] = SettingScope.App,
+            [AiMediaPort] = SettingScope.Asterisk,
+            [AiOpenRouterApiKey] = SettingScope.App,
+            [AiOpenRouterModel] = SettingScope.App,
+            [AiSttModel] = SettingScope.App,
+
             // Where the applier writes, and the directory the pjsip TLS certificate is named from.
             [AsteriskConfDirectory] = SettingScope.Asterisk,
 

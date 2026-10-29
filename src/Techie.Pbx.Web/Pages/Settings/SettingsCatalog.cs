@@ -34,6 +34,59 @@ namespace Techie.Pbx.Web.Pages.Settings
         {
             new SettingDescriptor
             {
+                Choices = Toggles.All,
+                Default = Toggles.On,
+                Description = "Whether an AI agent stops speaking the moment the caller starts. On is what a conversation needs; turn it off only if the site's lines echo badly enough that the agent keeps interrupting itself.",
+                Key = SettingsKeys.AiBargeIn,
+                Sample = Toggles.On,
+            },
+            new SettingDescriptor
+            {
+                Description = "The ElevenLabs API key the AI voice agents speak with. The customer's own account and bill; the key is stored like every other secret and never written into Asterisk's config.",
+                Key = SettingsKeys.AiElevenLabsApiKey,
+                Sample = "paste the ElevenLabs key",
+            },
+            new SettingDescriptor
+            {
+                Default = AiSettings.DefaultTtsModel,
+                Description = "The ElevenLabs model that speaks. Only the flash models are quick enough for a live call; the higher-quality ones add a second of silence before the first word.",
+                Key = SettingsKeys.AiElevenLabsModel,
+                Sample = AiSettings.DefaultTtsModel,
+            },
+            new SettingDescriptor
+            {
+                Description = "The ElevenLabs voice the agents speak with, by voice ID. Copy it from the voice's page in the ElevenLabs library.",
+                Key = SettingsKeys.AiElevenLabsVoiceId,
+                Sample = "JBFqnCBsd6RMkjVDRZzb",
+            },
+            new SettingDescriptor
+            {
+                Default = Number(AiSettings.DefaultMediaPort),
+                Description = $"The loopback port Asterisk's AudioSocket() dials the media service on, {AiSettings.MinMediaPort} to 65535. Change it only if something else on this server already holds {AiSettings.DefaultMediaPort}; Asterisk dials 127.0.0.1, so nothing on this port is reachable from the network.",
+                Key = SettingsKeys.AiMediaPort,
+                Sample = Number(AiSettings.DefaultMediaPort),
+            },
+            new SettingDescriptor
+            {
+                Description = "The OpenRouter API key the AI voice agents think with. A secret: the customer's own account, and every call is billed to it.",
+                Key = SettingsKeys.AiOpenRouterApiKey,
+                Sample = "paste the OpenRouter key",
+            },
+            new SettingDescriptor
+            {
+                Description = "The OpenRouter model an agent asks for by default, e.g. openai/gpt-4o-mini. An individual agent may name its own, and pasting a model the account cannot reach fails the call rather than the save.",
+                Key = SettingsKeys.AiOpenRouterModel,
+                Sample = "openai/gpt-4o-mini",
+            },
+            new SettingDescriptor
+            {
+                Default = AiSettings.DefaultSttModel,
+                Description = "The ElevenLabs speech-to-text model that transcribes the caller. Blank asks ElevenLabs for its default.",
+                Key = SettingsKeys.AiSttModel,
+                Sample = AiSettings.DefaultSttModel,
+            },
+            new SettingDescriptor
+            {
                 Default = AsteriskSettings.DefaultConfDirectory,
                 Description = "Where the generated conf files are written. Only change it to test against a copy of Asterisk's config.",
                 Key = SettingsKeys.AsteriskConfDirectory,

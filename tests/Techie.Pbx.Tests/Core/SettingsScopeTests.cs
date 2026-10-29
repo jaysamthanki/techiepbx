@@ -46,6 +46,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal(
                 new[]
                 {
+                    SettingsKeys.AiMediaPort,
                     SettingsKeys.AmiHost,
                     SettingsKeys.AmiPort,
                     SettingsKeys.AmiSecret,
@@ -119,6 +120,13 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal(
                 new[]
                 {
+                    SettingsKeys.AiBargeIn,
+                    SettingsKeys.AiElevenLabsApiKey,
+                    SettingsKeys.AiElevenLabsModel,
+                    SettingsKeys.AiElevenLabsVoiceId,
+                    SettingsKeys.AiOpenRouterApiKey,
+                    SettingsKeys.AiOpenRouterModel,
+                    SettingsKeys.AiSttModel,
                     SettingsKeys.AmiTimeoutSeconds,
                     SettingsKeys.AsteriskLogDirectory,
                     SettingsKeys.CertAcmeAccountKeyPem,
@@ -157,6 +165,9 @@ namespace Techie.Pbx.Tests.Core
         [InlineData(SettingsKeys.WebRequestLog, SettingScope.App)]
         [InlineData(SettingsKeys.ParkingEnabled, SettingScope.Asterisk)]
         [InlineData(SettingsKeys.ParkingAudio, SettingScope.Asterisk)]
+        [InlineData(SettingsKeys.AiMediaPort, SettingScope.Asterisk)]
+        [InlineData(SettingsKeys.AiOpenRouterApiKey, SettingScope.App)]
+        [InlineData(SettingsKeys.AiBargeIn, SettingScope.App)]
         public void Keys_are_scoped_by_what_reads_them(string key, SettingScope expected)
         {
             Assert.Equal(expected, SettingsKeys.ScopeOf(key));
