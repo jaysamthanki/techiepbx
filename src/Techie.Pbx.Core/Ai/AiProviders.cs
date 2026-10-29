@@ -55,6 +55,12 @@ namespace Techie.Pbx.Core.Ai
                 Content = JsonContent.Create(new
                 {
                     model,
+                    // Low temperature because this is a receptionist, not a writer: the same question
+                    // should get the same answer, and invention is the failure mode that matters.
+                    temperature = 0.2,
+                    // Short replies are the point on a phone call, and the cap is what stops a model
+                    // from producing a paragraph nobody wants read aloud.
+                    max_tokens = 250,
                     messages = messages.Select(m => new { role = m.Role, content = m.Content }).ToArray(),
                 }),
             };

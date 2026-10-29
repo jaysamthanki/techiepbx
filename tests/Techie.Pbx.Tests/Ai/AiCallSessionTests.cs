@@ -99,6 +99,23 @@ namespace Techie.Pbx.Tests.Ai
             };
         }
 
+        /// <summary>
+        /// The rules the first live calls earned (D200): a model with no facts invents an address, so
+        /// the prompt forbids invention outright, and the transfer token is only offered when the
+        /// agent actually has somewhere to hand the caller.
+        /// </summary>
+        [Theory]
+        [InlineData("", false)]
+        [InlineData("104", true)]
+        public void The_system_prompt_forbids_inventing_facts_and_names_the_token_only_with_a_handoff(string transferTo, bool transfer)
+        {
+            var prompt = AiCallSession.SystemPrompt(Agent(transferTo: transferTo));
+
+            Assert.StartsWith("You are the receptionist.", prompt, StringComparison.Ordinal);
+            Assert.Contains("never invent facts", prompt, StringComparison.Ordinal);
+            Assert.Equal(transfer, prompt.Contains(AiCallSession.TransferToken, StringComparison.Ordinal));
+        }
+
         [Fact]
         public async Task The_greeting_is_spoken_first_without_asking_the_model()
         {
@@ -167,7 +184,9 @@ namespace Techie.Pbx.Tests.Ai
             await run.WaitAsync(TimeSpan.FromSeconds(10));
 
             var chat = Assert.Single(this.chats);
-            Assert.Equal(("system", "You are the receptionist."), chat[0]);
+            Assert.Equal("system", chat[0].Role);
+            Assert.StartsWith("You are the receptionist.", chat[0].Content, StringComparison.Ordinal);
+            Assert.Contains("never invent facts", chat[0].Content, StringComparison.Ordinal);
             Assert.Equal(("user", "When do you open?"), chat[1]);
             Assert.Equal(new[] { "We open at nine." }, this.spoken);
             Assert.Equal(3, this.stream.WrittenFrames.Count);

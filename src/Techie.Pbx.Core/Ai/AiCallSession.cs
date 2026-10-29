@@ -127,12 +127,21 @@ namespace Techie.Pbx.Core.Ai
         /// </summary>
         public static string SystemPrompt(AiAgent agent)
         {
-            if (agent.TransferTo.Length == 0)
-                return agent.Prompt;
+            // The rule that answers the failure the first live calls showed: asked where the office
+            // is, a model with no facts invents an address. A receptionist that says it does not know
+            // and offers the handoff is useful; one that invents a street is a liability.
+            const string Rules =
+                "\n\nRules: never invent facts about this business — no address, opening hours, prices, " +
+                "policies or names you were not given above. If you do not know something, say so in one " +
+                "short sentence. Keep every reply to one or two short spoken sentences.";
 
-            return agent.Prompt.TrimEnd() + "\n\n" +
-                $"If the caller asks for a person, or you cannot help them, a transfer to a member of staff is available: " +
-                $"say a short goodbye and end your reply with the exact token {TransferToken} on its own.";
+            if (agent.TransferTo.Length == 0)
+                return agent.Prompt.TrimEnd() + Rules;
+
+            return agent.Prompt.TrimEnd() + Rules +
+                "\n\nIf the caller asks for a person, or asks something you cannot answer, a transfer to a member " +
+                $"of staff is available: end your reply with the exact token {TransferToken} on its own. Do not " +
+                "transfer for a question you can answer, and do not say goodbye without the token.";
         }
 
         /// <summary>
