@@ -63,5 +63,40 @@ namespace Techie.Pbx.Tests.Ai
 
             Assert.DoesNotContain(Key, snapshot.ToString());
         }
+        /// <summary>
+        /// Which provider is configured (D204): OpenRouter needs its key, Ollama its URL and a model
+        /// — the agent's own model stands in for a blank site-wide one.
+        /// </summary>
+        [Theory]
+        [InlineData(AiModelProviders.Ollama, "http://10.8.20.5:11434", "llama3.2", "", true)]
+        [InlineData(AiModelProviders.Ollama, "http://10.8.20.5:11434", "", "", false)]
+        [InlineData(AiModelProviders.Ollama, "", "llama3.2", "", false)]
+        [InlineData(AiModelProviders.Ollama, "http://10.8.20.5:11434", "", "llama3.2", true)]
+        [InlineData(AiModelProviders.OpenRouter, "http://10.8.20.5:11434", "llama3.2", "", false)]
+        [InlineData(AiModelProviders.OpenRouter, "", "", "", false)]
+        public void What_counts_as_configured_depends_on_the_provider(string provider, string url, string model, string agentModel, bool configured)
+        {
+            var snapshot = AiSettingsSnapshot.From(new Dictionary<string, string>
+            {
+                [SettingsKeys.AiProvider] = provider,
+                [SettingsKeys.AiOllamaUrl] = url,
+                [SettingsKeys.AiOllamaModel] = model,
+            });
+
+            Assert.Equal(provider, snapshot.Provider);
+            Assert.Equal(configured, snapshot.MissingForChat(agentModel).Length == 0);
+        }
+
+        [Fact]
+        public void A_trailing_slash_on_the_ollama_url_is_dropped()
+        {
+            var snapshot = AiSettingsSnapshot.From(new Dictionary<string, string>
+            {
+                [SettingsKeys.AiOllamaUrl] = " http://10.8.20.5:11434/ ",
+            });
+
+            Assert.Equal("http://10.8.20.5:11434", snapshot.OllamaUrl);
+        }
+
     }
 }

@@ -37,6 +37,23 @@ namespace Techie.Pbx.Core.Data
         public const string AiOpenRouterModel = "Ai.OpenRouterModel";
 
         /// <summary>
+        /// Which service answers the AI agents' chat half (F11, D204): an <see cref="Models.AiModelProviders"/>
+        /// value, blank for <see cref="Models.AiModelProviders.Default"/>. Speech stays ElevenLabs
+        /// whichever is chosen.
+        /// </summary>
+        public const string AiProvider = "Ai.Provider";
+
+        /// <summary>
+        /// The base URL of the customer's own Ollama-compatible server, e.g. <c>http://10.8.20.5:11434</c>
+        /// (F11, D204). http or https, no credentials, query or fragment; stored without a trailing
+        /// slash. Admin-only, and what it points at is the admin's own network (security.md).
+        /// </summary>
+        public const string AiOllamaUrl = "Ai.OllamaUrl";
+
+        /// <summary>The model the Ollama server is asked for, e.g. <c>llama3.1:8b</c> (F11, D204). An agent may name its own.</summary>
+        public const string AiOllamaModel = "Ai.OllamaModel";
+
+        /// <summary>
         /// The ElevenLabs API key that both writes the speech and reads the caller (F11, D198).
         /// A secret, exactly like <see cref="AiOpenRouterApiKey"/>: the customer's account, the
         /// customer's bill.
@@ -325,8 +342,11 @@ namespace Techie.Pbx.Core.Data
             AiElevenLabsVoiceId,
             AiLogTranscripts,
             AiMediaPort,
+            AiOllamaModel,
+            AiOllamaUrl,
             AiOpenRouterApiKey,
             AiOpenRouterModel,
+            AiProvider,
             AiSttModel,
             AsteriskConfDirectory,
             AsteriskLogDirectory,
@@ -397,17 +417,20 @@ namespace Techie.Pbx.Core.Data
         /// </summary>
         private static readonly Dictionary<string, SettingScope> Scopes = new(StringComparer.Ordinal)
         {
-            // The AI keys are credentials and model names this application sends to OpenRouter and
-            // ElevenLabs; no conf file carries them, so saving one applies nothing (F11, D198). The
-            // media port is the exception: the generated dialplan names it in AudioSocket().
+            // The AI keys are credentials, URLs and model names this application sends to the model
+            // provider and ElevenLabs; no conf file carries them, so saving one applies nothing (F11,
+            // D198, D204). The media port is the exception: the generated dialplan names it in AudioSocket().
             [AiBargeIn] = SettingScope.App,
             [AiElevenLabsApiKey] = SettingScope.App,
             [AiElevenLabsModel] = SettingScope.App,
             [AiElevenLabsVoiceId] = SettingScope.App,
             [AiLogTranscripts] = SettingScope.App,
             [AiMediaPort] = SettingScope.Asterisk,
+            [AiOllamaModel] = SettingScope.App,
+            [AiOllamaUrl] = SettingScope.App,
             [AiOpenRouterApiKey] = SettingScope.App,
             [AiOpenRouterModel] = SettingScope.App,
+            [AiProvider] = SettingScope.App,
             [AiSttModel] = SettingScope.App,
 
             // Where the applier writes, and the directory the pjsip TLS certificate is named from.

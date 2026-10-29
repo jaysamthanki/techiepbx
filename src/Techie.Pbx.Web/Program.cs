@@ -12,6 +12,7 @@ using Techie.Pbx.Asterisk.Ami;
 using Techie.Pbx.Core.Ai;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Diagnostics;
+using Techie.Pbx.Core.Models;
 using Techie.Pbx.Core.Security;
 using Techie.Pbx.Web.Ai;
 using Techie.Pbx.Web.CallRecords;
@@ -177,13 +178,22 @@ namespace Techie.Pbx.Web
             // Listens on AMI for call records and stores them for the reports page (F5).
             builder.Services.AddHostedService<CdrCollectorService>();
 
-            // The far end of every AI agent's AudioSocket (F11, D200), only when both provider keys
-            // are set: without them no call could be answered, so nothing listens. Setting the keys
-            // later needs an app restart to start it.
-            if (AiSettingsSnapshot.From(settings.GetAll()).IsConfigured)
+            // The far end of every AI agent's AudioSocket (F11, D200), only when speech and the
+            // chosen model provider are set up (D204): without them no call could be answered, so
+            // nothing listens. Setting them later needs an app restart to start it.
+            var ai = AiSettingsSnapshot.From(settings.GetAll());
+            var aiMissing = AiMediaListener.StartupMissing(ai, new AiAgentRepository(PbxDatabase.Current).GetAll());
+
+            if (aiMissing.Length == 0)
+            {
+                var where = ai.Provider == AiModelProviders.Ollama ? $" at {ai.OllamaUrl}" : "";
+                Log.Info($"AI media listener starting: model provider {AiModelProviders.Display(ai.Provider)}{where}, speech ElevenLabs.");
                 builder.Services.AddHostedService<AiMediaListener>();
+            }
             else
-                Log.Info("AI media listener not started: the OpenRouter and ElevenLabs keys are not both set.");
+            {
+                Log.Info($"AI media listener not started: {aiMissing} Setting it later needs an app restart.");
+            }
 
             if (certificate != null)
                 builder.Services.AddHttpsRedirection(options => options.HttpsPort = WebBindings.HttpsPort);

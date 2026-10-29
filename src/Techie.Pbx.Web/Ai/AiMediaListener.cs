@@ -49,6 +49,21 @@ namespace Techie.Pbx.Web.Ai
 
         private int activeCalls;
 
+        /// <summary>
+        /// Why the listener should not start, or empty when it should (D204): speech and the chosen
+        /// model provider are set up, and a model resolves — the site default, or for Ollama any
+        /// enabled agent's own. Pure, so the startup rule can be checked without a database.
+        /// </summary>
+        public static string StartupMissing(AiSettingsSnapshot settings, IEnumerable<AiAgent> agents)
+        {
+            var missing = settings.Missing("");
+
+            if (missing.Length == 0 || agents.Any(a => a.Enabled && settings.Missing(a.Model).Length == 0))
+                return "";
+
+            return missing;
+        }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var port = AiSettingsSnapshot.From(new SettingsRepository(PbxDatabase.Current).GetAll()).MediaPort;
@@ -153,9 +168,11 @@ namespace Techie.Pbx.Web.Ai
 
                     var settings = AiSettingsSnapshot.From(new SettingsRepository(PbxDatabase.Current).GetAll());
 
-                    if (!settings.IsConfigured)
+                    var missing = settings.Missing(agent.Model);
+
+                    if (missing.Length > 0)
                     {
-                        Log.Warn($"AI agent {agent.Number}: the OpenRouter or ElevenLabs key is not set; handing the call to the dialplan.");
+                        Log.Warn($"AI agent {agent.Number}: {missing} Handing the call to the dialplan.");
                         return;
                     }
 

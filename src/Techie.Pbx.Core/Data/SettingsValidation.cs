@@ -88,6 +88,21 @@ namespace Techie.Pbx.Core.Data
                         errors.Add("The model must be an OpenRouter model slug, e.g. openai/gpt-4o-mini.");
                     break;
 
+                case SettingsKeys.AiOllamaModel:
+                    if (!ModelPattern().IsMatch(text))
+                        errors.Add("The model must be an Ollama model name, e.g. llama3.1:8b: letters, digits and . _ : / -, up to 128 characters.");
+                    break;
+
+                case SettingsKeys.AiOllamaUrl:
+                    if (!IsOllamaUrl(text))
+                        errors.Add("The Ollama URL must be an http or https address with a host and an optional port, e.g. http://10.8.20.5:11434, with no user name, password, query string or fragment.");
+                    break;
+
+                case SettingsKeys.AiProvider:
+                    if (!AiModelProviders.IsKnown(text))
+                        errors.Add($"The model provider must be one of: {string.Join(", ", AiModelProviders.All)}. Leave it blank for {AiModelProviders.Default}.");
+                    break;
+
                 case SettingsKeys.AiElevenLabsVoiceId:
                 case SettingsKeys.AiElevenLabsModel:
                 case SettingsKeys.AiSttModel:
@@ -326,6 +341,28 @@ namespace Techie.Pbx.Core.Data
         }
 
         /// <summary>
+        /// The base URL of an Ollama-compatible server (D204): absolute, http or https, a host, an
+        /// optional port and path, and nothing else — no user name or password, no query string, no
+        /// fragment, no whitespace. A trailing slash is accepted because <see cref="Normalised"/>
+        /// takes it off before the value is stored. The admin is pointing their own appliance at
+        /// their own server, which is why an outbound URL is acceptable here at all (security.md).
+        /// </summary>
+        public static bool IsOllamaUrl(string value)
+        {
+            var text = value.Trim();
+
+            if (text.Length == 0 || text.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) || text.IndexOfAny(['?', '#', '@', '\\']) >= 0)
+                return false;
+
+            return Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+                uri.Host.Length > 0 &&
+                uri.UserInfo.Length == 0 &&
+                uri.Query.Length == 0 &&
+                uri.Fragment.Length == 0;
+        }
+
+        /// <summary>
         /// The shape of the DTMF a user presses to park a call: a star and one or two digits
         /// (D119). Public because <c>ParkingSettings</c> checks it the same way before the value
         /// reaches features.conf, so the value the page accepts and the value the file can carry
@@ -354,6 +391,14 @@ namespace Techie.Pbx.Core.Data
         /// two from drifting.
         /// </summary>
         public static bool IsZoneName(string value) => SystemTimezones.IsZoneName(value);
+
+        /// <summary>
+        /// The value as it is stored. <see cref="SettingsKeys.AiOllamaUrl"/> loses its surrounding
+        /// whitespace and any trailing slash, so that the request path can be appended without
+        /// doubling it (D204); every other key is stored exactly as given.
+        /// </summary>
+        public static string Normalised(string key, string value) =>
+            key == SettingsKeys.AiOllamaUrl ? value.Trim().TrimEnd('/') : value;
 
         /// <summary>
         /// Whether this machine's zone database can be read at all. A machine without tzdata would

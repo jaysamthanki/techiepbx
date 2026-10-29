@@ -193,7 +193,7 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>The turn loop, returning how the call should end.</summary>
         private async Task<AiCallOutcome> ConverseAsync(Stream socket, CancellationToken cancellationToken)
         {
-            var model = this.agent.Model.Length > 0 ? this.agent.Model : this.settings.OpenRouterModel;
+            var model = this.settings.ModelFor(this.agent.Model);
             var silentTurns = 0;
             var turn = 0;
             var systemPrompt = SystemPrompt(this.agent, this.transferTargets.Count > 0);

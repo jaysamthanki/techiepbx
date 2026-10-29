@@ -688,5 +688,51 @@ namespace Techie.Pbx.Tests.Core
         {
             Assert.NotEmpty(SettingsValidation.Errors(key, value));
         }
+        /// <summary>
+        /// The Ollama URL is typed by an admin and dialled by this app (D204), so it is an http/https
+        /// address and nothing else: no other scheme, no credentials in it, no query string.
+        /// </summary>
+        [Theory]
+        [InlineData("http://10.8.20.5:11434")]
+        [InlineData("https://ollama.example.com")]
+        [InlineData("http://ollama:11434")]
+        public void An_ollama_url_that_is_a_plain_address_is_accepted(string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(SettingsKeys.AiOllamaUrl, value));
+            Assert.True(SettingsValidation.IsOllamaUrl(value));
+        }
+
+        [Theory]
+        [InlineData("10.8.20.5:11434")]
+        [InlineData("file:///etc/passwd")]
+        [InlineData("ftp://host/")]
+        [InlineData("http://user:pass@host:11434")]
+        [InlineData("http://host:11434/?model=x")]
+        [InlineData("not a url")]
+        public void An_ollama_url_that_is_anything_else_is_rejected(string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(SettingsKeys.AiOllamaUrl, value));
+            Assert.False(SettingsValidation.IsOllamaUrl(value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.AiProvider, AiModelProviders.OpenRouter)]
+        [InlineData(SettingsKeys.AiProvider, AiModelProviders.Ollama)]
+        [InlineData(SettingsKeys.AiOllamaModel, "llama3.2")]
+        [InlineData(SettingsKeys.AiOllamaModel, "qwen2.5:14b")]
+        public void The_ai_provider_settings_take_their_values(string key, string value)
+        {
+            Assert.Empty(SettingsValidation.Errors(key, value));
+        }
+
+        [Theory]
+        [InlineData(SettingsKeys.AiProvider, "anthropic")]
+        [InlineData(SettingsKeys.AiProvider, "Ollama")]
+        [InlineData(SettingsKeys.AiOllamaModel, "not a model")]
+        public void The_ai_provider_settings_refuse_anything_else(string key, string value)
+        {
+            Assert.NotEmpty(SettingsValidation.Errors(key, value));
+        }
+
     }
 }

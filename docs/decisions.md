@@ -4216,3 +4216,33 @@ D201 left the handoff fixed per agent. "Can I speak to Anishi?" should reach ext
   the prompt offers the tool instead of the token.
 - **What the provider sees.** The extension numbers and names go to OpenRouter on every turn,
   alongside the prompt the customer already sends there.
+
+### D204. AI settings get a page, and the model half gets a provider choice (2026-10-29, F11)
+
+The AI settings were eight keys on the general key/value list, which said nothing about which of
+them belong together or which one has to be right for a call to work. They now have their own page
+under **Settings → AI settings**, grouped into the question an admin actually asks (D204 follows the
+SIP page's shape, D74): the model provider, that provider's own settings, speech, and conversation.
+The rows are the same `SettingRow`s and the same save handler as the general page, so a value is
+validated, stored and logged in exactly one place.
+
+- **Two model providers.** `Ai.Provider` is `openrouter` (the default) or `ollama`. OpenRouter keeps
+  the API key and model slug; Ollama keeps a base URL and a model name and no key at all, because the
+  server is the customer's own. Only the chosen provider's group is shown, and saving the provider
+  re-renders the groups, so nothing client-side has to keep two lists in step.
+- **The switch is the chat half only.** Speech stays ElevenLabs, which hears the caller and speaks
+  the reply. A local speech provider (the thing Michael is standing up) is anticipated: it is one
+  more value plus one more group, not a rework — but it is not built and has no keys.
+- **Ollama is close to OpenRouter, not identical.** `POST {url}/api/chat` wants `stream: false` to
+  answer in one piece, its limits live under `options` (`temperature`, `num_predict`), and — the trap
+  — a tool call's `arguments` is a **JSON object**, where OpenRouter sends a JSON string. Both are
+  normalised into the same internal reply, so the call session cannot tell them apart.
+- **The URL is normalised once**: stored without a trailing slash, http/https only, no credentials
+  in it, no query string — and `IsOllamaUrl` is both the validator and the guard at call time, so a
+  stored value that predates a rule cannot produce a request.
+- **Two test buttons.** One asks the configured provider for the single word OK; one has ElevenLabs
+  speak one sentence and reports its length. A wrong URL, key or model is therefore visible from the
+  page, without placing a call or reading a journal.
+- **Ollama's URL is an outbound address an admin typed**, on their own appliance, from an
+  admin-only page. Recorded in security.md: acceptable, and limited to http/https with no query,
+  fragment or embedded credentials.

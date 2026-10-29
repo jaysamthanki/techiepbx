@@ -290,6 +290,11 @@ D202/D203:** the caller can also ask for a person by name ("can I speak to Anish
 transfers them to that extension, chosen at runtime from the enabled extensions, by AMI `Redirect`;
 the fixed handoff stays the fallback for every other way a call ends.
 
+Settings live on their own page (Settings → AI settings, D204): a **model provider** choice —
+OpenRouter, or any Ollama-compatible server by URL plus model name, no key — the ElevenLabs speech
+settings, the conversation switches, and two buttons that test the model provider and the voice
+without placing a call. A local speech provider is planned as one more choice; it is not built.
+
 Settled in D200: speech-to-text is ElevenLabs Scribe on the same key; a call is turn-by-turn with
 barge-in on by default; and a provider failure is not a dead line — the service closes the socket so
 the dialplan's handoff runs, or hangs up when the agent has none.

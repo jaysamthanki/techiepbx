@@ -62,10 +62,12 @@ namespace Techie.Pbx.Core.Data
         /// <summary>
         /// Inserts or replaces one setting. Throws <see cref="ValidationFailedException"/> for an
         /// unknown key — a typo should fail loudly, not quietly store a value nothing ever reads —
-        /// and for a value the key cannot hold, such as a port that is not a number (D67).
+        /// and for a value the key cannot hold, such as a port that is not a number (D67). The value
+        /// is stored in <see cref="SettingsValidation.Normalised"/> form.
         /// </summary>
         public void Set(string key, string value)
         {
+            value = SettingsValidation.Normalised(key, value);
             ThrowIfInvalid(key, value);
 
             using var connection = this.database.Open();

@@ -1,0 +1,43 @@
+@page
+@model AiSettingsModel
+@{
+    ViewData["Title"] = "AI settings";
+
+    var tableUrl = Url.Page("AiSettings", "Table");
+    var testModelUrl = Url.Page("AiSettings", "TestModel");
+    var testVoiceUrl = Url.Page("AiSettings", "TestVoice");
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">AI settings</h1>
+</div>
+
+<p class="text-secondary">
+    What answers an AI agent's calls: the model provider, the voice it speaks with, and how a call
+    behaves. These are the same <code>Ai.*</code> settings the
+    <a asp-page="/Settings/Index">general settings page</a> lists, grouped, and they are edited the
+    same way — click a row. Neither test places a call.
+</p>
+
+@* The groups arrive from the Table handler, and come back whenever a setting changed. Saving the
+   provider answers "settingsChanged", so the group below it is replaced with the one that applies. *@
+<div id="ai-settings" hx-get="@tableUrl" hx-trigger="load, settingsChanged from:body">
+    <p class="text-secondary">Loading AI settings…</p>
+</div>
+
+<div class="d-flex gap-2 mb-3">
+    <button type="button" class="btn btn-outline-secondary"
+            hx-post="@testModelUrl"
+            hx-swap="none"
+            title="Ask the configured model provider for one word, and report what came back.">
+        Test model provider
+    </button>
+    <button type="button" class="btn btn-outline-secondary"
+            hx-post="@testVoiceUrl"
+            hx-swap="none"
+            title="Have ElevenLabs speak one sentence, and report how much audio it made.">
+        Test voice
+    </button>
+</div>
+
+<partial name="_FormModal" />

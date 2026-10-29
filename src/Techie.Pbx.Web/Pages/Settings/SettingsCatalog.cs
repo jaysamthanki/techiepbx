@@ -76,6 +76,18 @@ namespace Techie.Pbx.Web.Pages.Settings
             },
             new SettingDescriptor
             {
+                Description = "The model name the Ollama server is asked for by default, e.g. llama3.1:8b, exactly as `ollama list` shows it. An individual agent may name its own; a model the server has not pulled fails the call rather than the save.",
+                Key = SettingsKeys.AiOllamaModel,
+                Sample = "llama3.1:8b",
+            },
+            new SettingDescriptor
+            {
+                Description = "The base URL of the customer's own Ollama-compatible server, http or https with an optional port, e.g. http://10.8.20.5:11434. No user name, password or query string; a trailing slash is taken off when it is saved. Only used when the model provider is ollama.",
+                Key = SettingsKeys.AiOllamaUrl,
+                Sample = "http://10.8.20.5:11434",
+            },
+            new SettingDescriptor
+            {
                 Description = "The OpenRouter API key the AI voice agents think with. A secret: the customer's own account, and every call is billed to it.",
                 Key = SettingsKeys.AiOpenRouterApiKey,
                 Sample = "paste the OpenRouter key",
@@ -85,6 +97,14 @@ namespace Techie.Pbx.Web.Pages.Settings
                 Description = "The OpenRouter model an agent asks for by default, e.g. openai/gpt-4o-mini. An individual agent may name its own, and pasting a model the account cannot reach fails the call rather than the save.",
                 Key = SettingsKeys.AiOpenRouterModel,
                 Sample = "openai/gpt-4o-mini",
+            },
+            new SettingDescriptor
+            {
+                Choices = AiModelProviders.All,
+                Default = AiModelProviders.Default,
+                Description = "Where the AI agents' chat half runs: openrouter (the customer's OpenRouter key) or ollama (an Ollama-compatible server on the customer's own network). Speech stays ElevenLabs either way.",
+                Key = SettingsKeys.AiProvider,
+                Sample = AiModelProviders.Default,
             },
             new SettingDescriptor
             {
