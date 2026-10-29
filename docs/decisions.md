@@ -4080,3 +4080,45 @@ groups) and is a destination (`DestinationType.AiAgent`, value = the agent's num
   IVR keys, time conditions, call flow controls, ring group failover), and every repository that
   validates a destination, and the status page's broken-destination rule, resolve it against the
   live agents, so only an enabled agent is offered or accepted.
+
+### D200. AI voice agent: the media service, in-process, one request per turn (2026-10-29, F11)
+
+The far end of every agent's `AudioSocket()` is `AiMediaListener`, a hosted service in the web
+app listening on `127.0.0.1:Ai.MediaPort` only. Per connection it reads the UUID frame, finds the
+enabled agent with that `ServiceUuid` (D199) and runs one `AiCallSession`: greeting, then
+listen → ElevenLabs speech-to-text → OpenRouter chat → ElevenLabs `ulaw_8000` speech, turn after
+turn. It never touches ARI or AMI; every way the agent ends a call is closing the socket.
+
+- **Turn-taking is energy VAD** (`Endpointer`): 20 ms windows, a window at or above RMS 500 is
+  speech, a turn needs 300 ms of speech and ends after 400 ms of quiet, or at 20 s regardless.
+  300 ms of pre-roll goes with the utterance so the first syllable is not clipped. Audio that
+  arrives while the agent is thinking is discarded.
+- **Barge-in by threshold.** With `Ai.BargeIn` on, the caller's frames are read between the
+  agent's 20 ms chunks; the first one over the speech threshold stops playback and seeds the next
+  utterance. Off, they are read and thrown away until playback ends. A goodbye before a transfer
+  always plays out whole. Playback is paced in real time: Asterisk writes each frame to the channel
+  on arrival, so a sentence sent all at once would overrun the phone's jitter buffer.
+- **One STT request per turn, not a streaming socket.** A WAV of the finished utterance is one
+  multipart POST. Streaming would save some latency at the cost of a websocket client, partial
+  transcripts and their own endpointing; simplicity first, and measure on the lab before
+  optimising.
+- **In-process, not a separate daemon.** One binary to install, update and log; the keys are
+  already in the Settings table the web app reads; no new service account or unit file. The cost
+  is that an app restart drops calls in progress (an apply does not). The listener
+  is registered only when both provider keys are set at startup (setting them later needs an app
+  restart; the port, too, is read once at start); keys and voices are re-read per call.
+- **Caps.** A call lasts at most 10 minutes, then the socket closes. At most 8 calls run at once;
+  a ninth connection is closed at once, which sends the caller on through the dialplan. Three
+  turns in a row with an empty transcript end the call the same way. A frame longer than 16 KB is
+  a peer not speaking AudioSocket and ends the call.
+- **Transfer is a token.** When the agent has a `TransferTo`, one sentence is appended to its
+  prompt: end the reply with `[TRANSFER]` on its own to pass the caller to staff. The token is
+  stripped, any text before it is spoken, and the socket closes so the dialplan's `Goto` runs.
+  An agent with no handoff is not told about the token (a closed socket there would hang up).
+  The last 12 messages (caller and agent together) go with each chat request.
+- **A provider failure hands the call to the dialplan, not dead air.** Any STT, chat or TTS
+  failure (status, timeout of 15/20/15 s, network, unexpected JSON) is an `AiProviderException`
+  whose message is a status code and the provider's error text with the key scrubbed out; it is
+  logged and the socket closes, so the caller reaches the handoff extension or is hung up.
+- **What is logged.** One INFO line per call: agent number, duration, outcome. Never a transcript,
+  never a reply, never a key (`AiSettingsSnapshot.ToString` omits both keys).

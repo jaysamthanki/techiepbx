@@ -261,5 +261,20 @@ namespace Techie.Pbx.Tests.Core
 
             Assert.Null(this.agents.GetByID(id));
         }
+
+        [Fact]
+        public void An_agent_is_found_by_its_socket_uuid_only_while_it_is_enabled()
+        {
+            var agent = Agent();
+            this.agents.Insert(agent);
+
+            Assert.Equal(agent.AiAgentID, this.agents.GetByServiceUuid(agent.ServiceUuid)?.AiAgentID);
+            Assert.Null(this.agents.GetByServiceUuid(Guid.NewGuid().ToString("D")));
+
+            agent.Enabled = false;
+            this.agents.Update(agent);
+
+            Assert.Null(this.agents.GetByServiceUuid(agent.ServiceUuid));
+        }
     }
 }

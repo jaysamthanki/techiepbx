@@ -48,6 +48,15 @@ namespace Techie.Pbx.Core.Data
                 $"SELECT {Columns} FROM AiAgents WHERE Number = @number", new { number });
         }
 
+        /// <summary>
+        /// The enabled agent whose socket UUID this is (D199, D200), or null. The UUID is derived
+        /// from the row ID rather than stored, so this compares against every row; a site has a
+        /// handful of agents, and the lookup happens once per call.
+        /// </summary>
+        public AiAgent? GetByServiceUuid(string serviceUuid) =>
+            this.GetAll().FirstOrDefault(a =>
+                a.Enabled && string.Equals(a.ServiceUuid, serviceUuid, StringComparison.OrdinalIgnoreCase));
+
         public long Insert(AiAgent agent)
         {
             this.ThrowIfInvalid(agent);

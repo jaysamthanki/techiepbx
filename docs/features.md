@@ -277,13 +277,18 @@ it knows who it is, what the business is, and what it may do.
   agent's system prompt → ElevenLabs text-to-speech (`ulaw_8000`) → back into the socket.
 - **Where it attaches**: as a destination (inbound route, IVR key, time condition, CFC) and
   as a dialable play extension, the way announcements (F7) and time conditions (F8) work.
-- **Keys at rest**: encrypted with the app's data-protection ring, never in a generated conf
-  file or a log.
+- **Keys at rest**: masked in the UI and never logged or written to a conf file, but stored in the
+  Settings table in the clear like every other secret (D198, a recorded gap in security.md).
 - **Not on the list yet**: outbound calling, voicemail-box agents, multi-agent handoff, any
   always-on call monitoring.
 
 Settled in D199: an agent is its own entity (number, name, prompt, greeting, voice, model,
-optional handoff extension) and may hand a caller to a real extension. Design questions open at
-intake and still open: what it falls back to when the LLM or TTS fails; which vendor does speech-to-text (ElevenLabs Scribe
-on the same key, or a second provider key); and whether v1 streams turn-by-turn with barge-in
-or answers only when the caller stops talking.
+optional handoff extension) and may hand a caller to a real extension.
+
+Settled in D200: speech-to-text is ElevenLabs Scribe on the same key; a call is turn-by-turn with
+barge-in on by default; and a provider failure is not a dead line — the service closes the socket so
+the dialplan's handoff runs, or hangs up when the agent has none.
+
+Also wrong in the bullets above: the two API keys are **not** encrypted — they are masked in the UI
+and stored in the clear like every other secret, recorded as a gap in [security.md](security.md)
+(D198).

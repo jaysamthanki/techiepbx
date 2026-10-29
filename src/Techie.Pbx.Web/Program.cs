@@ -9,9 +9,11 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 using Techie.Pbx.Asterisk.Ami;
+using Techie.Pbx.Core.Ai;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Diagnostics;
 using Techie.Pbx.Core.Security;
+using Techie.Pbx.Web.Ai;
 using Techie.Pbx.Web.CallRecords;
 using Techie.Pbx.Web.Certificates;
 using Techie.Pbx.Web.Security;
@@ -174,6 +176,14 @@ namespace Techie.Pbx.Web
 
             // Listens on AMI for call records and stores them for the reports page (F5).
             builder.Services.AddHostedService<CdrCollectorService>();
+
+            // The far end of every AI agent's AudioSocket (F11, D200), only when both provider keys
+            // are set: without them no call could be answered, so nothing listens. Setting the keys
+            // later needs an app restart to start it.
+            if (AiSettingsSnapshot.From(settings.GetAll()).IsConfigured)
+                builder.Services.AddHostedService<AiMediaListener>();
+            else
+                Log.Info("AI media listener not started: the OpenRouter and ElevenLabs keys are not both set.");
 
             if (certificate != null)
                 builder.Services.AddHttpsRedirection(options => options.HttpsPort = WebBindings.HttpsPort);

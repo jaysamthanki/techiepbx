@@ -1,4 +1,5 @@
 using Techie.Pbx.Asterisk.Ami;
+using Techie.Pbx.Core.Ai;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
 
@@ -33,13 +34,11 @@ namespace Techie.Pbx.Asterisk.Config
         /// <summary>
         /// The loopback port an AI agent's AudioSocket() dials (D198, D199). Out of range or not a
         /// number falls back to the default, for the reason <see cref="Timezone"/> does.
+        /// The rule lives in <see cref="AiSettingsSnapshot"/> so the dialplan and the media
+        /// listener can never disagree about which port a call is on (D200).
         /// </summary>
-        public static int AiMediaPort(IReadOnlyDictionary<string, string> settings)
-        {
-            var port = Number(settings, SettingsKeys.AiMediaPort, AiSettings.DefaultMediaPort);
-
-            return port is >= AiSettings.MinMediaPort and <= 65535 ? port : AiSettings.DefaultMediaPort;
-        }
+        public static int AiMediaPort(IReadOnlyDictionary<string, string> settings) =>
+            AiSettingsSnapshot.From(settings).MediaPort;
 
         public static string ConfDirectory(IReadOnlyDictionary<string, string> settings) =>
             Text(settings, SettingsKeys.AsteriskConfDirectory) ?? DefaultConfDirectory;
