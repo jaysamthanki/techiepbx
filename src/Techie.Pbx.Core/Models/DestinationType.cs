@@ -10,6 +10,12 @@ namespace Techie.Pbx.Core.Models
     public enum DestinationType
     {
         /// <summary>
+        /// Hand the caller to an AI voice agent (F11). The value is the agent's number, which is
+        /// dialled like an extension and is the one door into the agent's entry (D199).
+        /// </summary>
+        AiAgent,
+
+        /// <summary>
         /// Play a recorded message and hang up. The value is the announcement's play extension,
         /// which is why an announcement without one cannot be a destination (D56).
         /// </summary>

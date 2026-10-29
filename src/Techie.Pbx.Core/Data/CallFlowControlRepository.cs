@@ -199,11 +199,12 @@ namespace Techie.Pbx.Core.Data
                 var announcements = new AnnouncementRepository(this.database).GetAll();
                 var ivrs = new IvrRepository(this.database).GetAll();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
+                var agents = new AiAgentRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, others, control.ToNormalDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, others, agents, control.ToNormalDestination()) == null)
                     errors.Add("Where a call normally goes is not there any more. Choose another.");
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, others, control.ToOverrideDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, others, agents, control.ToOverrideDestination()) == null)
                     errors.Add("Where a call goes while switched on is not there any more. Choose another.");
 
                 if (errors.Count == 0 && LoopsBack(control, others))

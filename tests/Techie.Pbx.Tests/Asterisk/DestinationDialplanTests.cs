@@ -19,6 +19,15 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(new[] { $"Goto({ExtensionsConfRenderer.InternalContext},1001,1)" }, steps);
         }
 
+        /// <summary>An agent is entered by its number's own entry, like an announcement (D199).</summary>
+        [Fact]
+        public void An_ai_agent_destination_goes_in_by_its_number()
+        {
+            var steps = DestinationDialplan.Steps(new Destination(DestinationType.AiAgent, "7300"));
+
+            Assert.Equal(new[] { $"Goto({ExtensionsConfRenderer.InternalContext},7300,1)" }, steps);
+        }
+
         [Fact]
         public void A_voicemail_destination_takes_a_message_and_hangs_up()
         {

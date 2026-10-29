@@ -37,6 +37,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         /// <summary>The timezone box in the page header. Filled in by OnGet.</summary>
         public TimezoneForm Timezone { get; private set; } = new();
 
+        private readonly AiAgentRepository aiAgents;
         private readonly AnnouncementRepository announcements;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
@@ -47,6 +48,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
 
         public IndexModel()
         {
+            this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
@@ -321,7 +323,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         private List<DestinationChoice> Catalog(List<TimeCondition> all) =>
             DestinationCatalog.All(
                 this.extensions.GetAll(), this.ringGroups.GetAll(), this.announcements.GetAll(), this.ivrs.GetAll(), all,
-                this.callFlowControls.GetAll());
+                this.callFlowControls.GetAll(), this.aiAgents.GetAll());
 
         /// <summary>The answer to a change: no content to swap, and events for the page to react to.</summary>
         private IActionResult Changed(string message)

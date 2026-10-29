@@ -186,6 +186,13 @@ namespace Techie.Pbx.Core.Data
             if (condition != null)
                 errors.Add($"Time condition '{condition.Name}' already uses {group.Number}.");
 
+            // And against an AI agent's number, which is dialled out of the same context (D199).
+            var agent = new AiAgentRepository(this.database).GetAll()
+                .FirstOrDefault(a => string.Equals(a.Number, group.Number, StringComparison.Ordinal));
+
+            if (agent != null)
+                errors.Add($"AI agent '{agent.Name}' already uses {group.Number}.");
+
             foreach (var member in group.MemberList().Where(m => Extension.IsValidNumber(m)))
             {
                 var extension = extensions.FirstOrDefault(e => string.Equals(e.Number, member, StringComparison.Ordinal));
@@ -203,8 +210,9 @@ namespace Techie.Pbx.Core.Data
                 var ivrs = new IvrRepository(this.database).GetAll();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
                 var controls = new CallFlowControlRepository(this.database).GetAll();
+                var agents = new AiAgentRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, conditions, controls, group.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, all, announcements, ivrs, conditions, controls, agents, group.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
                 else if (LoopsBack(group, all))
                     errors.Add("That destination comes back round to this group, so a call nobody answers would ring for ever.");

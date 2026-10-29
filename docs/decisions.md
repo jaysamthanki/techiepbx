@@ -4048,3 +4048,35 @@ ElevenLabs, both on the customer's account. So the credentials are settings, not
 - **Barge-in is a toggle, on by default.** The agent stops speaking the moment the caller speaks;
   a site whose lines echo badly can turn it off and get a stricter turn-taking loop instead of an
   agent that interrupts itself.
+
+### D199. AI voice agent: its own entity, a destination, and an AudioSocket entry in the dialplan (2026-10-29, F11)
+
+The F11 intake left the destination shape open; it is settled as **its own entity** (`AiAgents`,
+schema 031), not a per-extension toggle: an agent has a prompt, a greeting, a voice, a model and a
+handoff of its own, none of which belong on a phone. It is dialled like an extension (2-6 digits,
+the same both-ways number-collision checks D57 gives announcements, IVRs, time conditions and ring
+groups) and is a destination (`DestinationType.AiAgent`, value = the agent's number, reached by
+`Goto(internal,<number>,1)` like every play extension).
+
+- **Transport: AudioSocket.** Each enabled agent's entry is `Answer()` then
+  `AudioSocket(<uuid>,127.0.0.1:<port>)`: one TCP socket per call, 8 kHz PCM both ways, no ARI or
+  Stasis app and no new listening port on Asterisk. `res_audiosocket.so` and `app_audiosocket.so`
+  join the modules.conf allowlist (res_audiosocket is app_audiosocket's load-time dependency,
+  verified live).
+- **The UUID is the agent's identity on the socket.** AudioSocket() requires a UUID and sends it as
+  the socket's first message. It is derived from the row ID (`SHA-256("tnpbx-ai-agent:{AiAgentID}")`
+  cut to 16 bytes, as a GUID), so it is stable across applies and renumbers and needs no column.
+  The media service looks the agent up by it.
+- **Handoff by closing the socket.** AudioSocket() returns when the socket closes. With `TransferTo`
+  set the next line is `Goto(internal,<TransferTo>,1)`, so the media service transfers a caller
+  simply by hanging up its end; without it the next line is `Hangup()`. The service never needs
+  AMI or ARI to move a channel. The handoff target must be an existing, enabled extension.
+- **Loopback and `Ai.MediaPort`.** The address is fixed at `127.0.0.1`: call audio never leaves the
+  box and the media service binds loopback only. The port is the Asterisk-scoped `Ai.MediaPort`
+  setting (D198, default 9019) because it is written into the dialplan; an out-of-range stored value
+  falls back to the default, and the renderer refuses one it is handed directly.
+- **No system with no agents changes.** Every existing extensions.conf golden is byte-identical.
+- **In every picker.** An agent is selectable as a destination from every picker (inbound routes,
+  IVR keys, time conditions, call flow controls, ring group failover), and every repository that
+  validates a destination, and the status page's broken-destination rule, resolve it against the
+  live agents, so only an enabled agent is offered or accepted.

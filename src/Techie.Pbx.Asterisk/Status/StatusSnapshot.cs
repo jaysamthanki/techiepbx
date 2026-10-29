@@ -13,6 +13,8 @@ namespace Techie.Pbx.Asterisk.Status
     /// </summary>
     public class StatusSnapshot
     {
+        public List<AiAgent> AiAgents { get; set; } = new();
+
         /// <summary>Whether Asterisk answered at all. When it did not, every state below is a guess.</summary>
         public bool AmiReachable { get; set; }
 

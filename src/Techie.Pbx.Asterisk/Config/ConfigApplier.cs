@@ -71,6 +71,12 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public string Timezone { get; set; } = AsteriskSettings.DefaultTimezone;
 
+        /// <summary>
+        /// The loopback port an AI agent's AudioSocket() dials, the <c>Ai.MediaPort</c> setting
+        /// (D198). A property like <see cref="Timezone"/>, read once per apply in FromDatabase.
+        /// </summary>
+        public int AiMediaPort { get; set; } = Core.Models.AiSettings.DefaultMediaPort;
+
         private readonly string confDirectory;
         private readonly PjsipTransport transport;
         private readonly ParkingSettings parking;
@@ -86,6 +92,7 @@ namespace Techie.Pbx.Asterisk.Config
         private readonly MohClassRepository mohClasses;
         private readonly MohFileRepository mohFiles;
         private readonly CallFlowControlRepository callFlowControls;
+        private readonly AiAgentRepository aiAgents;
         private readonly AmiSettings ami;
         private readonly ConfigPendingMarker pending;
 
@@ -105,6 +112,7 @@ namespace Techie.Pbx.Asterisk.Config
             MohClassRepository mohClasses,
             MohFileRepository mohFiles,
             CallFlowControlRepository callFlowControls,
+            AiAgentRepository aiAgents,
             AmiSettings ami,
             ConfigPendingMarker pending)
         {
@@ -123,6 +131,7 @@ namespace Techie.Pbx.Asterisk.Config
             this.mohClasses = mohClasses;
             this.mohFiles = mohFiles;
             this.callFlowControls = callFlowControls;
+            this.aiAgents = aiAgents;
             this.ami = ami;
             this.pending = pending;
         }
@@ -167,9 +176,12 @@ namespace Techie.Pbx.Asterisk.Config
                 mohFiles,
                 // Like the classes: nothing but the dialplan renders the switches (F9).
                 new CallFlowControlRepository(database),
+                // And the AI agents (F11, D199).
+                new AiAgentRepository(database),
                 AsteriskSettings.Ami(values),
                 new ConfigPendingMarker(database))
             {
+                AiMediaPort = AsteriskSettings.AiMediaPort(values),
                 Timezone = AsteriskSettings.Timezone(values),
             };
         }
@@ -254,6 +266,7 @@ namespace Techie.Pbx.Asterisk.Config
             var allTimeConditions = this.timeConditions.GetAll();
             var allMohClasses = this.mohClasses.GetAll();
             var allCallFlowControls = this.callFlowControls.GetAll();
+            var allAiAgents = this.aiAgents.GetAll();
             var allMohFiles = this.mohFiles.GetAll();
 
             // One certificate feeds both the TLS transport and the file it points at, so it is read
@@ -292,7 +305,7 @@ namespace Techie.Pbx.Asterisk.Config
                 // one is written as the class's name in the trunk's context (D122 amended).
                 new("extensions.conf", DialplanModule, ExtensionsConfRenderer.Render(
                     all, allTrunks, allRoutes, allInbound, allGroups, allAnnouncements, allIvrs, allTimeConditions,
-                    this.Timezone, this.parking, allMohClasses, allCallFlowControls)),
+                    this.Timezone, this.parking, allMohClasses, allCallFlowControls, allAiAgents, this.AiMediaPort)),
                 new("voicemail.conf", VoicemailModule, VoicemailConfRenderer.Render(all)),
                 // Not an Asterisk file at all: what the mailcmd script should do with a message
                 // per mailbox, which app_voicemail has no way to tell it (D128). It is listed

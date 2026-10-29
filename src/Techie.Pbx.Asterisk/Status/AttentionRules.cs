@@ -233,6 +233,7 @@ namespace Techie.Pbx.Asterisk.Status
                 snapshot.Ivrs,
                 snapshot.TimeConditions,
                 snapshot.CallFlowControls,
+                snapshot.AiAgents,
                 destination);
 
             if (found != null)

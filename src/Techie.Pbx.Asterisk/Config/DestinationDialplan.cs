@@ -79,6 +79,12 @@ namespace Techie.Pbx.Asterisk.Config
                 DestinationType.TimeCondition =>
                     new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
 
+                // And an AI agent, the same shape again: its number's entry answers and opens the
+                // media socket, so a destination and a user dialling the number arrive the same way
+                // and the handoff after the socket closes is written once (D199).
+                DestinationType.AiAgent =>
+                    new List<string> { $"Goto({ExtensionsConfRenderer.InternalContext},{value},1)" },
+
                 // Not the internal context: the switch's code there is the toggle, and a call sent
                 // to a switch must be routed by it, not flip it. The entry context carries one door
                 // per switch, by code, into that switch's own context (F9).

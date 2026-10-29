@@ -18,6 +18,7 @@ namespace Techie.Pbx.Web.Pages.RingGroups
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AiAgentRepository aiAgents;
         private readonly AnnouncementRepository announcements;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
@@ -27,6 +28,7 @@ namespace Techie.Pbx.Web.Pages.RingGroups
 
         public IndexModel()
         {
+            this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
@@ -152,7 +154,7 @@ namespace Techie.Pbx.Web.Pages.RingGroups
         private List<DestinationChoice> Catalog(List<RingGroup> allGroups) =>
             DestinationCatalog.All(
                 this.extensions.GetAll(), allGroups, this.announcements.GetAll(), this.ivrs.GetAll(), this.timeConditions.GetAll(),
-                this.callFlowControls.GetAll());
+                this.callFlowControls.GetAll(), this.aiAgents.GetAll());
 
         /// <summary>
         /// The answer to a change: no content to swap, and events for the page to react to.

@@ -1,0 +1,120 @@
+@using Techie.Pbx.Core.Models
+@model AiAgentForm
+@{
+    var deleteUrl = Url.Page("Index", "Delete");
+    var saveUrl = Url.Page("Index", "Save");
+}
+@*
+    The whole contents of the shared Bootstrap modal (D42): one htmx swap replaces header, body
+    and footer together, so a validation failure comes back with the modal still open. No key or
+    secret is shown here: those are settings (D198).
+*@
+<form hx-post="@saveUrl" hx-target="this" hx-swap="outerHTML">
+    <div class="modal-header">
+        <h5 class="modal-title">@(Model.IsNew ? "Add AI agent" : $"Edit AI agent {Model.Number}")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+
+    <div class="modal-body">
+    @if (Model.Errors.Count > 0)
+    {
+        <div class="alert alert-danger">
+            <ul class="mb-0 ps-3">
+                @foreach (var error in Model.Errors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <input type="hidden" name="aiAgentID" value="@Model.AiAgentID" />
+
+    <div class="row">
+        <div class="col-4 mb-3">
+            <label class="form-label" for="agent-number">Number</label>
+            <input class="form-control font-monospace" id="agent-number" name="number" value="@Model.Number"
+                   inputmode="numeric" maxlength="6" autocomplete="off" required />
+            <div class="form-text">2 to 6 digits, dialled like an extension.</div>
+        </div>
+        <div class="col-8 mb-3">
+            <label class="form-label" for="agent-name">Name</label>
+            <input class="form-control" id="agent-name" name="name" value="@Model.Name"
+                   maxlength="64" autocomplete="off" required />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="agent-greeting">Greeting</label>
+        <input class="form-control" id="agent-greeting" name="greeting" value="@Model.Greeting"
+               maxlength="@AiAgent.MaxGreetingLength" autocomplete="off" placeholder="e.g. Thanks for calling, how can I help?" />
+        <div class="form-text">
+            Optional. Spoken the instant the call answers, with no model round trip. Blank and the
+            agent waits for the caller to speak first.
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="agent-prompt">Prompt</label>
+        <textarea class="form-control" id="agent-prompt" name="prompt" rows="8"
+                  maxlength="@AiAgent.MaxPromptLength" required>@Model.Prompt</textarea>
+        <div class="form-text">
+            The agent's personality and instructions: who it is, what the business is, what it may do.
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-6 mb-3">
+            <label class="form-label" for="agent-voice">Voice ID</label>
+            <input class="form-control font-monospace" id="agent-voice" name="voiceId" value="@Model.VoiceId"
+                   maxlength="64" autocomplete="off" placeholder="site default" />
+            <div class="form-text">An ElevenLabs voice. Blank uses the default in Settings.</div>
+        </div>
+        <div class="col-6 mb-3">
+            <label class="form-label" for="agent-model">Model</label>
+            <input class="form-control font-monospace" id="agent-model" name="model" value="@Model.Model"
+                   maxlength="127" autocomplete="off" placeholder="site default" />
+            <div class="form-text">An OpenRouter model slug. Blank uses the default in Settings.</div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="agent-transfer">Transfer to</label>
+        <select class="form-select" id="agent-transfer" name="transferTo">
+            <option value="" selected="@(string.IsNullOrEmpty(Model.TransferTo) ? "selected" : null)">None — the call ends with the agent</option>
+            @foreach (var extension in Model.Extensions)
+            {
+                <option value="@extension.Number" selected="@(Model.TransferTo == extension.Number ? "selected" : null)">
+                    @extension.Number @extension.Name
+                </option>
+            }
+        </select>
+        <div class="form-text">Where the call continues when the agent hands the caller on.</div>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="agent-enabled" name="enabled" value="true"
+               checked="@(Model.Enabled ? "checked" : null)" />
+        <label class="form-check-label" for="agent-enabled">Enabled</label>
+        <div class="form-text">A disabled agent is left out of the generated dialplan.</div>
+    </div>
+    </div>
+
+    @* Deleting lives here now that the table has no button column (D48). *@
+    <div class="modal-footer justify-content-between">
+        <div>
+            @if (!Model.IsNew)
+            {
+                <button type="button" class="btn btn-outline-danger"
+                        hx-post="@deleteUrl"
+                        hx-vals='{"aiAgentID": @Model.AiAgentID}'
+                        hx-swap="none"
+                        hx-confirm="Delete AI agent @Model.Number? Calls to that number stop working at the next apply.">Delete</button>
+            }
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+    </div>
+</form>

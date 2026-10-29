@@ -12,6 +12,12 @@ namespace Techie.Pbx.Asterisk.Config
     public static class ExtensionsConfRenderer
     {
         public const string InternalContext = "internal";
+
+        /// <summary>
+        /// Where an AI agent's AudioSocket() dials the media service: loopback only, so the call
+        /// audio never leaves the box and Asterisk opens no listening port of its own (D199).
+        /// </summary>
+        public const string AiAgentMediaHost = "127.0.0.1";
         public const string EchoTestNumber = SystemCodes.EchoTest;
 
         /// <summary>
@@ -267,9 +273,37 @@ namespace Techie.Pbx.Asterisk.Config
             string timezone,
             ParkingSettings parking,
             IEnumerable<MohClass> mohClasses,
-            IEnumerable<CallFlowControl> callFlowControls)
+            IEnumerable<CallFlowControl> callFlowControls) =>
+            Render(extensions, trunks, routes, inbound, ringGroups, announcements, ivrs, timeConditions, timezone, parking, mohClasses,
+                callFlowControls, new List<AiAgent>(), AiSettings.DefaultMediaPort);
+
+        /// <param name="aiAgents">
+        /// The AI voice agents (F11). Each enabled one gets an entry in the internal context that
+        /// answers and hands the audio to the media service over AudioSocket (D199).
+        /// </param>
+        /// <param name="aiMediaPort">
+        /// The loopback port the media service listens on, the <c>Ai.MediaPort</c> setting (D198).
+        /// </param>
+        public static string Render(
+            IEnumerable<Extension> extensions,
+            IEnumerable<Trunk> trunks,
+            IEnumerable<OutboundRoute> routes,
+            IEnumerable<InboundRoute> inbound,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            string timezone,
+            ParkingSettings parking,
+            IEnumerable<MohClass> mohClasses,
+            IEnumerable<CallFlowControl> callFlowControls,
+            IEnumerable<AiAgent> aiAgents,
+            int aiMediaPort)
         {
             parking.ThrowIfInvalid();
+
+            if (aiMediaPort is < AiSettings.MinMediaPort or > 65535)
+                throw new InvalidOperationException($"Refusing to write AI media port {aiMediaPort}.");
 
             // The rows as given as well as the render order: a forwarding target is matched against
             // every extension, switched on or not, so a target that has since been switched off is
@@ -289,6 +323,7 @@ namespace Techie.Pbx.Asterisk.Config
             var ivrList = IvrRenderOrder(ivrs, announcementRows);
             var timeConditionList = TimeConditionRenderOrder(timeConditions);
             var callFlowControlList = CallFlowControlRenderOrder(callFlowControls);
+            var aiAgentList = AiAgentRenderOrder(aiAgents);
 
             var sb = new StringBuilder();
             sb.Append(ConfText.Header).Append('\n');
@@ -424,6 +459,9 @@ namespace Techie.Pbx.Asterisk.Config
             foreach (var condition in timeConditionList)
                 AppendTimeConditionEntry(sb, condition);
 
+            foreach (var agent in aiAgentList)
+                AppendAiAgent(sb, agent, aiMediaPort);
+
             // Extensions in a context are matched before anything it includes, so the phones and
             // feature codes above always win over a route pattern (D46).
             if (routeList.Count > 0)
@@ -457,6 +495,29 @@ namespace Techie.Pbx.Asterisk.Config
             AppendOutboundRoutes(sb, routeList, trunkList, mohClassList, claimed);
 
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// The AI agents that get an entry, by number. Re-validated, so a row that reached the
+        /// database another way cannot reach a conf file. Switched on and a number to dial is all
+        /// an agent needs; whether the provider keys work is the provider's answer at call time.
+        /// </summary>
+        public static List<AiAgent> AiAgentRenderOrder(IEnumerable<AiAgent> aiAgents)
+        {
+            var enabled = aiAgents.Where(a => a.Enabled).ToList();
+
+            foreach (var agent in enabled)
+            {
+                var errors = agent.Validate();
+                if (errors.Count > 0)
+                    throw new InvalidOperationException($"AI agent '{agent.Name}' is invalid: {string.Join(" ", errors)}");
+            }
+
+            return enabled
+                .Where(a => a.IsPlayable)
+                .OrderBy(a => a.Number.Length)
+                .ThenBy(a => a.Number, StringComparer.Ordinal)
+                .ToList();
         }
 
         /// <summary>
@@ -635,6 +696,41 @@ namespace Techie.Pbx.Asterisk.Config
                 .OrderBy(t => t.PlayExtension.Length)
                 .ThenBy(t => t.PlayExtension, StringComparer.Ordinal)
                 .ToList();
+        }
+
+        /// <summary>
+        /// One AI agent (D199): answer, then hand the audio to the media service over AudioSocket,
+        /// named by the agent's UUID so the service knows which agent's prompt and voice to use.
+        /// The entry lives in the internal context like an extension, so a user can dial it and a
+        /// destination can Goto it, and both get the same lines.
+        ///
+        /// AudioSocket() returns when the socket closes. With a handoff extension the call carries
+        /// on to it: the media service transfers by closing the socket, so the transfer is the
+        /// dialplan's next line rather than anything the service does to the channel — a decision,
+        /// not an oversight. Without one the call ends there.
+        /// </summary>
+        private static void AppendAiAgent(StringBuilder sb, AiAgent agent, int mediaPort)
+        {
+            var number = ConfText.Safe(agent.Number, "AI agent number");
+            var name = ConfText.Safe(agent.Name, "AI agent name");
+            var uuid = ConfText.Safe(agent.ServiceUuid, "AI agent UUID");
+            var host = ConfText.Safe(AiAgentMediaHost, "AI media host");
+
+            sb.Append('\n');
+            sb.Append($"; AI agent {name} (F11, D199)\n");
+            sb.Append($"exten => {number},1,NoOp(AI agent: {name})\n");
+            sb.Append(" same => n,Answer()\n");
+            sb.Append($" same => n,AudioSocket({uuid},{host}:{mediaPort.ToString(CultureInfo.InvariantCulture)})\n");
+
+            if (agent.TransferTo.Length > 0)
+            {
+                sb.Append("; The media service hands off by closing the socket, so the call continues here (D199)\n");
+                sb.Append($" same => n,Goto({InternalContext},{ConfText.Safe(agent.TransferTo, "AI agent transfer")},1)\n");
+            }
+            else
+            {
+                sb.Append(DestinationDialplan.Lines(Destination.Hangup));
+            }
         }
 
         /// <summary>

@@ -270,6 +270,13 @@ namespace Techie.Pbx.Core.Data
                 if (condition != null)
                     errors.Add($"Time condition '{condition.Name}' already uses {number}.");
 
+                // And against an AI agent's number, which is dialled out of the same context (D199).
+                var agent = new AiAgentRepository(this.database).GetAll()
+                    .FirstOrDefault(a => string.Equals(a.Number, number, StringComparison.Ordinal));
+
+                if (agent != null)
+                    errors.Add($"AI agent '{agent.Name}' already uses {number}.");
+
                 var clash = all.FirstOrDefault(i =>
                     i.IvrID != ivr.IvrID && string.Equals(i.PlayExtension, number, StringComparison.Ordinal));
 
@@ -284,13 +291,14 @@ namespace Techie.Pbx.Core.Data
                 var others = all.Where(i => i.IvrID != ivr.IvrID).Append(ivr).ToList();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
                 var controls = new CallFlowControlRepository(this.database).GetAll();
+                var agents = new AiAgentRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, ivr.ToFinalDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, agents, ivr.ToFinalDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
 
                 foreach (var entry in ivr.Entries)
                 {
-                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, entry.ToDestination()) == null)
+                    if (DestinationCatalog.Find(extensions, ringGroups, announcements, others, conditions, controls, agents, entry.ToDestination()) == null)
                         errors.Add($"Where key {entry.Digit} goes is not there any more. Choose another.");
                 }
 

@@ -24,6 +24,7 @@ namespace Techie.Pbx.Web.Pages.Status
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AiAgentRepository aiAgents;
         private readonly AnnouncementRepository announcements;
         private readonly PhoneButtonRepository buttons;
         private readonly CallFlowControlRepository callFlowControls;
@@ -42,6 +43,7 @@ namespace Techie.Pbx.Web.Pages.Status
 
         public IndexModel()
         {
+            this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.buttons = new PhoneButtonRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
@@ -85,6 +87,7 @@ namespace Techie.Pbx.Web.Pages.Status
                 // with no trunks at all leaves nothing to infer from, and the live tiles are then
                 // the only thing that says so.
                 AmiReachable = trunkStates.Count == 0 || trunkStates.Values.Any(state => state != RegistrationState.Unknown),
+                AiAgents = this.aiAgents.GetAll(),
                 Announcements = this.announcements.GetAll(),
                 CallFlowControls = this.callFlowControls.GetAll(),
                 Certificates = this.certificates.GetAll(),

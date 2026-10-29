@@ -159,10 +159,11 @@ namespace Techie.Pbx.Core.Data
             List<Ivr> ivrs,
             List<TimeCondition> timeConditions,
             List<CallFlowControl> callFlowControls,
+            List<AiAgent> aiAgents,
             Destination destination,
             string what)
         {
-            if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, destination) == null)
+            if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, aiAgents, destination) == null)
                 errors.Add($"Where a call in {what} goes is not there any more. Choose another.");
         }
 
@@ -229,6 +230,13 @@ namespace Techie.Pbx.Core.Data
                 if (ivr != null)
                     errors.Add($"IVR '{ivr.Name}' already plays on {number}.");
 
+                // And against an AI agent's number, which is dialled out of the same context (D199).
+                var agent = new AiAgentRepository(this.database).GetAll()
+                    .FirstOrDefault(a => string.Equals(a.Number, number, StringComparison.Ordinal));
+
+                if (agent != null)
+                    errors.Add($"AI agent '{agent.Name}' already uses {number}.");
+
                 var clash = all.FirstOrDefault(t =>
                     t.TimeConditionID != condition.TimeConditionID &&
                     string.Equals(t.PlayExtension, number, StringComparison.Ordinal));
@@ -244,14 +252,15 @@ namespace Techie.Pbx.Core.Data
                 // of hours. Pointing at itself is refused by the model, not by this list.
                 var others = all.Where(t => t.TimeConditionID != condition.TimeConditionID).Append(condition).ToList();
                 var controls = new CallFlowControlRepository(this.database).GetAll();
+                var agents = new AiAgentRepository(this.database).GetAll();
 
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToOpenDestination(), "open hours");
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToClosedDestination(), "closed hours");
-                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, condition.ToHolidayDestination(), "holidays");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, agents, condition.ToOpenDestination(), "open hours");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, agents, condition.ToClosedDestination(), "closed hours");
+                CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, agents, condition.ToHolidayDestination(), "holidays");
 
                 foreach (var rule in condition.HolidayRules().Where(r => r.HasOverride))
                 {
-                    CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls,
+                    CheckDestination(errors, extensions, ringGroups, announcements, ivrs, others, controls, agents,
                         rule.ToDestination()!, $"the holiday on {rule.HolidayDate}");
                 }
             }

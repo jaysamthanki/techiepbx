@@ -136,8 +136,9 @@ namespace Techie.Pbx.Core.Data
                 var ivrs = new IvrRepository(this.database).GetAll();
                 var conditions = new TimeConditionRepository(this.database).GetAll();
                 var controls = new CallFlowControlRepository(this.database).GetAll();
+                var agents = new AiAgentRepository(this.database).GetAll();
 
-                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, controls, route.ToDestination()) == null)
+                if (DestinationCatalog.Find(extensions, ringGroups, announcements, ivrs, conditions, controls, agents, route.ToDestination()) == null)
                     errors.Add("That destination is not there any more. Choose another.");
             }
 

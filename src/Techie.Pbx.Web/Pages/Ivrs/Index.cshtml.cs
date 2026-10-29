@@ -22,6 +22,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AiAgentRepository aiAgents;
         private readonly AnnouncementRepository announcements;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
@@ -31,6 +32,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
 
         public IndexModel()
         {
+            this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
@@ -253,7 +255,7 @@ namespace Techie.Pbx.Web.Pages.Ivrs
             var stored = allIvrs.FirstOrDefault(i => i.IvrID == form.IvrID);
             var choices = DestinationCatalog.All(
                 this.extensions.GetAll(), this.ringGroups.GetAll(), allAnnouncements, allIvrs, this.timeConditions.GetAll(),
-                this.callFlowControls.GetAll());
+                this.callFlowControls.GetAll(), this.aiAgents.GetAll());
 
             form.DestinationChoices = new DestinationSelect
             {

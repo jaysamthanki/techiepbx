@@ -30,6 +30,17 @@ namespace Techie.Pbx.Asterisk.Config
         /// </summary>
         public const string DefaultNtpServer = "pool.ntp.org";
 
+        /// <summary>
+        /// The loopback port an AI agent's AudioSocket() dials (D198, D199). Out of range or not a
+        /// number falls back to the default, for the reason <see cref="Timezone"/> does.
+        /// </summary>
+        public static int AiMediaPort(IReadOnlyDictionary<string, string> settings)
+        {
+            var port = Number(settings, SettingsKeys.AiMediaPort, AiSettings.DefaultMediaPort);
+
+            return port is >= AiSettings.MinMediaPort and <= 65535 ? port : AiSettings.DefaultMediaPort;
+        }
+
         public static string ConfDirectory(IReadOnlyDictionary<string, string> settings) =>
             Text(settings, SettingsKeys.AsteriskConfDirectory) ?? DefaultConfDirectory;
 

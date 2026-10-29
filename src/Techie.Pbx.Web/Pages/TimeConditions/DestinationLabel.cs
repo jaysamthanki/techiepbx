@@ -42,6 +42,7 @@ namespace Techie.Pbx.Web.Pages.TimeConditions
         /// <summary>The short form: a word for the kind, and the number it points at.</summary>
         private static string Describe(Destination destination) => destination.Type switch
         {
+            DestinationType.AiAgent => $"AI agent {destination.Value}",
             DestinationType.Announcement => $"Announcement {destination.Value}",
             DestinationType.CallFlowControl => $"Call flow {destination.Value}",
             DestinationType.Extension => $"Ext {destination.Value}",

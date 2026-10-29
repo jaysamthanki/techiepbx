@@ -100,6 +100,12 @@ namespace Techie.Pbx.Asterisk.Config
                 "func_devstate.so",         // DEVICE_STATE(): the Custom: device a call flow control's key lamp follows (F9)
             }),
 
+            ("The AI voice agent's media socket (F11, D199)", new[]
+            {
+                "res_audiosocket.so",       // the AudioSocket protocol: app_audiosocket's load-time dependency (verified live)
+                "app_audiosocket.so",       // AudioSocket(): an AI agent's call audio to the loopback media service
+            }),
+
             ("Call records for the reports page (F5)", new[]
             {
                 // The CDR engine itself is not here: it is built into the Asterisk core as "cdr"

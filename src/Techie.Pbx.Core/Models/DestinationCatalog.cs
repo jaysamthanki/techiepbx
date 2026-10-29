@@ -10,6 +10,7 @@ namespace Techie.Pbx.Core.Models
     /// </summary>
     public static class DestinationCatalog
     {
+        public const string AiAgentsGroup = "AI agents";
         public const string AnnouncementsGroup = "Announcements";
         public const string CallFlowControlsGroup = "Call flow controls";
         public const string ExtensionsGroup = "Extensions";
@@ -60,7 +61,17 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<Announcement> announcements,
             IEnumerable<Ivr> ivrs,
             IEnumerable<TimeCondition> timeConditions,
-            IEnumerable<CallFlowControl> callFlowControls)
+            IEnumerable<CallFlowControl> callFlowControls) =>
+            All(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, new List<AiAgent>());
+
+        public static List<DestinationChoice> All(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            IEnumerable<CallFlowControl> callFlowControls,
+            IEnumerable<AiAgent> aiAgents)
         {
             var usable = InNumberOrder(extensions);
             var announcementList = announcements.ToList();
@@ -160,6 +171,21 @@ namespace Techie.Pbx.Core.Models
                 });
             }
 
+            // An agent needs what a ring group needs — switched on, and a number to Goto. Whether
+            // the provider keys work is the provider's answer at call time, not the picker's (D199).
+            foreach (var agent in aiAgents
+                .Where(a => a.IsPlayable)
+                .OrderBy(a => a.Number.Length)
+                .ThenBy(a => a.Number, StringComparer.Ordinal))
+            {
+                choices.Add(new DestinationChoice
+                {
+                    Destination = agent.ToDestination(),
+                    GroupName = AiAgentsGroup,
+                    Label = $"{agent.Number} {agent.Name}",
+                });
+            }
+
             choices.Add(new DestinationChoice
             {
                 Destination = Destination.Hangup,
@@ -224,12 +250,23 @@ namespace Techie.Pbx.Core.Models
             IEnumerable<Ivr> ivrs,
             IEnumerable<TimeCondition> timeConditions,
             IEnumerable<CallFlowControl> callFlowControls,
+            Destination? destination) =>
+            Find(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, new List<AiAgent>(), destination);
+
+        public static DestinationChoice? Find(
+            IEnumerable<Extension> extensions,
+            IEnumerable<RingGroup> ringGroups,
+            IEnumerable<Announcement> announcements,
+            IEnumerable<Ivr> ivrs,
+            IEnumerable<TimeCondition> timeConditions,
+            IEnumerable<CallFlowControl> callFlowControls,
+            IEnumerable<AiAgent> aiAgents,
             Destination? destination)
         {
             if (destination == null)
                 return null;
 
-            return All(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls)
+            return All(extensions, ringGroups, announcements, ivrs, timeConditions, callFlowControls, aiAgents)
                 .FirstOrDefault(c => string.Equals(c.Destination.Key, destination.Key, StringComparison.Ordinal));
         }
 

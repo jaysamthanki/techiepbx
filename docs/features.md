@@ -282,8 +282,8 @@ it knows who it is, what the business is, and what it may do.
 - **Not on the list yet**: outbound calling, voicemail-box agents, multi-agent handoff, any
   always-on call monitoring.
 
-Design questions open at intake: which destination shape (per-extension toggle vs its own
-agent entity); whether the agent may transfer a caller to a real extension in v1 and what it
-falls back to when the LLM or TTS fails; which vendor does speech-to-text (ElevenLabs Scribe
+Settled in D199: an agent is its own entity (number, name, prompt, greeting, voice, model,
+optional handoff extension) and may hand a caller to a real extension. Design questions open at
+intake and still open: what it falls back to when the LLM or TTS fails; which vendor does speech-to-text (ElevenLabs Scribe
 on the same key, or a second provider key); and whether v1 streams turn-by-turn with barge-in
 or answers only when the caller stops talking.

@@ -122,6 +122,34 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("600 Support", choices[0].Label);
         }
 
+        /// <summary>Enabled agents are offered under their own group; a disabled one is not (D199).</summary>
+        [Fact]
+        public void Ai_agents_are_on_the_list_and_found_by_number()
+        {
+            var agents = new List<AiAgent>
+            {
+                new() { AiAgentID = 1, Number = "7300", Name = "Reception", Prompt = "p" },
+                new() { AiAgentID = 2, Number = "7301", Name = "Off", Prompt = "p", Enabled = false },
+            };
+            var none = new List<RingGroup>();
+
+            var choices = DestinationCatalog.All(SampleExtensions(), none, new List<Announcement>(), new List<Ivr>(),
+                    new List<TimeCondition>(), new List<CallFlowControl>(), agents)
+                .Where(c => c.Destination.Type == DestinationType.AiAgent)
+                .ToList();
+
+            Assert.Equal(new[] { "7300" }, choices.Select(c => c.Destination.Value));
+            Assert.Equal(DestinationCatalog.AiAgentsGroup, choices[0].GroupName);
+            Assert.Equal("7300 Reception", choices[0].Label);
+
+            var found = DestinationCatalog.Find(SampleExtensions(), none, new List<Announcement>(), new List<Ivr>(),
+                new List<TimeCondition>(), new List<CallFlowControl>(), agents, new Destination(DestinationType.AiAgent, "7300"));
+            Assert.Equal("7300 Reception", found?.Label);
+
+            Assert.Null(DestinationCatalog.Find(SampleExtensions(), none, new List<Announcement>(), new List<Ivr>(),
+                new List<TimeCondition>(), new List<CallFlowControl>(), agents, new Destination(DestinationType.AiAgent, "7301")));
+        }
+
         [Fact]
         public void A_disabled_ring_group_is_not_offered()
         {

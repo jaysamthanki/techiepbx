@@ -1,0 +1,23 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "AI agents";
+
+    var tableUrl = Url.Page("Index", "Table");
+}
+
+<div class="mb-3">
+    <h1 class="h3 mb-0">AI agents</h1>
+</div>
+
+<p class="text-secondary">
+    A number that answers with a natural voice and talks to the caller from its own prompt, using
+    the OpenRouter and ElevenLabs keys in Settings. It can hand the caller on to an extension.
+</p>
+
+@* The table arrives from the Table handler, and comes back whenever something changed. *@
+<div id="ai-agents-table" hx-get="@tableUrl" hx-trigger="load, aiAgentsChanged from:body">
+    <p class="text-secondary">Loading AI agents…</p>
+</div>
+
+<partial name="_FormModal" />

@@ -58,7 +58,8 @@ namespace Techie.Pbx.Tests.Asterisk
             this.applier = new ConfigApplier(
                 this.confDirectory, new PjsipTransport(), new ParkingSettings(), this.certificates, this.extensions,
                 this.trunks, this.routes, this.inbound, this.ringGroups, this.announcements, this.ivrs,
-                this.timeConditions, this.mohClasses, this.mohFiles, new CallFlowControlRepository(this.database), ami, this.pending);
+                this.timeConditions, this.mohClasses, this.mohFiles, new CallFlowControlRepository(this.database),
+                new AiAgentRepository(this.database), ami, this.pending);
         }
 
         public void Dispose()

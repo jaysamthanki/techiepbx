@@ -137,6 +137,13 @@ namespace Techie.Pbx.Core.Data
                 if (condition != null)
                     errors.Add($"Time condition '{condition.Name}' already uses {number}.");
 
+                // And against an AI agent's number, which is dialled out of the same context (D199).
+                var agent = new AiAgentRepository(this.database).GetAll()
+                    .FirstOrDefault(a => string.Equals(a.Number, number, StringComparison.Ordinal));
+
+                if (agent != null)
+                    errors.Add($"AI agent '{agent.Name}' already uses {number}.");
+
                 var clash = this.GetAll().FirstOrDefault(a =>
                     a.AnnouncementID != announcement.AnnouncementID &&
                     string.Equals(a.PlayExtension, number, StringComparison.Ordinal));

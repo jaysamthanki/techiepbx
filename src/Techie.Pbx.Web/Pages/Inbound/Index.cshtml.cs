@@ -17,6 +17,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
     {
         private static readonly ILog Log = LogManager.GetLogger(typeof(IndexModel));
 
+        private readonly AiAgentRepository aiAgents;
         private readonly AnnouncementRepository announcements;
         private readonly CallFlowControlRepository callFlowControls;
         private readonly ExtensionRepository extensions;
@@ -29,6 +30,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
 
         public IndexModel()
         {
+            this.aiAgents = new AiAgentRepository(PbxDatabase.Current);
             this.announcements = new AnnouncementRepository(PbxDatabase.Current);
             this.callFlowControls = new CallFlowControlRepository(PbxDatabase.Current);
             this.extensions = new ExtensionRepository(PbxDatabase.Current);
@@ -75,6 +77,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
             var allAnnouncements = this.announcements.GetAll();
             var allIvrs = this.ivrs.GetAll();
             var allConditions = this.timeConditions.GetAll();
+            var allAgents = this.aiAgents.GetAll();
             var allControls = this.callFlowControls.GetAll();
             var allTrunks = this.trunks.GetAll();
 
@@ -83,7 +86,7 @@ namespace Techie.Pbx.Web.Pages.Inbound
                 {
                     var trunk = allTrunks.FirstOrDefault(t => t.TrunkID == route.TrunkID);
                     var choice = DestinationCatalog.Find(
-                        allExtensions, allGroups, allAnnouncements, allIvrs, allConditions, allControls, route.ToDestination());
+                        allExtensions, allGroups, allAnnouncements, allIvrs, allConditions, allControls, allAgents, route.ToDestination());
 
                     return new InboundRouteRow
                     {
@@ -200,7 +203,8 @@ namespace Techie.Pbx.Web.Pages.Inbound
                     this.announcements.GetAll(),
                     this.ivrs.GetAll(),
                     this.timeConditions.GetAll(),
-                    this.callFlowControls.GetAll()),
+                    this.callFlowControls.GetAll(),
+                    this.aiAgents.GetAll()),
                 ElementID = "route-destination",
                 Name = "destination",
                 SelectedKey = string.IsNullOrEmpty(form.Destination) ? null : form.Destination,

@@ -99,6 +99,12 @@ namespace Techie.Pbx.Core.Models
                         errors.Add("A time condition destination needs a play extension of 2 to 6 digits.");
                     break;
 
+                // And an AI agent's, which is the number its entry answers on (D199).
+                case DestinationType.AiAgent:
+                    if (!Extension.IsValidNumber(this.Value))
+                        errors.Add("An AI agent destination needs an agent number of 2 to 6 digits.");
+                    break;
+
                 // A call flow control is pointed at by its feature code, a star and two or three
                 // digits (F9): the only destination whose value is not a plain number.
                 case DestinationType.CallFlowControl:
