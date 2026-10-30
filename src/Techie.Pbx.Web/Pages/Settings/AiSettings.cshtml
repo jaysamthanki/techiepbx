@@ -19,6 +19,14 @@
     same way — click a row. Neither test places a call.
 </p>
 
+<div class="alert alert-info">
+    <strong>Turning AI on takes a restart.</strong> The media listener is created when
+    <code>tnpbx-web</code> starts and opens <code>127.0.0.1:9019</code> itself; saving the speech and
+    model keys here (or changing the media port) does not open the port, so calls keep falling
+    through to each agent's handoff until you restart <code>tnpbx-web</code>. The keys are read per
+    call, so once the app is back up they apply as they are.
+</div>
+
 @* The groups arrive from the Table handler, and come back whenever a setting changed. Saving the
    provider answers "settingsChanged", so the group below it is replaced with the one that applies. *@
 <div id="ai-settings" hx-get="@tableUrl" hx-trigger="load, settingsChanged from:body">
