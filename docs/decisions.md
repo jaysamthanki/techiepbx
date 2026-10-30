@@ -4265,7 +4265,7 @@ above the voice ID row that lists what the saved key can actually use.
   can act on, and the raw body (`{"detail":{"status":…}}`) tells them neither what to change nor
   where. Any other status keeps the usual status-and-text message (D200). The key is scrubbed from
   all of them.
-- **Cached ten minutes, keyed by the key itself** (`AiVoiceCache`, in memory, never logged or
+- **Cached ten minutes, keyed by the key itself** (`AiVoiceCache`, generalised to `AiListCache<T>` in D207, in memory, never logged or
   shown). A changed key is a different entry, so a fixed key is a fresh list. Two lookups that
   arrive together share one request. A failed load is cached too, for **one minute**: a key without
   `voices_read` fails identically every time, and repeated clicks should not hammer the provider,
@@ -4306,3 +4306,32 @@ Two changes, because there are two failures to cover:
   it would drop a live conversation into the handoff.
 - It only fires when the agent has a handoff configured; with none, the conversation continues, which
   is the better of two bad options.
+
+### D207. AI settings: choose the model from the provider's own list (2026-10-30, F11)
+
+Models change monthly, and the model row was a slug typed blind — the same problem the voice ID had
+(D205). The model provider's group now has a **Load models** button above its model row.
+
+- **The list is the provider's, not a built-in catalogue.** OpenRouter: `GET /api/v1/models`, public,
+  but sent with the saved key when there is one, since a key can change what is listed. Ollama:
+  `GET {Ai.OllamaUrl}/api/tags`, the models that server has actually pulled. A catalogue of ours would
+  be stale within the month. Nothing is fetched when the page opens.
+- **Tool-capable models only.** An OpenRouter model is listed only when its `supported_parameters`
+  contain `tools`: an agent whose model cannot call `transfer_call` cannot transfer a caller (D203), and
+  that failure would only show on a live call. Ollama does not say per model, so its list is unfiltered
+  (a model without tools ignores them and the session copes). An OpenRouter model without a fixed
+  price (`-1`, e.g. `openrouter/auto`) cannot be ranked by price and is left out; it can still be typed.
+- **Capped at the 200 cheapest**, ordered by output price then id, grouped in the select by vendor
+  (the part of the id before `/`). OpenRouter lists hundreds; the cap keeps the markup sane, and the
+  note beside the button says so. If the stored model is not in the list, the chooser says so rather
+  than pretending.
+- **Price per million tokens, in and out, as a picking aid** — OpenRouter quotes dollars per token,
+  which nobody can compare at a glance. It is what the list said when loaded, not a bill.
+- **The row stays the setting.** Saving stores `Ai.OpenRouterModel` or `Ai.OllamaModel` (whichever
+  provider is chosen) through `SettingsRepository`, with the same `settingsChanged` + toast as the
+  voice chooser; the posted slug must already have the row's shape, or nothing is written. Typing a
+  model on the row is unchanged, and an agent's own model override stays free text on its page.
+- **One cache for both lists.** `AiVoiceCache` became `AiListCache<T>` — the same ten-minute success and
+  one-minute failure lifetimes, shared in-flight loads, one cache per item type so voices and models
+  never share an entry. Models are keyed by provider plus the OpenRouter key or the Ollama URL, in
+  memory only, never logged.

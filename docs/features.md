@@ -295,7 +295,9 @@ OpenRouter, or any Ollama-compatible server by URL plus model name, no key — t
 settings, the conversation switches, and two buttons that test the model provider and the voice
 without placing a call. The voice can be chosen from the voices the saved ElevenLabs key can use
 (D205) — loaded on request, with a sentence saying why when the key cannot list them — and the voice
-ID row stays the setting, typeable by hand. A local speech provider is planned as one more choice; it is not built.
+ID row stays the setting, typeable by hand. The model can likewise be chosen from the provider's own
+list (D207) — tool-capable models only, the 200 cheapest with their prices per million tokens — and
+the model row stays the setting. A local speech provider is planned as one more choice; it is not built.
 
 Settled in D200: speech-to-text is ElevenLabs Scribe on the same key; a call is turn-by-turn with
 barge-in on by default; and a provider failure is not a dead line — the service closes the socket so

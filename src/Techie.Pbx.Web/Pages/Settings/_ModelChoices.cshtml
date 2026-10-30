@@ -1,0 +1,38 @@
+@model ModelChoices
+@*
+    The models the chosen provider offers, or why there are none (D207). Every name is the
+    provider's text, so it is only ever written with @, which encodes it.
+*@
+@{
+    var saveUrl = Url.Page("/Settings/AiSettings", "SaveModel");
+}
+@if (Model.Error.Length > 0)
+{
+    <p class="text-danger mb-0">@Model.Error</p>
+    <p class="text-secondary small mb-0">The model can still be typed by hand: click the model row below.</p>
+}
+else if (Model.Models.Count == 0)
+{
+    <p class="text-secondary mb-0">The provider listed no models that can call tools. Type the model by hand on the row below.</p>
+}
+else
+{
+    @if (Model.Current.Length > 0 && Model.Models.All(m => m.Id != Model.Current))
+    {
+        <p class="text-secondary small mb-1">The model stored now, @Model.Current, is not in this list; saving replaces it.</p>
+    }
+    <form class="d-flex gap-2 align-items-center" hx-post="@saveUrl" hx-swap="none">
+        <select name="model" class="form-select form-select-sm w-auto" aria-label="Model">
+            @foreach (var vendor in Model.Groups())
+            {
+                <optgroup label="@vendor.Key">
+                    @foreach (var choice in vendor)
+                    {
+                        <option value="@choice.Id" selected="@(choice.Id == Model.Current)">@Model.Label(choice)</option>
+                    }
+                </optgroup>
+            }
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </form>
+}

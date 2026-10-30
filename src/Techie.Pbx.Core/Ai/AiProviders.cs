@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -15,7 +16,8 @@ namespace Techie.Pbx.Core.Ai
     /// over the one shared <see cref="HttpClient"/>, each with its own timeout, because a caller
     /// on the line cannot wait for a provider that has stopped answering.
     ///
-    /// The settings page also lists the voices the saved ElevenLabs key may use (D205).
+    /// The settings page also lists the voices the saved ElevenLabs key may use (D205) and the
+    /// models the chosen model provider offers (D207).
     ///
     /// The chat can offer the model one tool, <see cref="TransferToolName"/>, whose only argument
     /// is one of the extensions it was given (D203); with none given, no tool is offered at all.
@@ -27,6 +29,15 @@ namespace Techie.Pbx.Core.Ai
     {
         /// <summary>How long a chat completion may take. The caller is waiting in silence for it.</summary>
         public static readonly TimeSpan ChatTimeout = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// The most models a list keeps: the cheapest, so the page's select stays a sane size while
+        /// OpenRouter offers hundreds (D207).
+        /// </summary>
+        public const int MaxModels = 200;
+
+        /// <summary>How long the model list may take. An admin is waiting for it, not a caller.</summary>
+        public static readonly TimeSpan ModelsTimeout = TimeSpan.FromSeconds(15);
 
         /// <summary>The one tool the model can call: put the caller through to an extension (D203).</summary>
         public const string TransferToolName = "transfer_call";
@@ -43,8 +54,8 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>The order a voice's labels are shown in, when it has them (D205).</summary>
         private static readonly string[] LabelNames = { "language", "gender", "age", "accent" };
 
-        /// <summary>The longest voice name or label kept; a provider's text, shown on a page.</summary>
-        private const int MaxVoiceTextLength = 100;
+        /// <summary>The longest voice or model name, or voice label, kept; a provider's text, shown on a page.</summary>
+        private const int MaxProviderTextLength = 100;
 
         /// <summary>The most provider error text carried into a log line.</summary>
         private const int MaxErrorTextLength = 300;
@@ -58,7 +69,12 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>Appended to <see cref="AiSettingsSnapshot.OllamaUrl"/>, which is stored without a trailing slash.</summary>
         private const string OllamaChatPath = "/api/chat";
 
+        /// <summary>Ollama's list of the models the server has pulled, under the same base URL.</summary>
+        private const string OllamaTagsPath = "/api/tags";
+
         private const string OpenRouterChatUri = "https://openrouter.ai/api/v1/chat/completions";
+        private const string OpenRouterModelsProvider = "OpenRouter models";
+        private const string OpenRouterModelsUri = "https://openrouter.ai/api/v1/models";
         private const string SpeechToTextUri = "https://api.elevenlabs.io/v1/speech-to-text";
         private const string TextToSpeechUri = "https://api.elevenlabs.io/v1/text-to-speech/";
         private const string VoicesProvider = "ElevenLabs voices";
@@ -80,6 +96,43 @@ namespace Techie.Pbx.Core.Ai
             return settings.Provider == AiModelProviders.Ollama
                 ? await OllamaChatAsync(http, settings, model, messages, transferTargets, cancellationToken)
                 : await OpenRouterChatAsync(http, settings, model, messages, transferTargets, cancellationToken);
+        }
+
+        /// <summary>
+        /// The tool-capable models the chosen model provider offers (D207): OpenRouter's public list,
+        /// asked with the saved key when there is one, since a key can change what is listed; or
+        /// the models the Ollama server has pulled. At most <see cref="MaxModels"/>, cheapest first.
+        /// Every failure is an <see cref="AiProviderException"/> the page can show as it stands.
+        /// </summary>
+        public static async Task<List<AiModel>> ListModelsAsync(HttpClient http, AiSettingsSnapshot settings, CancellationToken cancellationToken)
+        {
+            if (settings.Provider == AiModelProviders.Ollama)
+            {
+                if (settings.OllamaUrl.Length == 0)
+                    throw new AiProviderException("Set the Ollama URL first.");
+
+                // Checked again for the same reason the chat checks it: a request is only ever
+                // built from a value the Settings page would accept.
+                if (!SettingsValidation.IsOllamaUrl(settings.OllamaUrl))
+                    throw new AiProviderException("The Ollama URL in Settings is not a valid address. Fix it, then load the models again.");
+
+                var uri = settings.OllamaUrl + OllamaTagsPath;
+                var provider = $"Ollama models at {uri}";
+
+                using var ollamaRequest = new HttpRequestMessage(HttpMethod.Get, uri);
+                var ollamaBody = await SendAsync(http, ollamaRequest, provider, ModelsTimeout, "", cancellationToken);
+
+                return ReadOllamaModels(ollamaBody);
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, OpenRouterModelsUri);
+
+            if (settings.OpenRouterApiKey.Length > 0)
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenRouterApiKey);
+
+            var body = await SendAsync(http, request, OpenRouterModelsProvider, ModelsTimeout, settings.OpenRouterApiKey, cancellationToken);
+
+            return ReadOpenRouterModels(body);
         }
 
         /// <summary>
@@ -172,12 +225,98 @@ namespace Techie.Pbx.Core.Ai
             ReadChat(body, "Ollama chat", root => root.GetProperty("message"));
 
         /// <summary>
+        /// Ollama's <c>/api/tags</c>: the names of the models the server has pulled, by name, at most
+        /// <see cref="MaxModels"/>. Ollama does not say which take tools — it either uses them or
+        /// ignores them per model, which the session copes with — so every one is offered, and a
+        /// local model costs nothing per token. A name the model row would refuse is left out.
+        /// </summary>
+        public static List<AiModel> ReadOllamaModels(byte[] body)
+        {
+            const string provider = "Ollama models";
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var models = new List<AiModel>();
+
+                foreach (var model in document.RootElement.GetProperty("models").EnumerateArray())
+                {
+                    var name = IdOf(model, "name");
+
+                    if (AiModel.IsPlausibleId(name))
+                        models.Add(new AiModel { Id = name, Name = name, SupportsTools = true });
+                }
+
+                return models
+                    .OrderBy(m => m.Id, StringComparer.OrdinalIgnoreCase)
+                    .Take(MaxModels)
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                throw new AiProviderException($"{provider} answered with something other than the expected JSON.");
+            }
+        }
+
+        /// <summary>
         /// OpenRouter's answer: the first choice's words and its first tool call, either of which
         /// may be missing. A model that answered with neither has said nothing, which is an empty
         /// reply rather than a failure.
         /// </summary>
         public static AiChatReply ReadOpenRouterChatReply(byte[] body) =>
             ReadChat(body, "OpenRouter chat", root => root.GetProperty("choices")[0].GetProperty("message"));
+
+        /// <summary>
+        /// OpenRouter's <c>/api/v1/models</c>, kept to the models that take tools — an agent whose
+        /// model cannot call <c>transfer_call</c> cannot transfer (D207) — and ordered by output
+        /// price then id, at most <see cref="MaxModels"/>. Prices arrive as strings of dollars per
+        /// token and are kept per million. A model without a fixed price (OpenRouter writes
+        /// <c>-1</c> for a router whose price depends on where it sends the request) cannot be
+        /// ranked by price and is left out, as is an id the model row would refuse.
+        /// </summary>
+        public static List<AiModel> ReadOpenRouterModels(byte[] body)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var models = new List<AiModel>();
+
+                foreach (var model in document.RootElement.GetProperty("data").EnumerateArray())
+                {
+                    var id = IdOf(model, "id");
+
+                    if (!AiModel.IsPlausibleId(id) || !TakesTools(model))
+                        continue;
+
+                    if (!model.TryGetProperty("pricing", out var pricing) || pricing.ValueKind != JsonValueKind.Object ||
+                        PerMillion(pricing, "prompt") is not { } input ||
+                        PerMillion(pricing, "completion") is not { } output)
+                        continue;
+
+                    var name = StringOf(model, "name");
+
+                    models.Add(new AiModel
+                    {
+                        ContextLength = model.TryGetProperty("context_length", out var context) && context.ValueKind == JsonValueKind.Number && context.TryGetInt32(out var length) ? length : 0,
+                        Id = id,
+                        InputPricePerMillion = input,
+                        Name = name.Length > 0 ? name : id,
+                        OutputPricePerMillion = output,
+                        SupportsTools = true,
+                    });
+                }
+
+                return models
+                    .OrderBy(m => m.OutputPricePerMillion)
+                    .ThenBy(m => m.Id, StringComparer.Ordinal)
+                    .Take(MaxModels)
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                throw new AiProviderException($"{OpenRouterModelsProvider} answered with something other than the expected JSON.");
+            }
+        }
 
         /// <summary>
         /// ElevenLabs' v1 voice list, by category then name. A voice with no labels has a blank
@@ -352,6 +491,13 @@ namespace Techie.Pbx.Core.Ai
         private static string ErrorText(byte[] body, string key) =>
             Clean(Encoding.UTF8.GetString(body, 0, Math.Min(body.Length, MaxErrorTextLength * 4)), key, MaxErrorTextLength);
 
+        /// <summary>
+        /// A model id as the provider sent it, or blank: not cut short like <see cref="StringOf"/>,
+        /// because a shortened id would be a different model. The caller checks its shape.
+        /// </summary>
+        private static string IdOf(JsonElement element, string name) =>
+            element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+
         /// <summary>The conversation as both providers take it: an array of role and content.</summary>
         private static JsonArray Messages(IReadOnlyList<(string Role, string Content)> messages) =>
             new(messages.Select(m => (JsonNode)new JsonObject { ["role"] = m.Role, ["content"] = m.Content }).ToArray());
@@ -410,6 +556,20 @@ namespace Techie.Pbx.Core.Ai
             var body = await SendAsync(http, request, provider, ChatTimeout, settings.OpenRouterApiKey, cancellationToken);
 
             return ReadOpenRouterChatReply(body);
+        }
+
+        /// <summary>
+        /// A price string of OpenRouter's, dollars per token, as dollars per million; null when it
+        /// is absent, not a number, or negative (a price that is not fixed).
+        /// </summary>
+        private static decimal? PerMillion(JsonElement pricing, string name)
+        {
+            if (!pricing.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String ||
+                !decimal.TryParse(value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var perToken) ||
+                perToken < 0)
+                return null;
+
+            return perToken * 1_000_000m;
         }
 
         /// <summary>
@@ -551,7 +711,13 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>A string property of a provider's object, flattened and cut short, or blank when absent or not a string.</summary>
         private static string StringOf(JsonElement element, string name) =>
             element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-                ? Clean(value.GetString() ?? "", "", MaxVoiceTextLength)
+                ? Clean(value.GetString() ?? "", "", MaxProviderTextLength)
                 : "";
+
+        /// <summary>Whether an OpenRouter model lists <c>tools</c> among its supported parameters.</summary>
+        private static bool TakesTools(JsonElement model) =>
+            model.TryGetProperty("supported_parameters", out var parameters) &&
+            parameters.ValueKind == JsonValueKind.Array &&
+            parameters.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.String && p.GetString() == "tools");
     }
 }

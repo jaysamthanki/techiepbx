@@ -1,0 +1,22 @@
+@*
+    The AI page's model chooser (D207), shown in the model provider's group above its model row.
+    Nothing is fetched until the button is pressed; the list arrives from the Models handler as
+    _ModelChoices.
+*@
+@{
+    var modelsUrl = Url.Page("/Settings/AiSettings", "Models");
+}
+<div class="d-flex align-items-center gap-2 flex-wrap">
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            hx-get="@modelsUrl"
+            hx-target="#ai-model-choices"
+            hx-swap="innerHTML">
+        Load models
+    </button>
+    <span class="text-secondary small">
+        The list comes from the provider: only models that can call tools (an agent needs one to
+        transfer a caller), the @Techie.Pbx.Core.Ai.AiProviders.MaxModels cheapest at most. Choosing one
+        stores it as the model below, which can still be typed by hand.
+    </span>
+</div>
+<div id="ai-model-choices" class="mt-2"></div>

@@ -24,6 +24,9 @@ namespace Techie.Pbx.Web.Pages.Settings
     /// The Speech group also offers the voices the saved ElevenLabs key may use (D205), loaded only
     /// when asked for. Choosing one stores the same <c>Ai.ElevenLabsVoiceId</c> row through the same
     /// repository; the row stays the setting and can still be typed.
+    ///
+    /// The provider's group offers the provider's own model list the same way (D207): tool-capable
+    /// models only, stored as that provider's model row.
     /// </summary>
     public class AiSettingsModel : PageModel
     {
@@ -51,8 +54,52 @@ namespace Techie.Pbx.Web.Pages.Settings
             this.settings = new SettingsRepository(PbxDatabase.Current);
         }
 
+        /// <summary>
+        /// The row a chosen model is stored in: <c>Ai.OllamaModel</c> when the provider is Ollama,
+        /// <c>Ai.OpenRouterModel</c> otherwise. Pure, so it can be checked without hosting the page.
+        /// </summary>
+        public static string ModelKeyFor(AiSettingsSnapshot settings) =>
+            settings.Provider == AiModelProviders.Ollama ? SettingsKeys.AiOllamaModel : SettingsKeys.AiOpenRouterModel;
+
         public void OnGet()
         {
+        }
+
+        /// <summary>
+        /// The tool-capable models the chosen provider offers, as a list to choose from, or the
+        /// sentence that says why not (D207). Never an error page. Served from
+        /// <see cref="AiListCache{T}"/> where it can be, keyed by the provider and what decides its
+        /// list — the OpenRouter key, or the Ollama URL — so a changed one is a fresh list.
+        /// </summary>
+        public async Task<PartialViewResult> OnGetModelsAsync()
+        {
+            var settings = AiSettingsSnapshot.From(this.settings.GetAll());
+            var ollama = settings.Provider == AiModelProviders.Ollama;
+            var choices = new ModelChoices
+            {
+                Current = ollama ? settings.OllamaModel : settings.OpenRouterModel,
+                Provider = settings.Provider,
+            };
+
+            try
+            {
+                // Not the request's token, for the same reason as the voices: the load is shared.
+                choices.Models = await AiListCache<AiModel>.GetOrAdd(
+                    ollama ? $"{AiModelProviders.Ollama} {settings.OllamaUrl}" : $"{AiModelProviders.OpenRouter} {settings.OpenRouterApiKey}",
+                    DateTimeOffset.UtcNow,
+                    () => AiProviders.ListModelsAsync(Http, settings, CancellationToken.None));
+            }
+            catch (AiProviderException ex)
+            {
+                Log.Warn($"AI model list for {this.User.Identity?.Name}: {ex.Message}");
+                choices.Error = ex.Message;
+            }
+            catch (OperationCanceledException)
+            {
+                choices.Error = $"{AiModelProviders.Display(settings.Provider)} did not answer within {AiProviders.ModelsTimeout.TotalSeconds:0} seconds.";
+            }
+
+            return this.Partial("_ModelChoices", choices);
         }
 
         /// <summary>The groups, each a small table of rows.</summary>
@@ -61,7 +108,7 @@ namespace Techie.Pbx.Web.Pages.Settings
         /// <summary>
         /// The voices the saved ElevenLabs key may use, as a list to choose from, or the sentence
         /// that says why not (D205). Never an error page: a refusal is the admin's to act on. Served
-        /// from <see cref="AiVoiceCache"/> where it can be, so pressing the button again is free.
+        /// from <see cref="AiListCache{T}"/> where it can be, so pressing the button again is free.
         /// </summary>
         public async Task<PartialViewResult> OnGetVoicesAsync()
         {
@@ -79,7 +126,7 @@ namespace Techie.Pbx.Web.Pages.Settings
                 // Not the request's token: the load is shared through the cache, and an admin
                 // navigating away must not cancel it for whoever else is waiting on it. The
                 // provider call has its own timeout.
-                choices.Voices = await AiVoiceCache.GetOrAdd(
+                choices.Voices = await AiListCache<AiVoice>.GetOrAdd(
                     settings.ElevenLabsApiKey,
                     DateTimeOffset.UtcNow,
                     () => AiProviders.ListVoicesAsync(Http, settings, CancellationToken.None));
@@ -95,6 +142,34 @@ namespace Techie.Pbx.Web.Pages.Settings
             }
 
             return this.Partial("_VoiceChoices", choices);
+        }
+
+        /// <summary>
+        /// Stores the chosen model as the chosen provider's model row (<see cref="ModelKeyFor"/>),
+        /// through the repository the general settings page saves with. Only a slug shaped like one
+        /// the row accepts (<see cref="AiModel.IsPlausibleId"/>) is taken; anything else is refused
+        /// with nothing written.
+        /// </summary>
+        public IActionResult OnPostSaveModel(string? model)
+        {
+            var id = (model ?? "").Trim();
+
+            if (!AiModel.IsPlausibleId(id))
+                return this.Alert("That is not a model the provider listed. Load the models again and choose one from the list.");
+
+            var key = ModelKeyFor(AiSettingsSnapshot.From(this.settings.GetAll()));
+
+            try
+            {
+                this.settings.Set(key, id);
+            }
+            catch (ValidationFailedException ex)
+            {
+                return this.Alert(string.Join(" ", ex.Errors));
+            }
+
+            Log.Info($"Setting {key} chosen from the model list by {this.User.Identity?.Name}");
+            return this.Saved(key);
         }
 
         /// <summary>
@@ -120,15 +195,7 @@ namespace Techie.Pbx.Web.Pages.Settings
             }
 
             Log.Info($"Setting {SettingsKeys.AiElevenLabsVoiceId} chosen from the voice list by {this.User.Identity?.Name}");
-
-            // The same events the general page's save answers with: the groups reload, so the voice
-            // ID row shows the new value. App-scoped, so there is nothing to apply.
-            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object?>
-            {
-                ["settingsChanged"] = null,
-                ["pbxToast"] = new { message = WebUtility.HtmlEncode($"{SettingsKeys.AiElevenLabsVoiceId} saved.") },
-            });
-            return new StatusCodeResult(StatusCodes.Status204NoContent);
+            return this.Saved(SettingsKeys.AiElevenLabsVoiceId);
         }
 
         /// <summary>
@@ -214,12 +281,16 @@ namespace Techie.Pbx.Web.Pages.Settings
                 {
                     Help = "An Ollama-compatible server on your own network. No API key: the server is yours, " +
                         "so only its address and the model to ask for are needed.",
+                    InsertBeforeKey = SettingsKeys.AiOllamaModel,
+                    InsertPartial = "/Pages/Settings/_ModelChooser.cshtml",
                     Rows = Rows(stored, SettingsKeys.AiOllamaUrl, SettingsKeys.AiOllamaModel),
                     Title = AiModelProviders.Display(AiModelProviders.Ollama),
                 }
                 : new SettingSection
                 {
                     Help = "Your own OpenRouter account: the key it bills, and the model an agent asks for when it names none.",
+                    InsertBeforeKey = SettingsKeys.AiOpenRouterModel,
+                    InsertPartial = "/Pages/Settings/_ModelChooser.cshtml",
                     Rows = Rows(stored, SettingsKeys.AiOpenRouterApiKey, SettingsKeys.AiOpenRouterModel),
                     Title = AiModelProviders.Display(AiModelProviders.OpenRouter),
                 };
@@ -257,6 +328,21 @@ namespace Techie.Pbx.Web.Pages.Settings
 
         private static List<SettingRow> Rows(IReadOnlyDictionary<string, string> stored, params string[] keys) =>
             keys.Select(key => SettingRow.For(SettingsCatalog.For(key), stored)).ToList();
+
+        /// <summary>
+        /// A setting chosen from a list, answered with the same events the general page's save
+        /// answers with: the groups reload, so the row shows the new value. App-scoped, so there is
+        /// nothing to apply.
+        /// </summary>
+        private IActionResult Saved(string key)
+        {
+            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["settingsChanged"] = null,
+                ["pbxToast"] = new { message = WebUtility.HtmlEncode($"{key} saved.") },
+            });
+            return new StatusCodeResult(StatusCodes.Status204NoContent);
+        }
 
         /// <summary>A model's reply, flattened and cut short enough for a toast.</summary>
         private static string Shorten(string text)

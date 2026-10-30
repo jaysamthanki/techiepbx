@@ -1,9 +1,11 @@
 namespace Techie.Pbx.Core.Ai
 {
     /// <summary>
-    /// The voice list per ElevenLabs key, so the AI settings page does not ask the provider every
-    /// time an admin presses "Load voices" (D205). Keyed by the API key itself, because the list is
-    /// what that key may use; the key is only ever a dictionary key here, never logged or shown.
+    /// A provider's list per credential, so the AI settings page does not ask the provider every
+    /// time an admin presses "Load voices" (D205) or "Load models" (D207). One cache per item type,
+    /// so voices and models never share an entry. Keyed by what decides the list — the ElevenLabs
+    /// key for voices, the provider plus its key or URL for models; a key is only ever a dictionary
+    /// key here, never logged or shown.
     ///
     /// A list is kept for <see cref="Lifetime"/>. A failed load is kept too, for the shorter
     /// <see cref="FailureLifetime"/>: a key without <c>voices_read</c> fails the same way every
@@ -11,12 +13,12 @@ namespace Techie.Pbx.Core.Ai
     /// provider, while a fixed key is picked up within a minute. A load still in flight is shared,
     /// so two lookups for the same key never start two requests.
     /// </summary>
-    public static class AiVoiceCache
+    public static class AiListCache<T>
     {
         /// <summary>How long a failed load is answered from the cache.</summary>
         public static readonly TimeSpan FailureLifetime = TimeSpan.FromMinutes(1);
 
-        /// <summary>How long a voice list is answered from the cache.</summary>
+        /// <summary>How long a list is answered from the cache.</summary>
         public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
         private static readonly Dictionary<string, Entry> Entries = new(StringComparer.Ordinal);
@@ -31,13 +33,13 @@ namespace Techie.Pbx.Core.Ai
         }
 
         /// <summary>
-        /// The voices for <paramref name="key"/>: the cached list while it is fresh at
+        /// The list for <paramref name="key"/>: the cached list while it is fresh at
         /// <paramref name="now"/>, the load already running if there is one, and otherwise a new
         /// call to <paramref name="load"/>. A failed load's exception is what the caller awaits.
         /// </summary>
-        public static Task<List<AiVoice>> GetOrAdd(string key, DateTimeOffset now, Func<Task<List<AiVoice>>> load)
+        public static Task<List<T>> GetOrAdd(string key, DateTimeOffset now, Func<Task<List<T>>> load)
         {
-            Lazy<Task<List<AiVoice>>> lazy;
+            Lazy<Task<List<T>>> lazy;
 
             lock (Gate)
             {
@@ -47,7 +49,7 @@ namespace Techie.Pbx.Core.Ai
                 {
                     // Wrapped, so a loader that throws before its first await still fails as a
                     // task (which expires) rather than as a Lazy that rethrows for ever.
-                    entry = new Entry(now, new Lazy<Task<List<AiVoice>>>(async () => await load()));
+                    entry = new Entry(now, new Lazy<Task<List<T>>>(async () => await load()));
                     Entries[key] = entry;
                 }
 
@@ -71,7 +73,7 @@ namespace Techie.Pbx.Core.Ai
                 Entries.Remove(key);
         }
 
-        private sealed record Entry(DateTimeOffset Started, Lazy<Task<List<AiVoice>>> Load)
+        private sealed record Entry(DateTimeOffset Started, Lazy<Task<List<T>>> Load)
         {
             public bool IsFresh(DateTimeOffset now)
             {
