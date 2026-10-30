@@ -285,8 +285,13 @@ namespace Techie.Pbx.Core.Ai
                 {
                     var id = IdOf(model, "id");
 
-                    if (!AiModel.IsPlausibleId(id) || !TakesTools(model))
+                    // A ":batch" variant answers asynchronously on a lower tier: it would be a
+                    // cheap-looking choice that cannot answer a live call in time (D207).
+                    if (!AiModel.IsPlausibleId(id) || !TakesTools(model) ||
+                        id.EndsWith(":batch", StringComparison.Ordinal))
+                    {
                         continue;
+                    }
 
                     if (!model.TryGetProperty("pricing", out var pricing) || pricing.ValueKind != JsonValueKind.Object ||
                         PerMillion(pricing, "prompt") is not { } input ||

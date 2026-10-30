@@ -54,8 +54,27 @@ namespace Techie.Pbx.Tests.Ai
             Assert.Equal(new[] { "a/cheap", "z/cheap", "b/dear" }, models.Select(m => m.Id));
         }
 
+        /// <summary>
+        /// Batch variants answer asynchronously on a cheaper tier: listing them would offer a model
+        /// that cannot answer a live call in time (D207).
+        /// </summary>
         [Fact]
-        public void An_OpenRouter_body_without_data_is_a_provider_error()
+        public void Batch_variants_are_not_offered()
+        {
+            var models = AiProviders.ReadOpenRouterModels(Bytes(
+                """
+                {"data":[
+                  {"id":"anthropic/claude-haiku-5.5:batch","pricing":{"prompt":"0.00000005","completion":"0.00000025"},"supported_parameters":["tools"]},
+                  {"id":"anthropic/claude-haiku-5.5","pricing":{"prompt":"0.0000001","completion":"0.0000005"},"supported_parameters":["tools"]}
+                ]}
+                """));
+
+            var model = Assert.Single(models);
+            Assert.Equal("anthropic/claude-haiku-5.5", model.Id);
+        }
+
+        [Fact]
+        public void An_openrouter_body_without_data_is_a_provider_error()
         {
             var error = Assert.Throws<AiProviderException>(() => AiProviders.ReadOpenRouterModels(Bytes("""{"error":"nope"}""")));
 
