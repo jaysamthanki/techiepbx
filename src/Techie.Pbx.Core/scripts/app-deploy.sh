@@ -101,7 +101,11 @@ if [[ ! -e "${APP_HOME}/appsettings.json" ]]; then
     FIRST_INSTALL=1
 fi
 
-KEEP_DIR=$(mktemp -d)
+# The staging copy goes beside APP_HOME, not in /tmp: a box whose /tmp is a small tmpfs
+# cannot hold a kept whisper model (~466 MB) plus the tarball, and the deploy then dies
+# with "No space left on device" half way through (found on pbx.techienetworks.com
+# 2026-10-30). Beside APP_HOME it is on the same filesystem as the thing it is copying.
+KEEP_DIR=$(mktemp -d "$(dirname "${APP_HOME}")/.tnpbx-deploy.XXXXXX")
 # backups/ holds the helper's tnpbx-backup tarballs (D171) and operator snapshots — a
 # deploy must never destroy them.
 for kept in appsettings.json Data bin Config whisper backups; do
