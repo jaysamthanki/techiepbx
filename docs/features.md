@@ -288,7 +288,9 @@ from the shared picker except another AI agent — an extension, a ring group, v
 an announcement, a time condition or a call flow control — still fixed per agent. **Widened in
 D202/D203:** the caller can also ask for a person by name ("can I speak to Anishi?") and the model
 transfers them to that extension, chosen at runtime from the enabled extensions, by AMI `Redirect`;
-the fixed handoff stays the fallback for every other way a call ends.
+the fixed handoff stays the fallback for every other way a call ends. Since D208 every call has its
+own UUID, so two callers on the same agent at once can each be transferred; a call whose channel
+cannot be found over AMI when it is answered goes straight to the handoff.
 
 Settings live on their own page (Settings → AI settings, D204): a **model provider** choice —
 OpenRouter, or any Ollama-compatible server by URL plus model name, no key — the ElevenLabs speech

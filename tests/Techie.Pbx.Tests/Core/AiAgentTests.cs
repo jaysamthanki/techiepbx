@@ -197,25 +197,5 @@ namespace Techie.Pbx.Tests.Core
             agent.Enabled = false;
             Assert.False(agent.IsPlayable);
         }
-
-        /// <summary>
-        /// AudioSocket() needs a real UUID, and the media service needs the same one every apply
-        /// and after a renumber: it is derived from the row ID and nothing else (D199).
-        /// </summary>
-        [Fact]
-        public void The_service_uuid_is_a_stable_uuid_from_the_row_id()
-        {
-            var agent = Agent();
-            var uuid = agent.ServiceUuid;
-
-            Assert.True(Guid.TryParseExact(uuid, "D", out _));
-            Assert.Equal(uuid, Agent().ServiceUuid);
-
-            agent.Number = "7301";
-            Assert.Equal(uuid, agent.ServiceUuid);
-
-            agent.AiAgentID = 2;
-            Assert.NotEqual(uuid, agent.ServiceUuid);
-        }
     }
 }

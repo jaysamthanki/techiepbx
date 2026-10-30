@@ -15,8 +15,10 @@ namespace Techie.Pbx.Tests.Ai
 
         private readonly List<IReadOnlyList<(string Role, string Content)>> chats = new();
         private readonly List<string> spoken = new();
+        private readonly List<string> redirected = new();
         private readonly DuplexTestStream stream = new();
         private readonly List<string> transfers = new();
+        private int channelLookups;
         private int transcriptions;
 
         private static readonly IReadOnlyList<(string Extension, string Name)> Staff = new[] { ("101", "Jaysam"), ("102", "Anishi") };
@@ -62,7 +64,8 @@ namespace Techie.Pbx.Tests.Ai
             bool logTranscripts = true,
             Func<string, AiChatReply>? answer = null,
             IReadOnlyList<(string Extension, string Name)>? targets = null,
-            bool transferWorks = true)
+            bool transferWorks = true,
+            string? channel = "PJSIP/callcentric-00000001")
         {
             var settings = new AiSettingsSnapshot
             {
@@ -76,6 +79,7 @@ namespace Techie.Pbx.Tests.Ai
 
             return new AiCallSession(
                 agent,
+                channel,
                 settings,
                 Log,
                 targets ?? [],
@@ -104,10 +108,18 @@ namespace Techie.Pbx.Tests.Ai
                     var frames = this.spoken.Count == 1 && agent.Greeting.Length > 0 ? 5 : replyFrames;
                     return Task.FromResult(Clip(frames));
                 },
-                (extension, ct) =>
+                ct =>
+                {
+                    Interlocked.Increment(ref this.channelLookups);
+                    return Task.FromResult<string?>("PJSIP/found-00000002");
+                },
+                (name, extension, ct) =>
                 {
                     lock (this.transfers)
+                    {
+                        this.redirected.Add(name);
                         this.transfers.Add(extension);
+                    }
 
                     return Task.FromResult(transferWorks);
                 })
@@ -344,6 +356,37 @@ namespace Techie.Pbx.Tests.Ai
             Assert.Equal(new[] { "Hold on, connecting you." }, this.spoken);
             Assert.Equal(3, this.stream.WrittenFrames.Count);
             Assert.Contains(AiProviders.TransferToolName, Assert.Single(this.chats)[0].Content);
+        }
+
+        /// <summary>
+        /// The call's channel was bound by its UUID when it was answered (D208), so the transfer
+        /// redirects that channel and never asks Asterisk which channel it is.
+        /// </summary>
+        [Fact]
+        public async Task A_transfer_with_a_known_channel_redirects_it_without_looking_for_channels()
+        {
+            var session = this.Session(Agent(), _ => "unused", () => "Anishi please.", answer: _ => TransferCall("102"), targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            await session.RunAsync(this.stream, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.Transferred, session.Outcome);
+            Assert.Equal(0, this.channelLookups);
+            Assert.Equal(new[] { "PJSIP/callcentric-00000001" }, this.redirected);
+        }
+
+        [Fact]
+        public async Task A_transfer_with_no_channel_finds_it_first()
+        {
+            var session = this.Session(Agent(), _ => "unused", () => "Anishi please.", answer: _ => TransferCall("102"), targets: Staff, channel: null);
+
+            this.stream.SendAudio(Turn());
+            await session.RunAsync(this.stream, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.Transferred, session.Outcome);
+            Assert.Equal(1, this.channelLookups);
+            Assert.Equal(new[] { "PJSIP/found-00000002" }, this.redirected);
+            Assert.Equal(new[] { "102" }, this.transfers);
         }
 
         [Fact]

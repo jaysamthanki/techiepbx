@@ -16,7 +16,9 @@ namespace Techie.Pbx.Web.Ai
     /// service for the reason <c>CdrCollectorService</c> is one; everything it uses is built with
     /// <c>new</c>. A call is handed back to the dialplan by closing its socket; the one exception
     /// is a transfer to an extension the model chose, which moves the channel by AMI Redirect
-    /// (D202, D203). It never talks to ARI.
+    /// (D202, D203). AMI is also how a socket is bound to its call at answer time (D208): the
+    /// socket's UUID is the call's own, and the channel carrying it says which agent it is. It
+    /// never talks to ARI.
     ///
     /// The port is read once, at start: a changed port needs an app restart, as well as the apply
     /// that writes it into the dialplan. The keys and voices are read per call, so a change on the
@@ -131,8 +133,9 @@ namespace Techie.Pbx.Web.Ai
         }
 
         /// <summary>
-        /// One call: the UUID first, then the agent it names, then the session. One INFO line per
-        /// call — the agent's number, how long it lasted and how it ended, and nothing anyone said.
+        /// One call: the UUID first, then the channel carrying it and the agent at that channel's
+        /// extension (D208), then the session. One INFO line per call — the agent's number, the
+        /// channel, how long it lasted and how it ended, and nothing anyone said.
         /// </summary>
         private async Task HandleAsync(TcpClient client, CancellationToken stoppingToken)
         {
@@ -158,11 +161,16 @@ namespace Techie.Pbx.Web.Ai
 
                     // AudioSocket sends the UUID in RFC 4122 (big-endian) byte order.
                     var uuid = new Guid(first.Payload, bigEndian: true).ToString("D");
-                    var agent = new AiAgentRepository(PbxDatabase.Current).GetByServiceUuid(uuid);
+                    var channel = await BindAsync(uuid, stoppingToken);
 
-                    if (agent == null)
+                    if (channel == null)
+                        return;
+
+                    var agent = new AiAgentRepository(PbxDatabase.Current).GetByNumber(channel.Exten);
+
+                    if (agent == null || !agent.Enabled)
                     {
-                        Log.Warn($"AI media listener: no enabled agent has UUID {uuid}; closed.");
+                        Log.Warn($"AI media listener: no enabled agent has number {channel.Exten} (uuid {uuid}); handing the call to the dialplan.");
                         return;
                     }
 
@@ -180,18 +188,20 @@ namespace Techie.Pbx.Web.Ai
 
                     var session = new AiCallSession(
                         agent,
+                        channel.Channel,
                         settings,
                         Log,
                         targets,
                         (wav, ct) => AiProviders.TranscribeAsync(Http, settings, wav, ct),
                         (messages, model, ct) => AiProviders.ChatAsync(Http, settings, model, messages, targets, ct),
                         (text, model, voice, ct) => AiProviders.SpeakAsync(Http, settings, model, voice, text, ct),
-                        (extension, ct) => TransferAsync(agent, extension, ct));
+                        ct => FindChannelAsync(agent, ct),
+                        (name, extension, ct) => RedirectAsync(agent, name, extension, ct));
 
                     var clock = Stopwatch.StartNew();
                     await session.RunAsync(stream, stoppingToken);
 
-                    Log.Info($"AI agent {agent.Number}: call ended after {clock.Elapsed.TotalSeconds:0} seconds, {session.Outcome}.");
+                    Log.Info($"AI agent {agent.Number}: call on {channel.Channel} ended after {clock.Elapsed.TotalSeconds:0} seconds, {session.Outcome}.");
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
                 {
@@ -209,34 +219,78 @@ namespace Techie.Pbx.Web.Ai
         }
 
         /// <summary>
-        /// Moves the agent's call to an extension (D203): finds the one channel in this agent's
-        /// <c>AudioSocket()</c> and redirects it to the extension in the internal context. No
-        /// channel, or more than one, is false: two calls to the same agent must never be crossed.
-        /// AMI is synchronous and short lived, as everywhere else in the app, so it runs off the
-        /// call's own thread.
+        /// The channel this socket's UUID belongs to (D208): one <c>CoreShowChannels</c>, then the
+        /// channel in <c>AudioSocket()</c> whose data starts with the UUID. Null when none does or
+        /// AMI cannot be reached, logged once; the caller closes the socket and the dialplan hands
+        /// the call off rather than anything guessing which call this is. AMI is synchronous and
+        /// short lived, as everywhere else in the app, so it runs off the call's own thread.
         /// </summary>
-        private static Task<bool> TransferAsync(AiAgent agent, string extension, CancellationToken cancellationToken)
+        private static Task<ActiveChannel?> BindAsync(string uuid, CancellationToken cancellationToken)
         {
             return Task.Run(() =>
             {
                 try
                 {
                     using var client = new AmiClient(AsteriskSettings.Ami(new SettingsRepository(PbxDatabase.Current).GetAll()));
-                    var ami = client.Connect();
-
-                    var channel = AiAgentChannel.Find(ami.ShowChannels(), agent.Number, out var matches);
+                    var channel = AiAgentChannel.Bind(client.Connect().ShowChannels(), uuid);
 
                     if (channel == null)
-                    {
-                        Log.Warn(matches == 0
-                            ? $"AI agent {agent.Number}: transfer to {extension} failed: no channel is in its AudioSocket."
-                            : $"AI agent {agent.Number}: transfer to {extension} failed: {matches} channels are in its AudioSocket, and which one asked cannot be told.");
-                        return false;
-                    }
+                        Log.Warn($"AI media listener: no channel carries uuid {uuid}; handing the call to the dialplan.");
 
-                    if (!ami.Redirect(channel.Channel, ExtensionsConfRenderer.InternalContext, extension))
+                    return channel;
+                }
+                catch (Exception ex) when (ex is AmiException or InvalidOperationException)
+                {
+                    Log.Warn($"AI media listener: cannot find the channel for uuid {uuid} ({ex.Message}); handing the call to the dialplan.");
+                    return null;
+                }
+            }, cancellationToken);
+        }
+
+        /// <summary>
+        /// The fallback for a session given no channel (D203): the one channel in this agent's
+        /// <c>AudioSocket()</c>, or null — none, or more than one, which cannot be told apart
+        /// without the call's UUID. The listener always binds a channel first, so a call it
+        /// answers never comes here.
+        /// </summary>
+        private static Task<string?> FindChannelAsync(AiAgent agent, CancellationToken cancellationToken)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    using var client = new AmiClient(AsteriskSettings.Ami(new SettingsRepository(PbxDatabase.Current).GetAll()));
+                    var channel = AiAgentChannel.Find(client.Connect().ShowChannels(), agent.Number, out var matches);
+
+                    if (channel == null)
+                        Log.Warn($"AI agent {agent.Number}: transfer failed: {matches} channels are in its AudioSocket, and which one asked cannot be told.");
+
+                    return channel?.Channel;
+                }
+                catch (Exception ex) when (ex is AmiException or InvalidOperationException)
+                {
+                    Log.Warn($"AI agent {agent.Number}: transfer failed: {ex.Message}");
+                    return null;
+                }
+            }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Moves the agent's call to an extension (D203): redirects the call's own channel to the
+        /// extension in the internal context. False, logged, when Asterisk refuses or cannot be
+        /// reached.
+        /// </summary>
+        private static Task<bool> RedirectAsync(AiAgent agent, string channel, string extension, CancellationToken cancellationToken)
+        {
+            return Task.Run(() =>
+            {
+                try
+                {
+                    using var client = new AmiClient(AsteriskSettings.Ami(new SettingsRepository(PbxDatabase.Current).GetAll()));
+
+                    if (!client.Connect().Redirect(channel, ExtensionsConfRenderer.InternalContext, extension))
                     {
-                        Log.Warn($"AI agent {agent.Number}: transfer to {extension} failed: Asterisk refused the redirect.");
+                        Log.Warn($"AI agent {agent.Number}: transfer of {channel} to {extension} failed: Asterisk refused the redirect.");
                         return false;
                     }
 
@@ -244,7 +298,7 @@ namespace Techie.Pbx.Web.Ai
                 }
                 catch (Exception ex) when (ex is AmiException or InvalidOperationException)
                 {
-                    Log.Warn($"AI agent {agent.Number}: transfer to {extension} failed: {ex.Message}");
+                    Log.Warn($"AI agent {agent.Number}: transfer of {channel} to {extension} failed: {ex.Message}");
                     return false;
                 }
             }, cancellationToken);

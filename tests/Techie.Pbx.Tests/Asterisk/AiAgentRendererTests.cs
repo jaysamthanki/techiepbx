@@ -50,6 +50,21 @@ namespace Techie.Pbx.Tests.Asterisk
             Assert.Equal(Expected("extensions-ai-agents.conf"), Render(SampleAgents()));
         }
 
+        /// <summary>
+        /// Every call gets its own UUID from func_uuid, and that is what AudioSocket() sends, so the
+        /// media service can find this call's channel by it (D208). Nothing about the agent is in it.
+        /// </summary>
+        [Fact]
+        public void Each_call_gets_its_own_uuid_before_the_audiosocket()
+        {
+            Assert.Contains(
+                "exten => 7300,1,NoOp(AI agent: Reception)\n" +
+                " same => n,Answer()\n" +
+                " same => n,Set(AI_CALL=${UUID()})\n" +
+                " same => n,AudioSocket(${AI_CALL},127.0.0.1:9019)\n",
+                Render(SampleAgents()));
+        }
+
         /// <summary>The lab has no agents: its dialplan must not change by one byte.</summary>
         [Fact]
         public void A_system_with_no_agents_renders_exactly_what_it_did_before()
@@ -71,7 +86,7 @@ namespace Techie.Pbx.Tests.Asterisk
 
             var actual = Render(new[] { agent }, 9100);
 
-            Assert.Contains($" same => n,AudioSocket({agent.ServiceUuid},127.0.0.1:9100)\n same => n,Hangup()\n", actual);
+            Assert.Contains(" same => n,AudioSocket(${AI_CALL},127.0.0.1:9100)\n same => n,Hangup()\n", actual);
         }
 
         [Fact]
@@ -83,7 +98,7 @@ namespace Techie.Pbx.Tests.Asterisk
             var actual = Render(new[] { agent });
 
             Assert.Contains(
-                $" same => n,AudioSocket({agent.ServiceUuid},127.0.0.1:9019)\n" +
+                " same => n,AudioSocket(${AI_CALL},127.0.0.1:9019)\n" +
                 "; The media service hands off by closing the socket, so the call continues here (D199)\n" +
                 " same => n,Goto(internal,600,1)\n",
                 actual);

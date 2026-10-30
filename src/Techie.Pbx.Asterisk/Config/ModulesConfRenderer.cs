@@ -104,6 +104,7 @@ namespace Techie.Pbx.Asterisk.Config
             {
                 "res_audiosocket.so",       // the AudioSocket protocol: app_audiosocket's load-time dependency (verified live)
                 "app_audiosocket.so",       // AudioSocket(): an AI agent's call audio to the loopback media service
+                "func_uuid.so",             // UUID(): each AI agent call's own AudioSocket UUID, which names its channel (D208)
             }),
 
             ("Call records for the reports page (F5)", new[]

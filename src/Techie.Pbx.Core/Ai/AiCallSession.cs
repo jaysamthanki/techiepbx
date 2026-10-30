@@ -68,18 +68,19 @@ namespace Techie.Pbx.Core.Ai
         public const int MaxLoggedText = 500;
 
         private readonly AiAgent agent;
+        private readonly string? channel;
         private readonly Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<AiChatReply>> chat;
         private readonly Endpointer endpointer = new();
+        private readonly Func<CancellationToken, Task<string?>> findChannel;
         private readonly Channel<AudioSocketFrame> frames = Channel.CreateUnbounded<AudioSocketFrame>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
         private readonly List<(string Role, string Content)> history = new();
         private readonly ILog log;
-
+        private readonly Func<string, string, CancellationToken, Task<bool>> redirect;
         private readonly List<string> transcript = new();
         private readonly AiSettingsSnapshot settings;
         private readonly Func<string, string, string, CancellationToken, Task<byte[]>> speak;
         private readonly Func<byte[], CancellationToken, Task<string>> transcribe;
-        private readonly Func<string, CancellationToken, Task<bool>> transfer;
         private readonly IReadOnlyList<(string Extension, string Name)> transferTargets;
 
         /// <summary>How the call ended; meaningful once <see cref="RunAsync"/> has returned.</summary>
@@ -96,26 +97,33 @@ namespace Techie.Pbx.Core.Ai
         /// <paramref name="speak"/> takes the text, the TTS model and the voice ID, and returns
         /// μ-law 8 kHz bytes; <paramref name="chat"/> takes the messages and the model slug, and
         /// offers the model <paramref name="transferTargets"/> as its transfer tool.
-        /// <paramref name="transfer"/> takes one of those extensions and says whether the call was
-        /// moved there (D203); with no targets it is never called.
+        /// <paramref name="redirect"/> takes a channel name and one of those extensions and says
+        /// whether the call was moved there (D203); with no targets it is never called.
+        /// <paramref name="channel"/> is this call's channel, bound by its UUID (D208), and is the
+        /// one redirected; when it is null <paramref name="findChannel"/> is asked for it at
+        /// transfer time instead, and null from that is a failed transfer.
         /// </summary>
         public AiCallSession(
             AiAgent agent,
+            string? channel,
             AiSettingsSnapshot settings,
             ILog log,
             IReadOnlyList<(string Extension, string Name)> transferTargets,
             Func<byte[], CancellationToken, Task<string>> transcribe,
             Func<IReadOnlyList<(string Role, string Content)>, string, CancellationToken, Task<AiChatReply>> chat,
             Func<string, string, string, CancellationToken, Task<byte[]>> speak,
-            Func<string, CancellationToken, Task<bool>> transfer)
+            Func<CancellationToken, Task<string?>> findChannel,
+            Func<string, string, CancellationToken, Task<bool>> redirect)
         {
             this.agent = agent;
+            this.channel = channel;
             this.chat = chat;
+            this.findChannel = findChannel;
             this.log = log;
+            this.redirect = redirect;
             this.settings = settings;
             this.speak = speak;
             this.transcribe = transcribe;
-            this.transfer = transfer;
             this.transferTargets = transferTargets;
         }
 
@@ -515,10 +523,13 @@ namespace Techie.Pbx.Core.Ai
             if ((await this.SayAsync(socket, line, bargeIn: false, cancellationToken)).Playback == Playback.CallerGone)
                 return AiCallOutcome.CallerHungUp;
 
-            if (await this.transfer(target.Extension, cancellationToken))
+            // The bound channel is redirected as it is (D208); only a session given none asks Asterisk.
+            var channel = this.channel ?? await this.findChannel(cancellationToken);
+
+            if (channel != null && await this.redirect(channel, target.Extension, cancellationToken))
                 return AiCallOutcome.Transferred;
 
-            // Why it failed is the listener's to log: it is the one that looked at the channels.
+            // Why it failed is the listener's to log: it is the one that talked to Asterisk.
             this.log.Info($"AI agent {this.agent.Number}: transfer to {target.Extension} ({target.Name}) did not happen; the conversation carries on.");
 
             // For the model only: the caller hears the failure line, never this.

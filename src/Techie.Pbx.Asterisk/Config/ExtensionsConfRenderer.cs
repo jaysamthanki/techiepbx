@@ -699,10 +699,13 @@ namespace Techie.Pbx.Asterisk.Config
         }
 
         /// <summary>
-        /// One AI agent (D199): answer, then hand the audio to the media service over AudioSocket,
-        /// named by the agent's UUID so the service knows which agent's prompt and voice to use.
-        /// The entry lives in the internal context like an extension, so a user can dial it and a
-        /// destination can Goto it, and both get the same lines.
+        /// One AI agent (D199): answer, give the call its own UUID, then hand the audio to the media
+        /// service over AudioSocket. The UUID is per call (D208), not per agent: it names the
+        /// channel to the media service, which finds it in CoreShowChannels by that UUID and reads
+        /// the agent from the extension the channel is at, so a transfer moves exactly this call
+        /// even when two callers are talking to the same agent. The entry lives in the internal
+        /// context like an extension, so a user can dial it and a destination can Goto it, and
+        /// both get the same lines.
         ///
         /// AudioSocket() returns when the socket closes. With a handoff the call carries on to it,
         /// whatever kind of destination it is (D201): the media service transfers by closing the socket, so the transfer is the
@@ -713,14 +716,14 @@ namespace Techie.Pbx.Asterisk.Config
         {
             var number = ConfText.Safe(agent.Number, "AI agent number");
             var name = ConfText.Safe(agent.Name, "AI agent name");
-            var uuid = ConfText.Safe(agent.ServiceUuid, "AI agent UUID");
             var host = ConfText.Safe(AiAgentMediaHost, "AI media host");
 
             sb.Append('\n');
             sb.Append($"; AI agent {name} (F11, D199)\n");
             sb.Append($"exten => {number},1,NoOp(AI agent: {name})\n");
             sb.Append(" same => n,Answer()\n");
-            sb.Append($" same => n,AudioSocket({uuid},{host}:{mediaPort.ToString(CultureInfo.InvariantCulture)})\n");
+            sb.Append(" same => n,Set(AI_CALL=${UUID()})\n");
+            sb.Append($" same => n,AudioSocket(${{AI_CALL}},{host}:{mediaPort.ToString(CultureInfo.InvariantCulture)})\n");
 
             var handoff = agent.ToTransferDestination();
 

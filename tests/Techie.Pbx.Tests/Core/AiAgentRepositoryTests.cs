@@ -77,7 +77,7 @@ namespace Techie.Pbx.Tests.Core
             Assert.Equal("vendor/model", loaded.Model);
             Assert.Equal("Extension:1001", loaded.TransferTo);
             Assert.True(loaded.Enabled);
-            Assert.Equal(loaded.ServiceUuid, this.agents.GetByNumber("7300")!.ServiceUuid);
+            Assert.Equal(id, this.agents.GetByNumber("7300")!.AiAgentID);
         }
 
         [Fact]
@@ -231,12 +231,10 @@ namespace Techie.Pbx.Tests.Core
             });
 
             var agent = this.agents.GetByID(id)!;
-            var uuid = agent.ServiceUuid;
             agent.Number = "7310";
             this.agents.Update(agent);
 
             Assert.Equal("AiAgent:7310", conditions.GetByID(conditionID)!.ToOpenDestination().Key);
-            Assert.Equal(uuid, this.agents.GetByID(id)!.ServiceUuid);
         }
 
         private long AddTrunk() =>
@@ -309,21 +307,6 @@ namespace Techie.Pbx.Tests.Core
             this.agents.Delete(id);
 
             Assert.Null(this.agents.GetByID(id));
-        }
-
-        [Fact]
-        public void An_agent_is_found_by_its_socket_uuid_only_while_it_is_enabled()
-        {
-            var agent = Agent();
-            this.agents.Insert(agent);
-
-            Assert.Equal(agent.AiAgentID, this.agents.GetByServiceUuid(agent.ServiceUuid)?.AiAgentID);
-            Assert.Null(this.agents.GetByServiceUuid(Guid.NewGuid().ToString("D")));
-
-            agent.Enabled = false;
-            this.agents.Update(agent);
-
-            Assert.Null(this.agents.GetByServiceUuid(agent.ServiceUuid));
         }
     }
 }

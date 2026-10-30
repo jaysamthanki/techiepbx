@@ -3,10 +3,11 @@ using Techie.Pbx.Asterisk.Config;
 namespace Techie.Pbx.Asterisk.Ami
 {
     /// <summary>
-    /// Which channel is the AI agent's call (D203). The media socket carries a UUID that names the
-    /// agent, not the call, so the channel to redirect is found by where it is: in
-    /// <c>AudioSocket()</c>, at the agent's number, in the internal context. Pure, so the rule can
-    /// be tested without AMI.
+    /// Which channel is the AI agent's call. The dialplan gives every call its own UUID
+    /// (<c>Set(AI_CALL=${UUID()})</c>, D208) and passes it to <c>AudioSocket()</c>, which reports it
+    /// as the first part of its application data; the socket carries the same UUID, so the media
+    /// service binds the socket to its channel by it. A per-call UUID cannot match two channels, so
+    /// the ambiguity rule D203 needed is gone. Pure, so the rule can be tested without AMI.
     /// </summary>
     public static class AiAgentChannel
     {
@@ -14,10 +15,26 @@ namespace Techie.Pbx.Asterisk.Ami
         public const string AudioSocketApplication = "AudioSocket";
 
         /// <summary>
-        /// The one channel in the agent's <c>AudioSocket()</c>, or null with
-        /// <paramref name="matches"/> saying why: none (the caller has gone) or more than one. Two
-        /// callers talking to the same agent at once are indistinguishable from here, and moving
-        /// one caller's call on the other's request would be worse than not moving it at all.
+        /// The channel inside <c>AudioSocket()</c> whose data starts with <paramref name="uuid"/>
+        /// (<c>&lt;uuid&gt;,127.0.0.1:&lt;port&gt;</c>), or null when none does — the caller has
+        /// gone, or the socket is not one of ours. Its <see cref="ActiveChannel.Exten"/> is the
+        /// agent's number.
+        /// </summary>
+        public static ActiveChannel? Bind(IReadOnlyList<ActiveChannel> channels, string uuid)
+        {
+            if (uuid.Length == 0)
+                return null;
+
+            return channels.FirstOrDefault(c =>
+                string.Equals(c.Application, AudioSocketApplication, StringComparison.OrdinalIgnoreCase) &&
+                c.ApplicationData.StartsWith(uuid + ",", StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>
+        /// The fallback for a session that was given no channel (D203's rule, kept only for that):
+        /// the one channel in <c>AudioSocket()</c> at the agent's number in the internal context, or
+        /// null with <paramref name="matches"/> saying why — none, or more than one, which cannot be
+        /// told apart without the call's UUID.
         /// </summary>
         public static ActiveChannel? Find(IReadOnlyList<ActiveChannel> channels, string agentNumber, out int matches)
         {

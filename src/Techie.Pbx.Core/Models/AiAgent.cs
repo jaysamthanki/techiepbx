@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Techie.Pbx.Core.Models
@@ -69,22 +67,6 @@ namespace Techie.Pbx.Core.Models
 
         /// <summary>Whether a call can be sent here: switched on, and a number to send it to.</summary>
         public bool IsPlayable => this.Enabled && this.Number.Length > 0;
-
-        /// <summary>
-        /// The agent's identity on the media socket (D199). Asterisk's <c>AudioSocket()</c> takes a
-        /// UUID in string form as its first argument and sends it as the socket's first message;
-        /// that UUID is how the media service tells which agent a call belongs to. It is derived
-        /// from the row ID — a hash of "tnpbx-ai-agent:{AiAgentID}" cut to 16 bytes — so it is the
-        /// same on every apply, survives a renumber, and needs no column of its own.
-        /// </summary>
-        public string ServiceUuid
-        {
-            get
-            {
-                var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"tnpbx-ai-agent:{this.AiAgentID}"));
-                return new Guid(hash.AsSpan(0, 16)).ToString("D");
-            }
-        }
 
         /// <summary>Whether a model name is shaped like an OpenRouter slug, e.g. "vendor/model:variant".</summary>
         public static bool IsValidModel(string value) => ModelPattern().IsMatch(value);

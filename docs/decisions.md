@@ -4066,7 +4066,7 @@ groups) and is a destination (`DestinationType.AiAgent`, value = the agent's num
 - **The UUID is the agent's identity on the socket.** AudioSocket() requires a UUID and sends it as
   the socket's first message. It is derived from the row ID (`SHA-256("tnpbx-ai-agent:{AiAgentID}")`
   cut to 16 bytes, as a GUID), so it is stable across applies and renumbers and needs no column.
-  The media service looks the agent up by it.
+  The media service looks the agent up by it. **Superseded by D208:** the UUID is now per call.
 - **Handoff by closing the socket.** AudioSocket() returns when the socket closes. With `TransferTo`
   set the next line is `Goto(internal,<TransferTo>,1)`, so the media service transfers a caller
   simply by hanging up its end; without it the next line is `Hangup()`. The service never needs
@@ -4205,7 +4205,7 @@ D201 left the handoff fixed per agent. "Can I speak to Anishi?" should reach ext
   `[internal]` (`AiAgentChannel.Find`, a pure function). Exactly one is redirected to
   `internal,<ext>,1`; none or more than one is a failed transfer. Two callers talking to the same
   agent at once cannot be told apart from here, and crossing them would be worse than not
-  transferring.
+  transferring. **Retired by D208:** each call now has its own UUID, so its channel is known.
 - **On failure.** The caller hears "I couldn't reach them — can I help another way?", the model's
   history gets a note that the transfer did not go through, and the conversation carries on. The
   listener logs why (no channel, several, refused, AMI unreachable).
@@ -4335,3 +4335,30 @@ Models change monthly, and the model row was a slug typed blind — the same pro
   one-minute failure lifetimes, shared in-flight loads, one cache per item type so voices and models
   never share an entry. Models are keyed by provider plus the OpenRouter key or the Ollama URL, in
   memory only, never logged.
+
+### D208. AI voice agent: one UUID per call, so a transfer moves exactly that call (2026-10-30, F11)
+
+D199's UUID was derived from the agent's row, so every call to one agent carried the same one, and
+D203 had to find "the channel in AudioSocket at the agent's number" — refusing the transfer when two
+callers were on the same agent at once. Each call now has its own identity.
+
+- **The UUID comes from the dialplan.** The agent's entry is `Answer()`,
+  `Set(AI_CALL=${UUID()})`, `AudioSocket(${AI_CALL},127.0.0.1:<port>)`, then the handoff.
+  `UUID()` is `func_uuid.so`, present in the Asterisk 22 build and added to the modules.conf
+  allowlist; it is a pure function with no I/O, so it widens nothing Asterisk listens on.
+  `AiAgent.ServiceUuid` and `AiAgentRepository.GetByServiceUuid` are gone.
+- **The socket is bound to its channel at answer time.** After the UUID frame the listener sends one
+  `CoreShowChannels` and takes the channel whose `Application` is `AudioSocket` and whose
+  `ApplicationData` starts with `<uuid>,` (`AiAgentChannel.Bind`, pure). That channel's extension is
+  the agent's number (`GetByNumber`, enabled only), and its name goes to the session.
+- **AMI becomes load-bearing at answer time.** Before this AMI was needed only for a transfer; now no
+  call is taken without it. When AMI is unreachable or no channel carries the UUID, the listener logs
+  one WARN and closes the socket, so the dialplan runs the agent's handoff (or hangs up). It never
+  guesses which call a socket is.
+- **The cost is one `CoreShowChannels` per call**, on loopback, before the greeting — a few
+  milliseconds against the greeting's own TTS request, and it scales with the channels open on a small
+  box. A transfer then redirects the known channel directly, with no second lookup.
+- **D203's ambiguity rule is retired.** A per-call UUID cannot match two channels. The
+  find-by-number path (`AiAgentChannel.Find`, exactly one or none) remains only as the session's
+  fallback when it was given no channel; the listener always gives one, so a call it answers never
+  uses it.
