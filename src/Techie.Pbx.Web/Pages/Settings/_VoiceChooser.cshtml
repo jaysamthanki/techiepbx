@@ -1,0 +1,21 @@
+@*
+    The AI page's voice chooser (D205), shown in the Speech group above the voice ID row. Nothing is
+    fetched until the button is pressed, so opening the page spends no API call; the list arrives
+    from the Voices handler as _VoiceChoices.
+*@
+@{
+    var voicesUrl = Url.Page("/Settings/AiSettings", "Voices");
+}
+<div class="d-flex align-items-center gap-2 flex-wrap">
+    <button type="button" class="btn btn-sm btn-outline-secondary"
+            hx-get="@voicesUrl"
+            hx-target="#ai-voice-choices"
+            hx-swap="innerHTML">
+        Load voices
+    </button>
+    <span class="text-secondary small">
+        The list is what the saved ElevenLabs key can use. Choosing one stores it as the voice ID below,
+        which can still be typed by hand.
+    </span>
+</div>
+<div id="ai-voice-choices" class="mt-2"></div>

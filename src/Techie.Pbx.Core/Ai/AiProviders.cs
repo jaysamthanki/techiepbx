@@ -15,6 +15,8 @@ namespace Techie.Pbx.Core.Ai
     /// over the one shared <see cref="HttpClient"/>, each with its own timeout, because a caller
     /// on the line cannot wait for a provider that has stopped answering.
     ///
+    /// The settings page also lists the voices the saved ElevenLabs key may use (D205).
+    ///
     /// The chat can offer the model one tool, <see cref="TransferToolName"/>, whose only argument
     /// is one of the extensions it was given (D203); with none given, no tool is offered at all.
     ///
@@ -35,6 +37,15 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>How long one turn's transcription may take.</summary>
         public static readonly TimeSpan TranscribeTimeout = TimeSpan.FromSeconds(15);
 
+        /// <summary>How long the voice list may take. An admin is waiting for it, not a caller.</summary>
+        public static readonly TimeSpan VoicesTimeout = TimeSpan.FromSeconds(15);
+
+        /// <summary>The order a voice's labels are shown in, when it has them (D205).</summary>
+        private static readonly string[] LabelNames = { "language", "gender", "age", "accent" };
+
+        /// <summary>The longest voice name or label kept; a provider's text, shown on a page.</summary>
+        private const int MaxVoiceTextLength = 100;
+
         /// <summary>The most provider error text carried into a log line.</summary>
         private const int MaxErrorTextLength = 300;
 
@@ -50,6 +61,8 @@ namespace Techie.Pbx.Core.Ai
         private const string OpenRouterChatUri = "https://openrouter.ai/api/v1/chat/completions";
         private const string SpeechToTextUri = "https://api.elevenlabs.io/v1/speech-to-text";
         private const string TextToSpeechUri = "https://api.elevenlabs.io/v1/text-to-speech/";
+        private const string VoicesProvider = "ElevenLabs voices";
+        private const string VoicesUri = "https://api.elevenlabs.io/v1/voices";
 
         /// <summary>
         /// One chat completion from the chosen model provider (D204). <paramref name="transferTargets"/>
@@ -67,6 +80,31 @@ namespace Techie.Pbx.Core.Ai
             return settings.Provider == AiModelProviders.Ollama
                 ? await OllamaChatAsync(http, settings, model, messages, transferTargets, cancellationToken)
                 : await OpenRouterChatAsync(http, settings, model, messages, transferTargets, cancellationToken);
+        }
+
+        /// <summary>
+        /// The voices the saved ElevenLabs key may use, by category then name (D205). A refusal is
+        /// an <see cref="AiProviderException"/> worded by <see cref="VoicesError"/>, so the page can
+        /// show it as it stands.
+        /// </summary>
+        public static async Task<List<AiVoice>> ListVoicesAsync(HttpClient http, AiSettingsSnapshot settings, CancellationToken cancellationToken)
+        {
+            if (settings.ElevenLabsApiKey.Length == 0)
+                throw new AiProviderException("Set the ElevenLabs key first.");
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, VoicesUri);
+            request.Headers.Add("xi-api-key", settings.ElevenLabsApiKey);
+
+            var body = await SendAsync(
+                http,
+                request,
+                VoicesProvider,
+                VoicesTimeout,
+                settings.ElevenLabsApiKey,
+                cancellationToken,
+                (status, reason, error) => VoicesError(status, reason, error, settings.ElevenLabsApiKey));
+
+            return ReadVoices(body);
         }
 
         /// <summary>
@@ -140,6 +178,52 @@ namespace Techie.Pbx.Core.Ai
         /// </summary>
         public static AiChatReply ReadOpenRouterChatReply(byte[] body) =>
             ReadChat(body, "OpenRouter chat", root => root.GetProperty("choices")[0].GetProperty("message"));
+
+        /// <summary>
+        /// ElevenLabs' v1 voice list, by category then name. A voice with no labels has a blank
+        /// <see cref="AiVoice.Labels"/>; one whose ID is not shaped like a voice ID is left out,
+        /// because the page would refuse to save it. Names and labels are flattened to one line and
+        /// cut short, but otherwise the provider's text: the page renders them as text.
+        /// </summary>
+        public static List<AiVoice> ReadVoices(byte[] body)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var voices = new List<AiVoice>();
+
+                foreach (var voice in document.RootElement.GetProperty("voices").EnumerateArray())
+                {
+                    var id = StringOf(voice, "voice_id");
+
+                    if (!AiVoice.IsPlausibleId(id))
+                        continue;
+
+                    var labels = voice.TryGetProperty("labels", out var found) && found.ValueKind == JsonValueKind.Object
+                        ? LabelNames.Select(name => StringOf(found, name)).Where(text => text.Length > 0)
+                        : [];
+
+                    var name = StringOf(voice, "name");
+
+                    voices.Add(new AiVoice
+                    {
+                        Category = StringOf(voice, "category"),
+                        Id = id,
+                        Labels = string.Join(" · ", labels),
+                        Name = name.Length > 0 ? name : id,
+                    });
+                }
+
+                return voices
+                    .OrderBy(v => v.Category, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(v => v.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException)
+            {
+                throw new AiProviderException($"{VoicesProvider} answered with something other than the expected JSON.");
+            }
+        }
 
         /// <summary>The reply's speech as μ-law 8 kHz bytes, exactly what <c>ulaw_8000</c> returns.</summary>
         public static async Task<byte[]> SpeakAsync(
@@ -231,19 +315,42 @@ namespace Techie.Pbx.Core.Ai
         }
 
         /// <summary>
-        /// The provider's error body as one short line: control characters flattened, cut to
-        /// length, and the key scrubbed out in case a provider ever echoes it back.
+        /// A refused voice list as a sentence an admin can act on (D205), rather than the
+        /// provider's JSON. The two refusals that matter are named: a key without the
+        /// <c>voices_read</c> permission, and a 402 (the free plan's "cannot use library voices via
+        /// the API"), which keeps the provider's own reason. Anything else is the status and the
+        /// provider's text, as every other provider failure is.
         /// </summary>
-        private static string ErrorText(byte[] body, string key)
+        public static string VoicesError(int status, string? reason, byte[] body, string key)
         {
-            var text = Encoding.UTF8.GetString(body, 0, Math.Min(body.Length, MaxErrorTextLength * 4));
+            var text = ErrorText(body, key);
+
+            if (status == 401 && text.Contains("missing_permissions", StringComparison.Ordinal))
+                return "The ElevenLabs key cannot read voices: it needs the voices_read permission. Add it to the key, or type the voice ID by hand.";
+
+            if (status == 402)
+                return $"ElevenLabs refused the request: {ProviderMessage(body, key, text)}";
+
+            return $"{VoicesProvider} answered {status} {reason}: {text}";
+        }
+
+        /// <summary>
+        /// Text from a provider as one short line: control characters flattened, cut to length,
+        /// and the key scrubbed out in case a provider ever echoes it back.
+        /// </summary>
+        private static string Clean(string text, string key, int maxLength)
+        {
             text = new string(text.Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
 
             if (key.Length > 0)
                 text = text.Replace(key, "[key]", StringComparison.Ordinal);
 
-            return text.Length > MaxErrorTextLength ? text[..MaxErrorTextLength] : text;
+            return text.Length > maxLength ? text[..maxLength] : text;
         }
+
+        /// <summary>The provider's error body as one short line, by <see cref="Clean"/>.</summary>
+        private static string ErrorText(byte[] body, string key) =>
+            Clean(Encoding.UTF8.GetString(body, 0, Math.Min(body.Length, MaxErrorTextLength * 4)), key, MaxErrorTextLength);
 
         /// <summary>The conversation as both providers take it: an array of role and content.</summary>
         private static JsonArray Messages(IReadOnlyList<(string Role, string Content)> messages) =>
@@ -303,6 +410,33 @@ namespace Techie.Pbx.Core.Ai
             var body = await SendAsync(http, request, provider, ChatTimeout, settings.OpenRouterApiKey, cancellationToken);
 
             return ReadOpenRouterChatReply(body);
+        }
+
+        /// <summary>
+        /// ElevenLabs' own reason from an error body, <c>{"detail":{"message":"…"}}</c> or
+        /// <c>{"detail":"…"}</c>, cleaned like any error text; <paramref name="fallback"/> when the
+        /// body has neither.
+        /// </summary>
+        private static string ProviderMessage(byte[] body, string key, string fallback)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+
+                if (document.RootElement.ValueKind != JsonValueKind.Object ||
+                    !document.RootElement.TryGetProperty("detail", out var detail))
+                    return fallback;
+
+                var message = detail.ValueKind == JsonValueKind.String ? detail.GetString() ?? ""
+                    : detail.ValueKind == JsonValueKind.Object && detail.TryGetProperty("message", out var text) && text.ValueKind == JsonValueKind.String ? text.GetString() ?? ""
+                    : "";
+
+                return message.Length > 0 ? Clean(message, key, MaxErrorTextLength) : fallback;
+            }
+            catch (JsonException)
+            {
+                return fallback;
+            }
         }
 
         private static async Task<byte[]> ReadBodyAsync(HttpResponseMessage response, string provider, CancellationToken cancellationToken)
@@ -384,7 +518,8 @@ namespace Techie.Pbx.Core.Ai
             string provider,
             TimeSpan timeout,
             string key,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<int, string?, byte[], string>? describeFailure = null)
         {
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutSource.CancelAfter(timeout);
@@ -395,7 +530,11 @@ namespace Techie.Pbx.Core.Ai
                 var body = await ReadBodyAsync(response, provider, timeoutSource.Token);
 
                 if (!response.IsSuccessStatusCode)
-                    throw new AiProviderException($"{provider} answered {(int)response.StatusCode} {response.ReasonPhrase}: {ErrorText(body, key)}");
+                {
+                    throw new AiProviderException(describeFailure != null
+                        ? describeFailure((int)response.StatusCode, response.ReasonPhrase, body)
+                        : $"{provider} answered {(int)response.StatusCode} {response.ReasonPhrase}: {ErrorText(body, key)}");
+                }
 
                 return body;
             }
@@ -408,5 +547,11 @@ namespace Techie.Pbx.Core.Ai
                 throw new AiProviderException($"{provider} could not be reached ({ex.HttpRequestError}).");
             }
         }
+
+        /// <summary>A string property of a provider's object, flattened and cut short, or blank when absent or not a string.</summary>
+        private static string StringOf(JsonElement element, string name) =>
+            element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? Clean(value.GetString() ?? "", "", MaxVoiceTextLength)
+                : "";
     }
 }

@@ -4,6 +4,7 @@ using System.Text.Json;
 using log4net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Techie.Pbx.Core;
 using Techie.Pbx.Core.Ai;
 using Techie.Pbx.Core.Data;
 using Techie.Pbx.Core.Models;
@@ -19,6 +20,10 @@ namespace Techie.Pbx.Web.Pages.Settings
     /// place. Only the chosen provider's group is shown, decided here from what is stored; saving
     /// the provider answers "settingsChanged" and the groups come back for the new one, so there is
     /// no client code to keep in step.
+    ///
+    /// The Speech group also offers the voices the saved ElevenLabs key may use (D205), loaded only
+    /// when asked for. Choosing one stores the same <c>Ai.ElevenLabsVoiceId</c> row through the same
+    /// repository; the row stays the setting and can still be typed.
     /// </summary>
     public class AiSettingsModel : PageModel
     {
@@ -52,6 +57,79 @@ namespace Techie.Pbx.Web.Pages.Settings
 
         /// <summary>The groups, each a small table of rows.</summary>
         public PartialViewResult OnGetTable() => this.Partial("_Sections", Sections(this.settings.GetAll()));
+
+        /// <summary>
+        /// The voices the saved ElevenLabs key may use, as a list to choose from, or the sentence
+        /// that says why not (D205). Never an error page: a refusal is the admin's to act on. Served
+        /// from <see cref="AiVoiceCache"/> where it can be, so pressing the button again is free.
+        /// </summary>
+        public async Task<PartialViewResult> OnGetVoicesAsync()
+        {
+            var settings = AiSettingsSnapshot.From(this.settings.GetAll());
+            var choices = new VoiceChoices { Current = settings.ElevenLabsVoiceId };
+
+            if (settings.ElevenLabsApiKey.Length == 0)
+            {
+                choices.Error = "Set the ElevenLabs key first.";
+                return this.Partial("_VoiceChoices", choices);
+            }
+
+            try
+            {
+                // Not the request's token: the load is shared through the cache, and an admin
+                // navigating away must not cancel it for whoever else is waiting on it. The
+                // provider call has its own timeout.
+                choices.Voices = await AiVoiceCache.GetOrAdd(
+                    settings.ElevenLabsApiKey,
+                    DateTimeOffset.UtcNow,
+                    () => AiProviders.ListVoicesAsync(Http, settings, CancellationToken.None));
+            }
+            catch (AiProviderException ex)
+            {
+                Log.Warn($"AI voice list for {this.User.Identity?.Name}: {ex.Message}");
+                choices.Error = ex.Message;
+            }
+            catch (OperationCanceledException)
+            {
+                choices.Error = $"ElevenLabs did not answer within {AiProviders.VoicesTimeout.TotalSeconds:0} seconds.";
+            }
+
+            return this.Partial("_VoiceChoices", choices);
+        }
+
+        /// <summary>
+        /// Stores the chosen voice as <c>Ai.ElevenLabsVoiceId</c>, through the repository the general
+        /// settings page saves with, so validation and logging are the same. Only an ID shaped like
+        /// one ElevenLabs issues is accepted (<see cref="AiVoice.IsPlausibleId"/>); anything else is
+        /// refused with nothing written.
+        /// </summary>
+        public IActionResult OnPostSaveVoice(string? voiceId)
+        {
+            var id = (voiceId ?? "").Trim();
+
+            if (!AiVoice.IsPlausibleId(id))
+                return this.Alert("That is not an ElevenLabs voice ID. Load the voices again and choose one from the list.");
+
+            try
+            {
+                this.settings.Set(SettingsKeys.AiElevenLabsVoiceId, id);
+            }
+            catch (ValidationFailedException ex)
+            {
+                return this.Alert(string.Join(" ", ex.Errors));
+            }
+
+            Log.Info($"Setting {SettingsKeys.AiElevenLabsVoiceId} chosen from the voice list by {this.User.Identity?.Name}");
+
+            // The same events the general page's save answers with: the groups reload, so the voice
+            // ID row shows the new value. App-scoped, so there is nothing to apply.
+            this.Response.Headers["HX-Trigger"] = JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["settingsChanged"] = null,
+                ["pbxToast"] = new { message = WebUtility.HtmlEncode($"{SettingsKeys.AiElevenLabsVoiceId} saved.") },
+            });
+            return new StatusCodeResult(StatusCodes.Status204NoContent);
+        }
 
         /// <summary>
         /// One tiny chat through the chosen model provider, with no tools, so an admin can tell a
@@ -159,6 +237,8 @@ namespace Techie.Pbx.Web.Pages.Settings
                 new()
                 {
                     Help = "ElevenLabs hears the caller and speaks the replies, on your own key.",
+                    InsertBeforeKey = SettingsKeys.AiElevenLabsVoiceId,
+                    InsertPartial = "/Pages/Settings/_VoiceChooser.cshtml",
                     Rows = Rows(stored, SettingsKeys.AiElevenLabsApiKey, SettingsKeys.AiElevenLabsVoiceId, SettingsKeys.AiElevenLabsModel, SettingsKeys.AiSttModel),
                     Title = "Speech",
                 },

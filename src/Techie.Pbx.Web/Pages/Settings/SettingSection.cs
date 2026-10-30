@@ -10,6 +10,15 @@ namespace Techie.Pbx.Web.Pages.Settings
         /// <summary>The sentence under the heading. Blank shows none.</summary>
         public string Help { get; set; } = "";
 
+        /// <summary>
+        /// The row a page's own partial is shown above (<see cref="InsertPartial"/>), such as the AI
+        /// page's voice chooser above the voice ID (D205). Blank, or a key not in the rows, shows none.
+        /// </summary>
+        public string InsertBeforeKey { get; set; } = "";
+
+        /// <summary>The partial shown above <see cref="InsertBeforeKey"/>'s row, as a full-width row of its own.</summary>
+        public string InsertPartial { get; set; } = "";
+
         public List<SettingRow> Rows { get; set; } = new();
 
         /// <summary>

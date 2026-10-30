@@ -38,6 +38,15 @@
                     {
                         var editUrl = Url.Page("/Settings/Index", "Form", new { key = row.Key, setup = group.Setup.Length > 0 ? group.Setup : null });
 
+                        @* A page's own control above one row, e.g. the AI page's voice chooser (D205).
+                           It has no data-edit-url, so clicking it does not open the row's form. *@
+                        if (group.InsertPartial.Length > 0 && row.Key == group.InsertBeforeKey)
+                        {
+                            <tr>
+                                <td colspan="4"><partial name="@group.InsertPartial" /></td>
+                            </tr>
+                        }
+
                         <tr data-edit-url="@editUrl">
                             <td class="font-monospace">@row.Key</td>
                             <td class="text-secondary">@row.Description</td>

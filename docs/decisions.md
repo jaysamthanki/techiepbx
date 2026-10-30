@@ -4246,3 +4246,36 @@ validated, stored and logged in exactly one place.
 - **Ollama's URL is an outbound address an admin typed**, on their own appliance, from an
   admin-only page. Recorded in security.md: acceptable, and limited to http/https with no query,
   fragment or embedded credentials.
+
+### D205. AI settings: choose the ElevenLabs voice from the voices the saved key can use (2026-10-30, F11)
+
+The voice ID was typed blind, and a wrong one surfaced only on a live call: a free-plan key gave
+`402 payment_required: Free users cannot use library voices via the API` on every greeting, which
+the customer heard as "the agent is broken". The Speech group now has a **Load voices** button
+above the voice ID row that lists what the saved key can actually use.
+
+- **The list comes from the saved key, not from us.** `GET /v1/voices` with the stored
+  `Ai.ElevenLabsApiKey` (`AiProviders.ListVoicesAsync`, 15 s), ordered by category then name, each
+  voice with a short label line ("en · female · young · American"). A baked-in list would offer
+  library voices a free plan cannot use — the exact failure that prompted this. Nothing is fetched
+  when the page opens; an admin can look at the page without spending an API call.
+- **Two refusals are sentences, not provider JSON.** A `401` carrying `missing_permissions` says the
+  key needs the `voices_read` permission and that the ID can still be typed; a `402` says
+  "ElevenLabs refused the request:" followed by ElevenLabs' own reason. Those are the two an admin
+  can act on, and the raw body (`{"detail":{"status":…}}`) tells them neither what to change nor
+  where. Any other status keeps the usual status-and-text message (D200). The key is scrubbed from
+  all of them.
+- **Cached ten minutes, keyed by the key itself** (`AiVoiceCache`, in memory, never logged or
+  shown). A changed key is a different entry, so a fixed key is a fresh list. Two lookups that
+  arrive together share one request. A failed load is cached too, for **one minute**: a key without
+  `voices_read` fails identically every time, and repeated clicks should not hammer the provider,
+  while a key fixed at ElevenLabs is picked up within the minute.
+- **The picker is an aid; the row is the setting.** Choosing a voice stores `Ai.ElevenLabsVoiceId`
+  through `SettingsRepository`, as the general page does, and answers with the same
+  `settingsChanged` + toast. The posted ID must be 10–64 letters and digits (stricter than the
+  row's own rule, since the list only ever offers IDs ElevenLabs issued); anything else is refused
+  with nothing written. Typing an ID on the row stays possible — a key without `voices_read` has no
+  other way. No voice previews: the API offers preview URLs, but playing audio in the browser is
+  another piece.
+- **Third-party text is text.** Voice names and labels are flattened to one line, cut to 100
+  characters and rendered through Razor's encoding, never as HTML.

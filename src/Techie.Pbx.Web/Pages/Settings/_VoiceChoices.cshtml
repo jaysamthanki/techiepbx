@@ -1,0 +1,36 @@
+@model VoiceChoices
+@*
+    The voices the saved ElevenLabs key may use, or why there are none (D205). Every name and label
+    is the provider's text, so it is only ever written with @, which encodes it.
+*@
+@{
+    var saveUrl = Url.Page("/Settings/AiSettings", "SaveVoice");
+}
+@if (Model.Error.Length > 0)
+{
+    <p class="text-danger mb-0">@Model.Error</p>
+    <p class="text-secondary small mb-0">The voice ID can still be typed by hand: click the voice ID row below.</p>
+}
+else if (Model.Voices.Count == 0)
+{
+    <p class="text-secondary mb-0">The ElevenLabs key has no voices to offer. Add one in ElevenLabs, or type the voice ID by hand.</p>
+}
+else
+{
+    <form class="d-flex gap-2 align-items-center" hx-post="@saveUrl" hx-swap="none">
+        <select name="voiceId" class="form-select form-select-sm w-auto" aria-label="Voice">
+            @foreach (var category in Model.Voices.GroupBy(v => v.Category))
+            {
+                <optgroup label="@(category.Key.Length > 0 ? category.Key : "other")">
+                    @foreach (var voice in category)
+                    {
+                        <option value="@voice.Id" selected="@(voice.Id == Model.Current)">
+                            @voice.Name@(voice.Labels.Length > 0 ? $" ({voice.Labels})" : "")
+                        </option>
+                    }
+                </optgroup>
+            }
+        </select>
+        <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </form>
+}
