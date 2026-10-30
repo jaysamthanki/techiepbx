@@ -412,5 +412,78 @@ namespace Techie.Pbx.Tests.Ai
             Assert.Equal(new[] { "I can't do that." }, this.spoken);
             Assert.Equal(AiCallOutcome.CallerHungUp, session.Outcome);
         }
+        /// <summary>
+        /// The model promised a transfer in words but never called the tool (D206). The promise is
+        /// kept the only way left: the line is spoken and the call follows the agent's handoff.
+        /// </summary>
+        /// <summary>
+        /// With a transfer tool the words are the system's, so the model is told plainly not to narrate
+        /// the transfer — the sentence the last live call earned (D206).
+        /// </summary>
+        [Fact]
+        public void The_tool_prompt_forbids_narrating_a_transfer()
+        {
+            var prompt = AiCallSession.SystemPrompt(Agent(transferTo: "RingGroup:600"), transferTool: true);
+
+            Assert.Contains("Never say you are transferring", prompt, StringComparison.Ordinal);
+            Assert.Contains(AiProviders.TransferToolName, prompt, StringComparison.Ordinal);
+            Assert.DoesNotContain(AiCallSession.TransferToken, prompt, StringComparison.Ordinal);
+        }
+
+        [Fact]
+        public async Task A_spoken_transfer_promise_without_a_tool_call_hands_the_call_off()
+        {
+            var session = this.Session(
+                Agent(transferTo: "RingGroup:600"),
+                _ => "unused",
+                () => "I have a problem with my computer",
+                answer: _ => AiChatReply.Text("Got it! I'll get you over to Jaysam for tech support. Just a moment, please."),
+                targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+            await this.stream.WaitForFramesAsync(3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.Transferred, session.Outcome);
+            Assert.Contains(this.spoken, s => s.Contains("get you over to Jaysam", StringComparison.Ordinal));
+        }
+
+        /// <summary>A refusal is not a promise: the conversation carries on.</summary>
+        [Fact]
+        public async Task A_refusal_to_transfer_is_not_treated_as_a_promise()
+        {
+            var session = this.Session(
+                Agent(transferTo: "RingGroup:600"),
+                _ => "ok",
+                () => "Can I speak to Mark?",
+                answer: _ => AiChatReply.Text("I can’t transfer you to Mark, but I can help with your computer."),
+                targets: Staff);
+
+            this.stream.SendAudio(Turn());
+            var run = session.RunAsync(this.stream, CancellationToken.None);
+            await this.stream.WaitForFramesAsync(3);
+            this.stream.CompleteInbound();
+            await run.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(AiCallOutcome.CallerHungUp, session.Outcome);
+            Assert.Single(this.chats);
+        }
+
+        [Theory]
+        [InlineData("I'll get you over to Jaysam. Just a moment, please.", true)]
+        [InlineData("Let me put you through.", true)]
+        [InlineData("I can't transfer you to Mark, but I can help.", false)]
+        [InlineData("We don't have anyone named Mark here.", false)]
+        [InlineData("Is there anything else I can help with?", false)]
+        [InlineData("We open at nine.", false)]
+        public void A_transfer_promise_is_recognised_narrowly(string text, bool promise)
+        {
+            Assert.Equal(promise, AiCallSession.LooksLikeTransferPromise(text));
+        }
+
+
+
     }
 }

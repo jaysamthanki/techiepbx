@@ -4279,3 +4279,30 @@ above the voice ID row that lists what the saved key can actually use.
   another piece.
 - **Third-party text is text.** Voice names and labels are flattened to one line, cut to 100
   characters and rendered through Razor's encoding, never as HTML.
+
+### D206. A transfer promised in words is a transfer, and the prompt stops asking for one (2026-10-30, F11)
+
+The first live call with the tool in place ended with the agent saying *"I'll get you over to Jaysam
+for tech support. Just a moment, please."* and then nothing: the caller waited, nothing happened, and
+they hung up 20 seconds later. The transcript shows why — **the model never called the tool**. It
+narrated the transfer instead, and a spoken promise moves no channel, so the call simply continued on
+a line where everyone was waiting.
+
+Two changes, because there are two failures to cover:
+
+- **The prompt says it outright.** With a transfer tool the model is told: call the tool with the
+  extension and say nothing, *never* say you are transferring, connecting or putting the caller
+  through, and never "just a moment" — the system speaks the agent's own handoff line. The agent's
+  customer-written prompt asks for warm, conversational replies, which is exactly the pressure that
+  produced the narration, so the rule has to be explicit and non-editable.
+- **The promise is still honoured.** If a reply reads as a transfer promise and no tool call came
+  back, the session speaks that line and ends as `Transferred`, so the call follows the agent's
+  configured handoff — the same door a closed socket reaches (D199, D201). The caller gets a person
+  either way; the only loss is that they land on the handoff instead of the named extension.
+- **The detector is deliberately narrow** (`LooksLikeTransferPromise`, pure and tested): a
+  transfer-ish phrase, no negation ("I can't transfer you to Mark…" is a refusal), and no trailing
+  question mark ("Is there anything else?" is not a promise). Curly apostrophes are normalised first,
+  because a refusal written with `can’t` read as a promise is the worst false positive available —
+  it would drop a live conversation into the handoff.
+- It only fires when the agent has a handoff configured; with none, the conversation continues, which
+  is the better of two bad options.

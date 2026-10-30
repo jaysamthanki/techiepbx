@@ -26,6 +26,32 @@ namespace Techie.Pbx.Core.Ai
         /// <summary>Turns in a row with nothing transcribed before the agent gives up on the call.</summary>
         public const int MaxSilentTurns = 3;
 
+        /// <summary>The phrases a model uses instead of calling the tool (D206). Narrow on purpose.</summary>
+        private static readonly string[] Promises =
+        {
+            "get you over to",
+            "put you through",
+            "transfer you",
+            "transferring you",
+            "connecting you",
+            "connect you to",
+            "just a moment",
+            "hold on",
+        };
+
+        /// <summary>Words that turn a transfer phrase into a refusal, which is not a promise (D206).</summary>
+        private static readonly string[] Negations =
+        {
+            "can't",
+            "cannot",
+            "can not",
+            "unable",
+            "don't have",
+            "do not have",
+            "not able",
+            "won't be able",
+        };
+
         /// <summary>What the agent says when a transfer to an extension did not happen (D203).</summary>
         public const string TransferFailedLine = "I couldn't reach them — can I help another way?";
 
@@ -161,7 +187,10 @@ namespace Techie.Pbx.Core.Ai
             {
                 return agent.Prompt.TrimEnd() + Rules +
                     $"\n\nIf the caller asks to speak to a particular person, call the {AiProviders.TransferToolName} " +
-                    "tool with their extension, without any words of your own. Do not transfer for a question you can answer.";
+                    "tool with their extension and say nothing at all. Do not transfer for a question you can answer. " +
+                    "Never say you are transferring, connecting or putting the caller through, and never say \"just a " +
+                    "moment\": the tool is the transfer, and the system speaks the handoff line itself. A spoken " +
+                    "promise with no tool call leaves the caller waiting on a call nobody moved (D206).";
             }
 
             if (agent.TransferTo.Length == 0)
@@ -241,6 +270,19 @@ namespace Techie.Pbx.Core.Ai
                 clock.Restart();
                 var answer = await this.chat(messages, model, cancellationToken);
                 var chatMs = clock.ElapsedMilliseconds;
+
+                // A model that promised a transfer in words but never called the tool leaves the caller
+                // waiting on a line nobody moved. The promise is honoured the only way left: the call
+                // follows the agent's own handoff, the same one a closed socket reaches (D206).
+                if (answer.ToolCall == null && this.agent.TransferTo.Length > 0 && LooksLikeTransferPromise(answer.Content))
+                {
+                    this.Note($"AI agent {this.agent.Number}: turn {turn} spoke a transfer promise with no tool call; handing the call off instead.");
+                    this.Remember("assistant", answer.Content.Trim());
+
+                    var said = await this.SayAsync(socket, answer.Content.Trim(), bargeIn: false, cancellationToken: cancellationToken);
+
+                    return said.Playback == Playback.CallerGone ? AiCallOutcome.CallerHungUp : AiCallOutcome.Transferred;
+                }
 
                 if (answer.ToolCall != null)
                 {
@@ -510,6 +552,30 @@ namespace Techie.Pbx.Core.Ai
 
             this.log.Info($"AI agent {this.agent.Number}: ignored a call to tool '{Flat(call.Name)}' for an extension it was not offered.");
             return null;
+        }
+
+        /// <summary>
+        /// Whether a reply <i>promised</i> a transfer without calling the tool (D206). Deliberately
+        /// narrow: a transfer-ish phrase, no negation, and no question mark — "I can't transfer you to
+        /// Mark, but I can help" and "Is there anything else?" are not promises, and treating them as
+        /// one would drop a live conversation into the handoff.
+        /// </summary>
+        public static bool LooksLikeTransferPromise(string text)
+        {
+            if (text.Length == 0)
+                return false;
+
+            // Models emit a curly apostrophe in "can’t" as often as the straight one, and a refusal
+            // read as a promise would drop a live conversation into the handoff (D206).
+            var flat = text.ReplaceLineEndings(" ").Replace('’', '\'').Trim();
+
+            if (flat.EndsWith('?'))
+                return false;
+
+            if (Negations.Any(negation => flat.Contains(negation, StringComparison.OrdinalIgnoreCase)))
+                return false;
+
+            return Promises.Any(promise => flat.Contains(promise, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>
